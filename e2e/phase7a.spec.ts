@@ -128,7 +128,7 @@ test.describe.serial('Phase 7a · plans & billing', () => {
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Starter', { exact: true }).first()).toBeVisible();
     // Starter has no AI features: no credits to show or buy.
-    await expect(page.getByText('AI features start on Growth').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'AI credits' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Buy 1,000 credits/ })).toHaveCount(0);
   });
 

@@ -111,10 +111,8 @@ export function PlanPicker({ slug, sub }: { slug: string; sub: Sub }) {
               <div className="text-xs text-muted">{p.tagline}</div>
               <ul className="flex flex-col gap-1 text-[13px]">
                 {p.highlights.map((h) => <li key={h} className="flex gap-1.5"><Check size={14} className="mt-0.5 shrink-0" />{h}</li>)}
-                {p.creditsPerUser > 0 ? (
+                {p.creditsPerUser > 0 && (
                   <li className="flex gap-1.5"><Sparkles size={14} className="mt-0.5 shrink-0" />{p.creditsPerUser.toLocaleString('en-IN')} AI credits per user each month</li>
-                ) : (
-                  <li className="flex gap-1.5 text-muted"><Sparkles size={14} className="mt-0.5 shrink-0" />AI features start on Growth</li>
                 )}
               </ul>
               <div className="mt-auto flex flex-col gap-1.5">
@@ -129,19 +127,6 @@ export function PlanPicker({ slug, sub }: { slug: string; sub: Sub }) {
           );
         })}
       </div>
-    </Card>
-  );
-}
-
-/** Shown instead of the credits card on a plan without AI features. */
-export function NoAiCard({ leftover }: { leftover: number }) {
-  return (
-    <Card>
-      <CardHeader title="AI credits" sub="AI call notes, the WhatsApp AI assistant, the voice agent and document checks start on the Growth plan." />
-      <p className="px-5 py-4 text-sm text-muted">
-        Choose Growth or Pro above to turn on AI features; each includes monthly AI credits.
-        {leftover > 0 && ` Your ${leftover.toLocaleString('en-IN')} purchased credits are kept for when you upgrade.`}
-      </p>
     </Card>
   );
 }
