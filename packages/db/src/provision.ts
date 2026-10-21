@@ -4,7 +4,7 @@ import { VISA_CATALOG } from './visa-catalog';
 
 export const RESERVED_SLUGS = new Set([
   'api', 'app', 'login', 'logout', 'signup', 'invite', 'f', 'embed', 'static', 'assets',
-  'admin', 'settings', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
+  'admin', 'account', 'settings', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
 ]);
 
 export function slugify(input: string): string {
@@ -43,6 +43,8 @@ export type TenantSettings = {
   };
   /** AI features that work on agency data. */
   ai?: { docChecks: boolean };
+  /** Owners can require two-step sign-in for everyone in the workspace. */
+  security?: { require2fa?: boolean };
   /** WhatsApp AI assistant. */
   assistant?: {
     mode: 'off' | 'always' | 'after_hours';

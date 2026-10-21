@@ -52,6 +52,11 @@ export default async function TenantLayout({
             }}
           />
         ) : undefined}
+        {canManage && (
+          <p className="text-sm text-muted">
+            Need your records? <a href={`/api/t/${slug}/export`} className="font-semibold text-ink underline">Download all your data</a> (CSV files in a ZIP).
+          </p>
+        )}
       </SuspendedScreen>
     );
   }

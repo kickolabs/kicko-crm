@@ -1,5 +1,6 @@
 'use server';
 
+import { audit } from '@/server/audit';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
@@ -86,6 +87,7 @@ export async function savePortalSettingsAction(slug: string, _: Prev, fd: FormDa
     const input = portalSettingsInput.parse({ ...raw, bookingEnabled: raw.bookingEnabled === 'on', days: fd.getAll('days') });
     const settings: TenantSettings = { ...ctx.tenant.settings, portal: { ...input, welcome: input.welcome || undefined } };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.portal', 'Changed client portal settings');
   }, 'Portal settings saved');
   refresh(slug);
   return res;

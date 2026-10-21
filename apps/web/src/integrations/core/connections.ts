@@ -1,4 +1,5 @@
 import 'server-only';
+import { audit } from '@/server/audit';
 import { cache } from 'react';
 import { withTenant } from '@kicko/db';
 import { decryptSecret, encryptSecret } from '@/server/secrets';
@@ -96,10 +97,13 @@ export async function saveConnection(
       update: { provider, config: stored, status: 'active', lastError: null, lastCheckedAt: null },
     }),
   );
+  // Never the keys themselves: only which provider was connected.
+  await audit({ tenantId, actorId }, 'settings.integration_saved', `${prev ? 'Updated' : 'Connected'} ${provider} for ${capability.replace('_', ' ')}`);
 }
 
-export async function removeConnection(tenantId: string, capability: Capability) {
+export async function removeConnection(tenantId: string, capability: Capability, actorId: string | null = null) {
   await withTenant(tenantId, (tx) => tx.providerConnection.deleteMany({ where: { tenantId, capability } }));
+  await audit({ tenantId, actorId }, 'settings.integration_removed', `Disconnected ${capability.replace('_', ' ')}`);
 }
 
 /** Run the adapter's health check and record the outcome. */

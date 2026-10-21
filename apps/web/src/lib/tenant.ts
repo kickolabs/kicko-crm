@@ -39,6 +39,10 @@ export const getCtx = cache(async (slug: string): Promise<Ctx> => {
   );
   // Same response as an unknown slug, so workspace names can't be probed.
   if (!membership || !membership.active) notFound();
+  // The agency requires two-step sign-in: set it up before anything else.
+  if (tenant.settings.security?.require2fa && !(session.user as { twoFactorEnabled?: boolean | null }).twoFactorEnabled) {
+    redirect(`/account?required=${encodeURIComponent(slug)}`);
+  }
   return {
     tenant,
     user: { id: session.user.id, name: session.user.name, email: session.user.email },

@@ -4,6 +4,7 @@ import { prisma } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
 import type { ChecklistItem, Stage } from '@kicko/db/visa-catalog';
 import { z } from 'zod';
+import { audit } from './audit';
 import { inTenant, UserError, type Scope } from './scope';
 
 export const generalInput = z.object({
@@ -24,11 +25,24 @@ export async function updateGeneral(scope: Scope, raw: z.input<typeof generalInp
     where: { id: scope.tenantId },
     data: { name: input.name, timezone: input.timezone, settings },
   });
+  await audit(scope, 'settings.general', 'Changed general settings (name, timezone, lead assignment)');
+}
+
+/** Require two-step sign-in for everyone in the workspace. Only someone who uses it can switch it on. */
+export async function setRequire2fa(scope: Scope, on: boolean) {
+  if (on) {
+    const me = scope.actorId ? await prisma.user.findUnique({ where: { id: scope.actorId }, select: { twoFactorEnabled: true } }) : null;
+    if (!me?.twoFactorEnabled) throw new UserError('Turn on two-step sign-in for your own account first (My account & security).');
+  }
+  const settings: TenantSettings = { ...scope.settings, security: { ...scope.settings.security, require2fa: on } };
+  await prisma.tenant.update({ where: { id: scope.tenantId }, data: { settings } });
+  await audit(scope, 'settings.require_2fa', on ? 'Required two-step sign-in for everyone' : 'Stopped requiring two-step sign-in');
 }
 
 export async function rotateFormKey(scope: Scope) {
   const settings: TenantSettings = { ...scope.settings, formKey: randomBytes(12).toString('base64url') };
   await prisma.tenant.update({ where: { id: scope.tenantId }, data: { settings } });
+  await audit(scope, 'settings.form_key', 'Replaced the web form & kiosk key (old embeds stop working)');
 }
 
 const key = (s: string) =>

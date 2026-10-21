@@ -40,7 +40,7 @@ export async function removeConnectionAction(slug: string, capability: string) {
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'settings.manage');
-    await removeConnection(ctx.tenant.id, capabilityOf(capability));
+    await removeConnection(ctx.tenant.id, capabilityOf(capability), ctx.user.id);
   });
   refresh(slug);
   return res;

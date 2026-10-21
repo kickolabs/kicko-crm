@@ -6,6 +6,7 @@ import { fullName } from '@/lib/format';
 import type { CfDef, CfValues } from '@/lib/custom-fields';
 import { listFields } from './custom-fields';
 import { featureOn } from './plan';
+import { audit } from './audit';
 import { inTenant, UserError, type Scope } from './scope';
 
 /** Custom fields an import can fill (Pro plan). */
@@ -284,7 +285,10 @@ async function createClients(tx: Tx, scope: Scope, rows: Pending[], ownerOf: (d:
 export async function finishImport(scope: Scope, batchId: string) {
   return inTenant(scope, async (tx) => {
     const b = await tx.importBatch.update({ where: { id: batchId }, data: { status: 'done', finishedAt: new Date() } });
-    return { created: b.created, updated: b.updated, skipped: b.skipped, failed: b.failed };
+    return { created: b.created, updated: b.updated, skipped: b.skipped, failed: b.failed, fileName: b.fileName, entity: b.entity };
+  }).then(async ({ fileName, entity, ...r }) => {
+    await audit(scope, 'data.import', `Imported ${entity} from ${fileName}: ${r.created} created, ${r.updated} updated`);
+    return r;
   });
 }
 
@@ -309,7 +313,10 @@ export async function undoImport(scope: Scope, batchId: string) {
       removed = (await tx.client.deleteMany({ where: { id: { in: ids }, cases: { none: {} }, invoices: { none: {} }, payments: { none: {} } } })).count;
     }
     await tx.importBatch.update({ where: { id: batchId }, data: { status: 'undone', undoneAt: new Date(), undoneById: scope.actorId } });
-    return { removed, kept: b.createdIds.length - removed };
+    return { removed, kept: b.createdIds.length - removed, fileName: b.fileName };
+  }).then(async ({ fileName, ...r }) => {
+    await audit(scope, 'data.import_undone', `Undid the import of ${fileName}: ${r.removed} removed`);
+    return r;
   });
 }
 

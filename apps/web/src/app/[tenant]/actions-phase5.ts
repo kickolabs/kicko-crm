@@ -1,5 +1,6 @@
 'use server';
 
+import { audit } from '@/server/audit';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
@@ -80,6 +81,7 @@ export async function saveCallingSettingsAction(slug: string, _: Prev, fd: FormD
       calling: { record: input.record === 'on', aiNotes: input.aiNotes === 'on', greeting: input.greeting || undefined },
     };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.calling', 'Changed calling settings');
   }, 'Saved');
   refresh(slug);
   return res;
@@ -164,6 +166,7 @@ export async function saveAssistantSettingsAction(slug: string, _: Prev, fd: For
       assistant: { mode: input.mode, name: input.name, start: input.start, end: input.end, booking: input.booking === 'on', days },
     };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.assistant', 'Changed WhatsApp AI assistant settings');
   }, 'Saved');
   refresh(slug);
   return res;
@@ -284,6 +287,7 @@ export async function saveVoiceSettingsAction(slug: string, _: Prev, fd: FormDat
       },
     };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.voice', 'Changed AI voice agent settings');
   }, 'Saved');
   refresh(slug);
   return res;
@@ -360,6 +364,7 @@ export async function saveAiFeaturesAction(slug: string, _: Prev, fd: FormData) 
     assertCan(ctx, 'settings.manage');
     const settings: TenantSettings = { ...ctx.tenant.settings, ai: { docChecks: fd.get('docChecks') === 'on' } };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.ai', 'Changed AI feature settings');
   }, 'Saved');
   refresh(slug);
   return res;

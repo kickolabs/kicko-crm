@@ -266,3 +266,15 @@ describe('super-admin read access', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('audit log', () => {
+  it('is append-only for the app: rows can be added and read, never changed or removed', async () => {
+    await withTenant(a.id, (tx) => tx.auditEvent.create({ data: { tenantId: a.id, action: 'test.event', summary: 'original' } }));
+    const changed = await withTenant(a.id, (tx) => tx.auditEvent.updateMany({ where: { action: 'test.event' }, data: { summary: 'tampered' } }));
+    const removed = await withTenant(a.id, (tx) => tx.auditEvent.deleteMany({ where: { action: 'test.event' } }));
+    expect([changed.count, removed.count]).toEqual([0, 0]);
+    const rows = await withTenant(a.id, (tx) => tx.auditEvent.findMany({ where: { action: 'test.event' } }));
+    expect(rows.map((r) => r.summary)).toEqual(['original']);
+    expect(await withTenant(b.id, (tx) => tx.auditEvent.count({ where: { action: 'test.event' } }))).toBe(0);
+  });
+});

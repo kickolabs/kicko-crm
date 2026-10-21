@@ -1,9 +1,10 @@
 import 'server-only';
 import { cache } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { prisma, withPlatformRead, withTenant, type Prisma, type Subscription, type Tx } from '@kicko/db';
 import { getSession } from '@/lib/auth';
 import { DAY, PLANS, quote, type Interval, type PlanId } from '@/lib/plans';
+import { audit } from './audit';
 import { UserError } from './scope';
 
 // Kicko's super-admin console: every agency, its plan and usage, and the few
@@ -32,14 +33,18 @@ export const getAdmin = cache(async () => {
   const session = await getSession();
   if (!session) return null;
   if (!adminEmails().includes(session.user.email.toLowerCase())) return null;
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, emailVerified: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, emailVerified: true, twoFactorEnabled: true } });
   return user?.emailVerified ? user : null;
 });
 
-/** Same 404 as any unknown page, so the console's existence isn't revealed. */
+/**
+ * Same 404 as any unknown page, so the console's existence isn't revealed.
+ * A real admin without two-step sign-in is sent to set it up first.
+ */
 export async function requireAdmin() {
   const admin = await getAdmin();
   if (!admin) notFound();
+  if (!admin.twoFactorEnabled) redirect('/account?admin=1');
   return admin;
 }
 
@@ -187,7 +192,12 @@ async function change(admin: Admin, tenantId: string, action: string, details: P
     await tx.subscription.update({ where: { tenantId }, data });
   });
   await prisma.adminAction.create({ data: { actorEmail: admin.email, tenantId, action, details } });
+  await audit({ tenantId }, 'billing.kicko_support', `Kicko support: ${ADMIN_SUMMARY[action] ?? action}`, details);
 }
+
+const ADMIN_SUMMARY: Record<string, string> = {
+  extend_trial: 'extended the trial', set_plan: 'changed the plan', set_discount: 'set a discount', add_credits: 'added AI credits', suspend: 'suspended the workspace', reactivate: 'reactivated the workspace',
+};
 
 const paidByCard = (s: Subscription) => s.provider && s.provider !== 'manual' && s.status === 'active' && !s.cancelAtPeriodEnd;
 

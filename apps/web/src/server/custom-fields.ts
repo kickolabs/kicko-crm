@@ -3,6 +3,7 @@ import type { Prisma } from '@kicko/db';
 import { z } from 'zod';
 import { CF_LIMIT, cfClean, cfKey, parseOptions, type CfDef, type CfEntity, type CfType, type CfValues } from '@/lib/custom-fields';
 import { requireFeature } from './plan';
+import { audit } from './audit';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 
 // Custom fields (Pro plan). Definitions per entity; values in each record's
@@ -30,7 +31,7 @@ export async function createField(scope: Scope, raw: unknown) {
   const input = fieldInput.parse(raw);
   const options = input.type === 'select' ? parseOptions(input.options) : [];
   if (input.type === 'select' && options.length < 2) throw new UserError('Add at least two options, one per line');
-  return inTenant(scope, async (tx) => {
+  const created = await inTenant(scope, async (tx) => {
     const all = await tx.customField.findMany({ where: { entity: input.entity }, select: { key: true, label: true, archived: true, sortOrder: true } });
     if (all.filter((f) => !f.archived).length >= CF_LIMIT) throw new UserError(`Up to ${CF_LIMIT} fields per record type. Archive one you no longer use.`);
     if (all.some((f) => !f.archived && f.label.toLowerCase() === input.label.toLowerCase())) throw new UserError(`There is already a field called “${input.label}”`);
@@ -46,6 +47,8 @@ export async function createField(scope: Scope, raw: unknown) {
       },
     });
   });
+  await audit(scope, 'settings.custom_field', `Added the ${input.entity.slice(0, -1)} field “${created.label}”`);
+  return created;
 }
 
 /** Rename, change dropdown options, or archive / restore. The type can't change (values would no longer fit). */
@@ -62,6 +65,10 @@ export async function updateField(scope: Scope, id: string, raw: unknown) {
       if (active >= CF_LIMIT) throw new UserError(`Up to ${CF_LIMIT} fields per record type`);
     }
     await tx.customField.update({ where: { id }, data: { label: input.label, options, archived: input.archived } });
+    return f;
+  }).then(async (f) => {
+    const what = input.archived === true ? 'Archived' : input.archived === false ? 'Restored' : 'Edited';
+    await audit(scope, 'settings.custom_field', `${what} the ${f.entity.slice(0, -1)} field “${input.label ?? f.label}”`);
   });
 }
 

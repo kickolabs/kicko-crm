@@ -1,5 +1,6 @@
 'use server';
 
+import { audit } from '@/server/audit';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma, type ApplicationStatus } from '@kicko/db';
@@ -178,6 +179,7 @@ export async function saveBillingSettingsAction(slug: string, _: Prev, fd: FormD
       billing: { ...input, invoicePrefix: input.invoicePrefix?.toUpperCase() || 'INV' },
     };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.billing', 'Changed invoice & billing settings');
   }, 'Billing settings saved');
   refresh(slug);
   return res;

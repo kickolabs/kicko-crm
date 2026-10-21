@@ -24,6 +24,7 @@ import {
 } from '@/lib/plans';
 import { financialYear } from './billing';
 import { sendEmail } from './email';
+import { audit } from './audit';
 import { UserError, type Scope } from './scope';
 
 // Kicko subscriptions: entitlements, seats, AI credits, checkout and the lifecycle.
@@ -127,6 +128,7 @@ export async function startCheckout(scope: Scope, input: { plan: PlanId; interva
   await withTenant(scope.tenantId, (tx) =>
     tx.subscription.update({ where: { tenantId: scope.tenantId }, data: { pendingChange: { ...input, providerSubscriptionId: res.providerSubscriptionId } } }),
   );
+  await audit(scope, 'billing.checkout', `Started checkout: ${PLANS[input.plan].name}, ${input.seats} users, ${input.interval === 'year' ? 'yearly' : 'monthly'}`);
   return res.checkoutUrl;
 }
 
@@ -148,6 +150,7 @@ export async function setCancelAtPeriodEnd(scope: Scope, cancel: boolean) {
     else throw new UserError('To resume, choose a plan again: a new subscription starts when the current one ends.');
   }
   await withTenant(scope.tenantId, (tx) => tx.subscription.update({ where: { tenantId: scope.tenantId }, data: { cancelAtPeriodEnd: cancel } }));
+  await audit(scope, 'billing.cancel', cancel ? 'Cancelled the subscription at the end of the period' : 'Resumed the subscription');
 }
 
 // ── Payment events ──────────────────────────────────────────────────────────

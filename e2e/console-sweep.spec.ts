@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
 const PAGES = [
   '', '/inbox', '/calls', '/leads', '/leads?view=table', '/clients', '/cases', '/documents', '/tasks', '/tasks?scope=all', '/tasks?show=done',
   '/calendar', '/walk-ins', '/billing', '/partners', '/partners/commissions', '/import', '/reports', '/reports?r=counsellors', '/reports?r=approvals', '/reports?r=collections',
-  ...['general', 'team', 'billing', 'portal', 'whatsapp', 'assistant', 'calling', 'voice', 'integrations', 'plan', 'fields', 'capture', 'workflows'].map((t) => `/settings?tab=${t}`),
+  ...['general', 'team', 'billing', 'portal', 'whatsapp', 'assistant', 'calling', 'voice', 'integrations', 'plan', 'fields', 'security', 'capture', 'workflows'].map((t) => `/settings?tab=${t}`),
 ];
 
 /**

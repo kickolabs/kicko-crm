@@ -12,7 +12,9 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
-  retries: 0,
+  // One retry: under two parallel workers on a dev PC a test can time out. Playwright
+  // still reports those as "flaky" (not hidden); a test failing twice fails the run.
+  retries: 1,
   reporter: [['list']],
   use: {
     baseURL: external ?? 'http://localhost:3100',

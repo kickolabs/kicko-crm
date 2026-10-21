@@ -34,12 +34,14 @@ model User {
   name          String
   email         String       @unique
   emailVerified Boolean      @default(false)
+  twoFactorEnabled Boolean?  @default(false)
   image         String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   sessions      Session[]
   accounts      Account[]
   memberships   Membership[]
+  twoFactors    TwoFactor[]
 
   @@map("user")
 }
@@ -75,6 +77,22 @@ model Account {
   updatedAt             DateTime  @updatedAt
 
   @@map("account")
+}
+
+// Two-step sign-in (authenticator app). Secret and backup codes are encrypted by Better-Auth.
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
 }
 
 model Verification {
@@ -1034,6 +1052,24 @@ model SavedReport {
   updatedAt   DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+// Security-relevant events per agency: sign-ins, team and settings changes, exports,
+// document views. Shown to owners/admins in Settings → Security. Append-only.
+model AuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  actorId    String?
+  actorEmail String?
+  action     String // e.g. auth.sign_in, team.role_changed, data.export
+  summary    String
+  details    Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action, createdAt])
 }
 
 // A spreadsheet import (leads or clients). createdIds make the import undoable.

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
+import { enableTwoStep } from './totp';
 
 // Phase 7b: Kicko's super-admin console. Only allowlisted, verified staff get in;
 // they can see every agency and extend a trial, set a discount, add credits, set a
@@ -44,7 +45,8 @@ test.describe.serial('Phase 7b · super-admin console', () => {
 
     // The Kicko staff account (no workspace of its own). Re-runs reuse it.
     await request.post('/api/auth/sign-up/email', { data: { name: 'Kicko Ops', ...ADMIN } });
-    await q(`UPDATE "user" SET "emailVerified" = false WHERE email = $1`, [ADMIN.email]);
+    await q(`UPDATE "user" SET "emailVerified" = false, "twoFactorEnabled" = false WHERE email = $1`, [ADMIN.email]);
+    await q(`DELETE FROM "twoFactor" WHERE "userId" = (SELECT id FROM "user" WHERE email = $1)`, [ADMIN.email]); // fresh 2FA each run
 
     admin = await browser.newPage();
     admin.on('console', (m) => {
@@ -61,6 +63,11 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     expect((await owner.goto('/admin'))!.status()).toBe(404);
     expect((await admin.goto('/admin'))!.status()).toBe(404); // allowlisted, not yet granted
     await q(`UPDATE "user" SET "emailVerified" = true WHERE email = $1`, [ADMIN.email]); // what `npm run admin:grant` does
+    // A real admin must use two-step sign-in before the console opens.
+    await admin.goto('/admin');
+    await admin.waitForURL(/\/account\?admin=1/);
+    await expect(admin.getByText('The Kicko admin console requires two-step sign-in')).toBeVisible();
+    await enableTwoStep(admin, ADMIN.password);
     expect((await admin.goto('/admin'))!.status()).toBe(200);
     // A staff account has no workspace: home takes it to the console.
     await admin.goto('/');

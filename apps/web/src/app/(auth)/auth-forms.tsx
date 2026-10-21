@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ActionForm, FormField, SubmitButton } from '@/components/forms';
 import { Input } from '@/components/ui';
-import { signInAction, signUpAction } from './actions';
+import { signInAction, signUpAction, verifySecondFactorAction } from './actions';
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
@@ -28,6 +28,33 @@ export function SignInForm({ next }: { next?: string }) {
           Create a workspace
         </Link>
       </p>
+    </ActionForm>
+  );
+}
+
+export function SecondFactorForm({ next }: { next: string }) {
+  const [mode, setMode] = useState<'totp' | 'backup'>('totp');
+  return (
+    <ActionForm action={verifySecondFactorAction} className="flex flex-col gap-4">
+      <input type="hidden" name="next" value={next} />
+      <input type="hidden" name="mode" value={mode} />
+      {mode === 'totp' ? (
+        <FormField label="Code" name="code">
+          <Input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} placeholder="123 456" autoFocus className="text-center text-2xl tracking-[0.3em]" />
+        </FormField>
+      ) : (
+        <FormField label="Backup code" name="code" hint="One of the codes you saved when you set up two-step sign-in. Each works once.">
+          <Input id="code" name="code" autoComplete="off" autoFocus />
+        </FormField>
+      )}
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="trust" className="size-4 accent-ink" />
+        Trust this browser for 30 days
+      </label>
+      <SubmitButton size="lg" className="w-full">Verify</SubmitButton>
+      <button type="button" onClick={() => setMode(mode === 'totp' ? 'backup' : 'totp')} className="text-sm font-semibold text-muted hover:text-ink">
+        {mode === 'totp' ? 'Lost your phone? Use a backup code' : 'Use the authenticator app instead'}
+      </button>
     </ActionForm>
   );
 }

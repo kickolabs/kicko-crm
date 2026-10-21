@@ -89,18 +89,48 @@ const signInSchema = z.object({
 export async function signInAction(_: ActionResult | null, fd: FormData): Promise<ActionResult> {
   const res = await run(async () => {
     const input = signInSchema.parse(formObject(fd));
+    let twoStep = false;
     try {
-      await auth.api.signInEmail({
+      const r = await auth.api.signInEmail({
         body: { email: input.email.toLowerCase(), password: input.password },
         headers: await headers(),
       });
+      twoStep = 'twoFactorRedirect' in r && Boolean(r.twoFactorRedirect);
     } catch (err) {
       const msg = authMessage(err);
       if (msg) throw new UserError(msg);
       throw err;
     }
-    // Only allow same-site relative redirects.
-    return input.next && /^\/[\w\-/]*$/.test(input.next) && !input.next.startsWith('//') ? input.next : '/';
+    const next = safeNext(input.next);
+    return twoStep ? `/login/verify?next=${encodeURIComponent(next)}` : next;
+  });
+  if (res.ok) redirect(res.data as string);
+  return res;
+}
+
+/** Only same-site relative redirects. */
+const safeNext = (n?: string) => (n && /^\/[\w\-/?=&%.]*$/.test(n) && !n.startsWith('//') ? n : '/');
+
+/** Second step of sign-in: a code from the authenticator app, or a backup code. */
+export async function verifySecondFactorAction(_: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const res = await run(async () => {
+    const input = z
+      .object({ code: z.string().trim().min(6, 'Enter the code').max(20), mode: z.enum(['totp', 'backup']), trust: z.string().optional(), next: z.string().optional() })
+      .parse(formObject(fd));
+    const body = { code: input.mode === 'totp' ? input.code.replace(/\s/g, '') : input.code, trustDevice: input.trust === 'on' };
+    try {
+      if (input.mode === 'totp') await auth.api.verifyTOTP({ body, headers: await headers() });
+      else await auth.api.verifyBackupCode({ body, headers: await headers() });
+    } catch (err) {
+      if (err instanceof APIError) {
+        const msg = String(err.body?.message ?? err.message);
+        if (/locked|too many/i.test(msg)) throw new UserError('Too many wrong codes. Wait a few minutes, then sign in again.');
+        if (/cookie|expired|not found/i.test(msg)) throw new UserError('This sign-in timed out. Go back and sign in again.');
+        throw new UserError(input.mode === 'totp' ? 'That code didn’t work. Check the app shows Kicko and try the newest code.' : 'That backup code didn’t work.');
+      }
+      throw err;
+    }
+    return safeNext(input.next);
   });
   if (res.ok) redirect(res.data as string);
   return res;

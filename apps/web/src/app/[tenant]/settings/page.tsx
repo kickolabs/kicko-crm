@@ -14,6 +14,7 @@ import { UpgradeCard } from '@/components/upgrade';
 import { hasAi, hasFeature } from '@/lib/plans';
 import { IntegrationsTab } from './integrations-tab';
 import { CustomFieldsSettings } from './custom-fields-settings';
+import { SecurityTab } from './security-settings';
 import { listFields } from '@/server/custom-fields';
 import { CreditsCard, CurrentPlan, PlanPicker } from './plan-settings';
 import { creditSummary } from '@/server/plan';
@@ -54,6 +55,7 @@ const TABS = [
   ['voice', 'AI voice agent'],
   ['integrations', 'Integrations'],
   ['fields', 'Custom fields'],
+  ['security', 'Security'],
   ['capture', 'Lead capture'],
   ['workflows', 'Visa workflows'],
 ] as const;
@@ -63,7 +65,7 @@ export default async function SettingsPage({
   searchParams,
 }: {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ tab?: string; product?: string; paid?: string }>;
+  searchParams: Promise<{ tab?: string; product?: string; paid?: string; group?: string; person?: string; before?: string }>;
 }) {
   const { tenant: slug } = await params;
   const sp = await searchParams;
@@ -127,6 +129,8 @@ export default async function SettingsPage({
       )}
 
       {tab === 'fields' && <FieldsTab />}
+
+      {tab === 'security' && <SecurityTab ctx={ctx} sp={sp} />}
 
       {tab === 'workflows' && <WorkflowsTab slug={slug} productId={sp.product} ctx={ctx} />}
     </div>

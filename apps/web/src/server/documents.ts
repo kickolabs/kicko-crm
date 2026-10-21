@@ -5,6 +5,7 @@ import type { DocumentStatus, Tx } from '@kicko/db';
 import type { ChecklistItem } from '@kicko/db/visa-catalog';
 import { z } from 'zod';
 import { parseLocal } from '@/lib/format';
+import { audit } from './audit';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 import { ALLOWED_TYPES, MAX_UPLOAD_BYTES, createDownloadUrl, createUploadUrl, newKey, objectSize } from './storage';
 
@@ -171,7 +172,12 @@ export async function setDocumentExpiry(scope: Scope, documentId: string, date: 
 
 /** Signed URL for a file; the lookup runs under RLS so foreign files are never resolvable. */
 export async function fileUrl(scope: Scope, fileId: string, inline: boolean) {
-  const file = await inTenant(scope, (tx) => tx.documentFile.findUnique({ where: { id: fileId } }));
+  const file = await inTenant(scope, (tx) =>
+    tx.documentFile.findUnique({ where: { id: fileId }, include: { document: { select: { name: true, client: { select: { ref: true, firstName: true, lastName: true } } } } } }),
+  );
   if (!file) throw new UserError('File not found');
+  // Who opened which client document (passports etc.), for the agency's audit log.
+  const c = file.document.client;
+  await audit(scope, 'document.viewed', `${inline ? 'Viewed' : 'Downloaded'} ${file.document.name} of ${c.ref} ${[c.firstName, c.lastName].filter(Boolean).join(' ')}`, { fileId, fileName: file.fileName });
   return createDownloadUrl(file.storageKey, file.fileName, inline);
 }

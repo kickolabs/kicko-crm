@@ -9,6 +9,7 @@ import { assertCan, getCtx } from '@/lib/tenant';
 import { createField, moveField, setValues, updateField } from '@/server/custom-fields';
 import { PlanError } from '@/server/plan';
 import { deleteSavedReport, saveReport } from '@/server/reports';
+import { setRequire2fa } from '@/server/settings';
 import { scopeOf } from '@/server/scope';
 
 // Phase 7d: custom fields and saved reports.
@@ -64,6 +65,15 @@ export async function saveReportAction(slug: string, spec: ReportSpec, _prev: Ac
     revalidatePath(`/${slug}/reports`);
     return r.id;
   }, 'Report saved');
+}
+
+export async function setRequire2faAction(slug: string, on: boolean) {
+  const ctx = await getCtx(slug);
+  return run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await setRequire2fa(scopeOf(ctx), on);
+    revalidatePath(`/${slug}`, 'layout');
+  });
 }
 
 export async function deleteReportAction(slug: string, id: string) {

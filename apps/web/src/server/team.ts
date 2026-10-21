@@ -4,6 +4,8 @@ import { prisma, withTenant, type Role } from '@kicko/db';
 import { z } from 'zod';
 import { assertSeatAvailable } from './plan';
 import { normalizeEmail } from '@/lib/phone';
+import { ROLE_LABEL } from '@/lib/permissions';
+import { audit } from './audit';
 import { inTenant, UserError, type Scope } from './scope';
 
 const INVITE_DAYS = 7;
@@ -17,7 +19,7 @@ export async function createInvite(scope: Scope, raw: z.input<typeof inviteInput
   const input = inviteInput.parse(raw);
   const email = normalizeEmail(input.email)!;
   const user = await prisma.user.findUnique({ where: { email } });
-  return inTenant(scope, async (tx) => {
+  const invite = await inTenant(scope, async (tx) => {
     await assertSeatAvailable(tx, scope.tenantId);
     if (user) {
       const m = await tx.membership.findUnique({ where: { tenantId_userId: { tenantId: scope.tenantId, userId: user.id } } });
@@ -35,10 +37,17 @@ export async function createInvite(scope: Scope, raw: z.input<typeof inviteInput
       },
     });
   });
+  await audit(scope, 'team.invited', `Invited ${email} as ${ROLE_LABEL[input.role as Role]}`);
+  return invite;
 }
 
 export async function revokeInvite(scope: Scope, inviteId: string) {
-  return inTenant(scope, (tx) => tx.invite.deleteMany({ where: { id: inviteId, acceptedAt: null } }));
+  const inv = await inTenant(scope, async (tx) => {
+    const i = await tx.invite.findUnique({ where: { id: inviteId } });
+    await tx.invite.deleteMany({ where: { id: inviteId, acceptedAt: null } });
+    return i;
+  });
+  if (inv) await audit(scope, 'team.invite_revoked', `Cancelled the invite for ${inv.email}`);
 }
 
 export async function getInvite(tenantId: string, token: string) {
@@ -61,6 +70,9 @@ export async function acceptInvite(tenantId: string, token: string, user: { id: 
       update: { role: invite.role, active: true },
     });
     await tx.invite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+    return invite.role;
+  }).then(async (role) => {
+    await audit({ tenantId, actorId: user.id }, 'team.joined', `${user.email} joined as ${ROLE_LABEL[role]}`);
   });
 }
 
@@ -73,5 +85,11 @@ export async function updateMember(scope: Scope, userId: string, patch: { role?:
     if (losingOwner && owners <= 1) throw new UserError('A workspace needs at least one owner');
     if (userId === scope.actorId && patch.active === false) throw new UserError("You can't deactivate yourself");
     await tx.membership.update({ where: { id: m.id }, data: patch });
+    return m;
+  }).then(async (m) => {
+    const who = (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email ?? 'a member';
+    if (patch.role && patch.role !== m.role) await audit(scope, 'team.role_changed', `Changed ${who} from ${ROLE_LABEL[m.role]} to ${ROLE_LABEL[patch.role]}`);
+    if (patch.active === false && m.active) await audit(scope, 'team.deactivated', `Deactivated ${who}`);
+    if (patch.active === true && !m.active) await audit(scope, 'team.reactivated', `Reactivated ${who}`);
   });
 }
