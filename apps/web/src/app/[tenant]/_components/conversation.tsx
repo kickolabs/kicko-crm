@@ -9,7 +9,6 @@ import { ActionButton, ActionForm, SubmitButton } from '@/components/forms';
 import { Select, buttonCls } from '@/components/ui';
 import { staffMessageAction } from '../actions-phase3';
 import {
-  markContactReadAction,
   saveMediaToDocumentAction,
   setOptInAction,
   simulateStatusAction,
@@ -23,7 +22,6 @@ type View = NonNullable<ThreadView>;
 type Msg = View['messages'][number];
 
 export function Conversation({ slug, view }: { slug: string; view: View }) {
-  const router = useRouter();
   const end = useRef<HTMLLIElement>(null);
   const lastInboundChannel = [...view.messages].reverse().find((m) => m.direction === 'INBOUND')?.channel;
   const [channel, setChannel] = useState<'whatsapp' | 'portal'>(
@@ -36,8 +34,11 @@ export function Conversation({ slug, view }: { slug: string; view: View }) {
     end.current?.scrollIntoView({ block: 'end' });
   }, [view.messages.length]);
   useEffect(() => {
-    if (view.unread > 0) void markContactReadAction(slug, view.key).then(() => router.refresh());
-  }, [view.unread, view.key, slug, router]);
+    // A plain request, not a server action: an action fired automatically while the
+    // page is navigating could leave the user's next click (e.g. "Resume AI") stuck.
+    // Unread counts catch up on the next refresh.
+    if (view.unread > 0) void fetch(`/api/t/${slug}/inbox/read`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: view.key }) }).catch(() => {});
+  }, [view.unread, view.key, slug]);
 
   const canWhatsApp = Boolean(view.whatsapp);
   return (

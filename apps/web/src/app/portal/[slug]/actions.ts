@@ -36,6 +36,11 @@ export async function redeemAction(slug: string, token: string): Promise<ActionR
   return res;
 }
 
+/** Form version, so "Open my portal" works even before the page's JavaScript has loaded. */
+export async function redeemFormAction(slug: string, token: string, _prev: ActionResult | null, _fd: FormData): Promise<ActionResult> {
+  return redeemAction(slug, token);
+}
+
 export async function logoutAction(slug: string) {
   await endPortalSession(slug);
   redirect(`/portal/${slug}/login`);

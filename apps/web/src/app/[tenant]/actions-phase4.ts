@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { formObject, run, type ActionResult } from '@/lib/action';
 import { can } from '@/lib/permissions';
 import { assertCan, db, getCtx, type Ctx } from '@/lib/tenant';
-import { markThreadRead, parseContactKey } from '@/server/messages';
+import { parseContactKey } from '@/server/messages';
 import { createLoginLink } from '@/server/portal-auth';
 import { scopeOf, UserError } from '@/server/scope';
 import { createDownloadUrl, copyObject, newKey, ALLOWED_TYPES } from '@/server/storage';
@@ -118,13 +118,6 @@ export async function setOptInAction(slug: string, key: string, optIn: boolean) 
     assertCanMessage(ctx);
     await wa.setOptIn(scopeOf(ctx), contactOf(key), optIn);
   });
-  refresh(slug);
-  return res;
-}
-
-export async function markContactReadAction(slug: string, key: string) {
-  const ctx = await getCtx(slug);
-  const res = await run(() => markThreadRead(scopeOf(ctx), contactOf(key)));
   refresh(slug);
   return res;
 }

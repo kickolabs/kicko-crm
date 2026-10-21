@@ -149,8 +149,7 @@ test.describe.serial('Phase 5b · WhatsApp AI assistant (sandbox)', () => {
     await expect(page.getByText('Asha · AI assistant').first()).toBeVisible();
     await expect(page.getByText('Handed to a human')).toBeVisible();
     await page.getByRole('button', { name: 'Resume AI' }).click();
-    // The inbox re-render after the action can be slow under parallel test load.
-    await expect(page.getByText(/Asha.*\(AI\) is answering this chat/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Asha.*\(AI\) is answering this chat/)).toBeVisible();
   });
 
   test('a staff reply pauses the assistant; STOP opts out', async ({ request }) => {

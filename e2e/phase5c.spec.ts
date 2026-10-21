@@ -146,11 +146,15 @@ test.describe.serial('Phase 5c · AI voice agent (sandbox)', () => {
     }
     expect(await leadByPhone('+919840033445')).toMatchObject({ status: 'LOST', lostReason: 'Not interested (AI call)' });
 
-    const calls = await q<{ status: string; attempt: number }>(
-      `SELECT c.status, c.attempt FROM "Call" c JOIN "Lead" l ON l.id = c."leadId" JOIN "Tenant" w ON w.id = l."tenantId" WHERE w.slug = $1 AND l."phoneNormalized" = '+919840044556' ORDER BY c.attempt`,
-      [slug],
-    );
-    expect(calls).toEqual([{ status: 'NO_ANSWER', attempt: 1 }, { status: 'QUEUED', attempt: 2 }]);
+    // The retry is queued just after the call is marked unanswered, so wait for it.
+    await expect
+      .poll(() =>
+        q<{ status: string; attempt: number }>(
+          `SELECT c.status, c.attempt FROM "Call" c JOIN "Lead" l ON l.id = c."leadId" JOIN "Tenant" w ON w.id = l."tenantId" WHERE w.slug = $1 AND l."phoneNormalized" = '+919840044556' ORDER BY c.attempt`,
+          [slug],
+        ),
+      )
+      .toEqual([{ status: 'NO_ANSWER', attempt: 1 }, { status: 'QUEUED', attempt: 2 }]);
     await page.goto(`/${slug}/settings?tab=voice`);
     await expect(page.getByText(/attempt 2/)).toBeVisible();
   });

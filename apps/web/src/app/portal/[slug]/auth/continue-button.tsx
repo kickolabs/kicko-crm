@@ -1,35 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useTransition } from 'react';
-import { Spinner } from '@/components/forms';
-import { buttonCls } from '@/components/ui';
-import { redeemAction } from '../actions';
+import { useActionState } from 'react';
+import { SubmitButton } from '@/components/forms';
+import { redeemFormAction } from '../actions';
 
+// A real form, not an onClick: a tap before the page's JavaScript has loaded (slow
+// phones) still signs the client in, instead of silently doing nothing.
 export function ContinueButton({ slug, token }: { slug: string; token: string }) {
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [state, action] = useActionState(redeemFormAction.bind(null, slug, token), null);
   return (
-    <div className="flex flex-col gap-3">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          start(async () => {
-            const res = await redeemAction(slug, token);
-            if (res && !res.ok) setError(res.error);
-          })
-        }
-        className={buttonCls('primary', 'lg', 'w-full')}
-      >
-        {pending && <Spinner />} Open my portal
-      </button>
-      {error && (
+    <form action={action} className="flex flex-col gap-3">
+      <SubmitButton size="lg" className="w-full">Open my portal</SubmitButton>
+      {state && !state.ok && (
         <div role="alert" className="rounded-[12px] bg-danger-bg px-4 py-3 text-sm text-danger">
-          {error}{' '}
+          {state.error}{' '}
           <Link href={`/portal/${slug}/login`} className="font-semibold underline underline-offset-4">Get a new link</Link>
         </div>
       )}
-    </div>
+    </form>
   );
 }
