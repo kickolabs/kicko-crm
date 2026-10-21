@@ -70,14 +70,16 @@ test.describe.serial('Phase 7b · super-admin console', () => {
   test('lists every agency with plan, trial and usage', async () => {
     await expect(admin.getByRole('heading', { name: 'Agencies', exact: true })).toBeVisible();
     await expect(admin.locator('th', { hasText: 'MRR' })).toBeVisible();
-    await admin.getByLabel('Search agencies').fill(slug);
-    await admin.getByLabel('Search agencies').press('Enter');
+    await admin.getByLabel('Search agencies').fill(slug); // filters instantly, no reload
     await admin.waitForURL(/q=p7b-/);
+    await expect(admin.locator('tbody tr')).toHaveCount(1);
     const row = admin.getByRole('row').filter({ hasText: agency });
     await expect(row).toContainText('Free trial');
     await expect(row).toContainText('Trial · 14 days left');
     await expect(row).toContainText(`p7b-${run}@example.test`);
-    await admin.getByRole('link', { name: 'Trial', exact: false }).first().click();
+    await admin.getByRole('tab', { name: /^Paying/ }).click();
+    await expect(admin.getByRole('row').filter({ hasText: agency })).toHaveCount(0);
+    await admin.getByRole('tab', { name: /^Trial \d/ }).click();
     await expect(admin.getByRole('row').filter({ hasText: agency })).toBeVisible();
     await row.getByRole('link', { name: agency }).click();
     await expect(admin.getByRole('heading', { name: agency })).toBeVisible();

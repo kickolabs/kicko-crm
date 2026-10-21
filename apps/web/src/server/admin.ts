@@ -97,9 +97,25 @@ async function inBatches<T, R>(items: T[], size: number, fn: (x: T) => Promise<R
   return out;
 }
 
-export async function listAgencies() {
-  const tenants = await prisma.tenant.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, name: true, slug: true, country: true, createdAt: true } });
-  return inBatches(tenants, 5, agencySummary);
+// Visiting every agency is slow with many agencies, so the list is kept for a
+// minute. Admin changes clear it; the console also has a Refresh link.
+const LIST_TTL = 60_000;
+let listCache: { at: number; rows: Promise<AgencyRow[]> } | null = null;
+
+export function clearAgencyCache() {
+  listCache = null;
+}
+
+export async function listAgencies({ fresh = false } = {}) {
+  if (fresh || !listCache || Date.now() - listCache.at > LIST_TTL) {
+    const rows = prisma.tenant
+      .findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, name: true, slug: true, country: true, createdAt: true } })
+      .then((tenants) => inBatches(tenants, 8, agencySummary));
+    listCache = { at: Date.now(), rows };
+    rows.catch(() => (listCache = null));
+  }
+  const { at, rows } = listCache;
+  return { rows: await rows, at: new Date(at) };
 }
 
 export function overview(rows: AgencyRow[], now = new Date()) {
