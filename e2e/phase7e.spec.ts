@@ -154,3 +154,24 @@ test.describe.serial('Phase 7e · trust & security', () => {
     expect(consoleErrors).toEqual([]);
   });
 });
+
+test.describe('Phase 7e · legal pages', () => {
+  test('footer links to every legal page; signup shows the agreement; legal addresses are reserved', async ({ page }) => {
+    await page.goto('/');
+    for (const [link, heading] of [['Terms', 'Terms of Service'], ['Privacy', 'Privacy Policy'], ['Data Processing Agreement', 'Data Processing Agreement'], ['Security', 'Security']] as const) {
+      await page.getByRole('contentinfo').getByRole('link', { name: link, exact: true }).click();
+      await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    }
+    await page.goto('/dpa');
+    await expect(page.getByRole('cell', { name: 'Anthropic PBC' })).toBeVisible();
+    await page.goto('/signup');
+    await expect(page.getByText('By creating a workspace you agree to the')).toBeVisible();
+    await page.getByLabel('Your name').fill('Reserved Test');
+    await page.getByLabel('Work email').fill(`p7e-reserved-${Date.now().toString(36)}@example.test`);
+    await page.getByLabel('Password').fill('kicko-pass-123');
+    await page.getByLabel('Agency name').fill('Privacy Agency');
+    await page.getByLabel('Workspace address').fill('privacy');
+    await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await expect(page.getByText('That address is reserved. Try another.')).toBeVisible();
+  });
+});

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { tenantsForUser } from '@kicko/db/provision';
 import { Logo } from '@/components/logo';
+import { SiteFooter } from '@/components/site-footer';
 import { buttonCls, LinkButton } from '@/components/ui';
 import { getSession } from '@/lib/auth';
 import { getAdmin } from '@/server/admin';
@@ -83,6 +84,7 @@ export default async function Home() {
           ))}
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

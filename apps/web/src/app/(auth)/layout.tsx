@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
+import { SiteFooter } from '@/components/site-footer';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </Link>
       </header>
       <main className="flex flex-1 items-start justify-center px-4 pt-6 pb-16 sm:pt-14">{children}</main>
+      <SiteFooter />
     </div>
   );
 }

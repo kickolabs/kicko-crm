@@ -11,6 +11,7 @@
     "db:seed:demo": "npm run seed:demo --workspace @kicko/db",
     "db:reset": "npm run reset --workspace @kicko/db",
     "db:clean-test": "npm run clean:test --workspace @kicko/db",
+    "db:backup": "dotenv -e .env -- node scripts/backup-db.mjs",
     "admin:grant": "npm run admin:grant --workspace @kicko/db --",
     "dev": "npm run dev --workspace @kicko/web",
     "build": "npm run generate --workspace @kicko/db && npm run build --workspace @kicko/web",

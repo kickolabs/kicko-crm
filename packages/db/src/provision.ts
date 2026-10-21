@@ -4,7 +4,7 @@ import { VISA_CATALOG } from './visa-catalog';
 
 export const RESERVED_SLUGS = new Set([
   'api', 'app', 'login', 'logout', 'signup', 'invite', 'f', 'embed', 'static', 'assets',
-  'admin', 'account', 'settings', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
+  'admin', 'account', 'settings', 'terms', 'privacy', 'dpa', 'security', 'legal', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
 ]);
 
 export function slugify(input: string): string {

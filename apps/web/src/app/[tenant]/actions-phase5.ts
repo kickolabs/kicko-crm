@@ -141,6 +141,7 @@ export async function recordingUrlAction(slug: string, callId: string) {
   const ctx = await getCtx(slug);
   assertCanCall(ctx);
   const c = await db(ctx, (tx) => tx.call.findUnique({ where: { id: callId } }));
+  if (c?.recordingKey) await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'document.viewed', 'Played a call recording', { callId });
   return c?.recordingKey ? createDownloadUrl(c.recordingKey, `call-${c.id}.${c.recordingKey.split('.').pop()}`) : null;
 }
 

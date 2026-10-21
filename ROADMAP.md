@@ -17,7 +17,7 @@
 | 7b | Super-admin console at /admin: all agencies with plan, trial, seats, usage, MRR, last activity; extend trial, founding discount (20 slots), manual plan, AI credits, suspend / reactivate, notes; every change logged | Done |
 | 7c | CSV / Excel import of leads & clients: column guessing, preview (new / duplicate / error), skip or update duplicates, owner matching, original dates, client rows convert matching leads, undo per import (20,000 rows; 5,000 in ~2 s) | Done |
 | 7d | Custom fields on leads, clients & cases (text, number, date, dropdown, yes/no; editable on Pro, importable, reportable) and Reports: 6 ready-made (all plans) plus a builder with group / split / measure, saved reports and CSV (Pro) | Done |
-| 7e | Trust: 2FA, audit log, data export, backups, legal pages | Planned |
+| 7e | Trust: two-step sign-in (agency can require it; admin console requires it), append-only audit log, full data export (ZIP of CSVs), backup script + runbook, Terms / Privacy / DPA / Security pages (need legal review) | Done |
 | 7f | Website, pricing page, onboarding | Planned |
 
 ## Phase 4.5: Integration foundation

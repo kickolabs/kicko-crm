@@ -1,4 +1,5 @@
 import 'server-only';
+import { audit } from './audit';
 import { after } from 'next/server';
 import { checkDocumentFile } from './doc-checks';
 import { prisma, withTenant } from '@kicko/db';
@@ -117,6 +118,7 @@ export async function portalFinishUpload(p: PortalCtx, documentId: string, raw: 
 export async function portalFileUrl(p: PortalCtx, fileId: string) {
   const file = await run(p, (tx) => tx.documentFile.findFirst({ where: { id: fileId, document: { clientId: p.client.id } } }));
   if (!file) throw new UserError('File not found');
+  await audit({ tenantId: p.scope.tenantId }, 'document.viewed', `Client ${p.client.ref} opened their file ${file.fileName} in the portal`, { fileId });
   return createDownloadUrl(file.storageKey, file.fileName, true);
 }
 

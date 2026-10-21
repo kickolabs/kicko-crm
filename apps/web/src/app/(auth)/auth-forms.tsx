@@ -105,6 +105,10 @@ export function SignUpForm({ signedInAs }: { signedInAs?: string }) {
       <SubmitButton size="lg" className="mt-2 w-full">
         {signedInAs ? 'Create workspace' : 'Create account & workspace'}
       </SubmitButton>
+      <p className="text-center text-xs text-muted">
+        By creating a workspace you agree to the <Link href="/terms" className="underline">Terms</Link>, <Link href="/privacy" className="underline">Privacy Policy</Link> and{' '}
+        <Link href="/dpa" className="underline">Data Processing Agreement</Link>.
+      </p>
       {!signedInAs && (
         <p className="text-center text-sm text-muted">
           Already on Kicko?{' '}

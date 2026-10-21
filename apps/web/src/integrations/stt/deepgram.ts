@@ -17,6 +17,8 @@ export function deepgram(apiKey: string): SttAdapter {
         smart_format: 'true',
         punctuate: 'true',
         utterances: 'true',
+        // Don't let Deepgram use agencies' call audio to improve its models (Model Improvement Program).
+        mip_opt_out: 'true',
         ...(channels === 'dual' ? { multichannel: 'true' } : { diarize: 'true' }),
       });
       const res = await fetch(`https://api.deepgram.com/v1/listen?${q}`, {

@@ -1,5 +1,6 @@
 'use server';
 
+import { audit } from '@/server/audit';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { formObject, run, type ActionResult } from '@/lib/action';
@@ -133,6 +134,7 @@ export async function waMediaUrlAction(slug: string, messageId: string) {
   return run(async () => {
     const m = await db(ctx, (tx) => tx.message.findUnique({ where: { id: messageId } }));
     if (!m?.mediaKey) throw new UserError('Attachment not available');
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'document.viewed', `Opened WhatsApp attachment ${m.mediaName ?? m.mediaType ?? ''}`.trim(), { messageId });
     return createDownloadUrl(m.mediaKey, m.mediaName ?? `whatsapp-${m.mediaType}`, true);
   });
 }
