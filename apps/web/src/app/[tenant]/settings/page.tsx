@@ -11,11 +11,11 @@ import { GeneralForm, InviteForm, LeadCapture, MemberControls, ProductEditor, Re
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
 import { ConnectionCard } from './connection-card';
 import { UpgradeCard } from '@/components/upgrade';
-import { hasFeature } from '@/lib/plans';
+import { hasAi, hasFeature } from '@/lib/plans';
 import { IntegrationsTab } from './integrations-tab';
 import { CustomFieldsSettings } from './custom-fields-settings';
 import { listFields } from '@/server/custom-fields';
-import { CreditsCard, CurrentPlan, PlanPicker } from './plan-settings';
+import { CreditsCard, CurrentPlan, NoAiCard, PlanPicker } from './plan-settings';
 import { creditSummary } from '@/server/plan';
 import { formatMoney } from '@/lib/money';
 import type { Interval, PlanId, SubStatus } from '@/lib/plans';
@@ -210,7 +210,11 @@ export default async function SettingsPage({
       <div className="flex flex-col gap-5">
         <CurrentPlan slug={slug} sub={sub} paid={sp.paid === '1'} />
         <PlanPicker slug={slug} sub={sub} />
-        <CreditsCard slug={slug} credits={credits} currency={sub.currency} sandboxAi={!platformStatus().llm} />
+        {hasAi(s) ? (
+          <CreditsCard slug={slug} credits={credits} currency={sub.currency} sandboxAi={!platformStatus().llm} />
+        ) : (
+          <NoAiCard leftover={credits.topUp} />
+        )}
         <Card>
           <CardHeader title="Invoices from Kicko" sub="GST tax invoices for your subscription and credits" />
           <ul className="divide-y divide-line">

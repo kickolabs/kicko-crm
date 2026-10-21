@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { access, DAY, hasFeature, monthlyAllowance, nextStatus, planFor, quote, TRIAL_CREDITS } from './plans';
+import { access, DAY, hasAi, hasFeature, monthlyAllowance, nextStatus, planFor, quote, TRIAL_CREDITS } from './plans';
 
 const now = new Date('2026-10-22T10:00:00Z');
 const ago = (days: number) => new Date(now.getTime() - days * DAY);
@@ -28,6 +28,12 @@ describe('entitlements', () => {
     expect(hasFeature({ plan: 'starter', status: 'trialing' }, 'voice_agent')).toBe(true);
     expect(monthlyAllowance({ plan: 'pro', status: 'trialing', seats: 10 })).toBe(TRIAL_CREDITS);
     expect(monthlyAllowance({ plan: 'growth', status: 'active', seats: 4 })).toBe(1200);
+  });
+  it('Starter has no AI features, so no credits', () => {
+    expect(monthlyAllowance({ plan: 'starter', status: 'active', seats: 3 })).toBe(0);
+    expect(hasAi({ plan: 'starter', status: 'active' })).toBe(false);
+    expect(hasAi({ plan: 'starter', status: 'trialing' })).toBe(true);
+    expect(hasAi({ plan: 'growth', status: 'active' })).toBe(true);
   });
 });
 

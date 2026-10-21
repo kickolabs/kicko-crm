@@ -127,6 +127,9 @@ test.describe.serial('Phase 7a · plans & billing', () => {
     await page.waitForURL(/settings\?tab=plan/);
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Starter', { exact: true }).first()).toBeVisible();
+    // Starter has no AI features: no credits to show or buy.
+    await expect(page.getByText('AI features start on Growth').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Buy 1,000 credits/ })).toHaveCount(0);
   });
 
   test('daily job moves an expired trial to read-only; forged billing webhooks are refused', async ({ request }) => {

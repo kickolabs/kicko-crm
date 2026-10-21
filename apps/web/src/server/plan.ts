@@ -9,6 +9,7 @@ import {
   access,
   CREDIT_COST,
   FEATURE_LABEL,
+  hasAi,
   hasFeature,
   monthlyAllowance,
   nextStatus,
@@ -130,6 +131,7 @@ export async function startCheckout(scope: Scope, input: { plan: PlanId; interva
 }
 
 export async function buyCredits(scope: Scope) {
+  if (!hasAi(await getSubscription(scope.tenantId))) throw new PlanError('AI features start on the Growth plan. Upgrade first, then credits can be added.');
   const c = await customerOf(scope);
   const subtotal = TOP_UP.price[c.currency];
   const amount = c.currency === 'INR' ? Math.round(subtotal * 1.18) : subtotal;

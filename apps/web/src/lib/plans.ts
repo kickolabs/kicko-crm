@@ -34,7 +34,7 @@ export const PLANS: Record<PlanId, {
     name: 'Starter',
     tagline: 'Small agencies, 1–3 counsellors',
     price: { INR: { month: 119_900, year: 99_900 }, USD: { month: 1_800, year: 1_500 } },
-    creditsPerUser: 100,
+    creditsPerUser: 0, // no AI features on Starter, so no credits to spend
     storageGb: 10,
     features: [],
     highlights: ['Leads, clients, cases & documents', 'GST invoices & receipts', 'Client portal, web form & walk-in kiosk', 'WhatsApp inbox, templates & automations'],
@@ -81,6 +81,12 @@ export type CreditAction = keyof typeof CREDIT_COST;
 export const TRIAL_CREDITS = 200;
 export const TOP_UP = { credits: 1000, price: { INR: 149_900, USD: 1_900 } };
 export const GST_RATE = 0.18;
+
+/** Features that spend AI credits. */
+export const AI_FEATURES: Feature[] = ['call_notes', 'wa_assistant', 'voice_agent', 'doc_checks'];
+
+/** Whether the plan has anything to spend AI credits on (trials do). */
+export const hasAi = (sub: { plan: string; status: string }) => AI_FEATURES.some((f) => hasFeature(sub, f));
 
 /** Lowest plan that includes a feature. */
 export const planFor = (f: Feature) => PLAN_ORDER.find((p) => PLANS[p].features.includes(f))!;
