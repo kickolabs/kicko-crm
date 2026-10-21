@@ -8,6 +8,7 @@ import { getPortalHome } from '@/server/portal';
 import { requirePortal } from '@/server/portal-auth';
 import { connectionSummary } from '@/integrations/core/connections';
 import { PortalShell } from './portal-shell';
+import { portalQuestions } from '@/server/forms';
 import { CancelAppointment, CopyText, NeedItem, PayButton } from './portal-widgets';
 
 export const metadata = { title: 'Your visa journey', robots: { index: false } };
@@ -34,11 +35,22 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
   );
   const nextDue = dues.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
   const welcome = p.scope.settings.portal?.welcome;
+  const questions = await portalQuestions(p);
 
   return (
     <PortalShell slug={slug} agency={p.tenantName} active="journey" unread={home.unread}>
       {booked && (
         <div role="status" className="rounded-[16px] bg-lime px-5 py-3.5 font-semibold">Booked. Your consultant has it in their calendar.</div>
+      )}
+
+      {questions.pending > 0 && (
+        <Link href={`/portal/${slug}/questions`} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-lime px-5 py-4 hover:brightness-95">
+          <span>
+            <span className="block font-extrabold">Your consultant needs {questions.pending} detail{questions.pending === 1 ? '' : 's'} for your application</span>
+            <span className="text-sm">A few questions for {questions.forms.join(', ')}. Takes about 5 minutes.</span>
+          </span>
+          <span className="font-bold">Answer now →</span>
+        </Link>
       )}
 
       {openCases.length === 0 && (

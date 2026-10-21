@@ -313,3 +313,62 @@ export async function renderReceiptPdf(input: {
   footer(w, page, input.agency);
   return doc.save();
 }
+
+// ── Government form data sheet ──────────────────────────────────────────────
+
+/** The embedded fonts cover Latin scripts; anything else is replaced rather than breaking the PDF. */
+const latin = (s: string) => s.replace(/[^\u0000-ɏ‐-‧₹]/g, '?');
+
+export async function renderFormSheetPdf(input: {
+  agency: string;
+  form: { title: string; use: string };
+  client: { name: string; ref: string };
+  sections: { title: string; rows: { label: string; value: string | null }[] }[];
+  generated: string;
+}) {
+  const { doc, fonts } = await setup();
+  let page = doc.addPage([595.28, 841.89]);
+  let w = new Writer(page, fonts);
+  const { width, height } = page.getSize();
+  const left = 48;
+  const valueX = 250;
+  const valueW = width - left - valueX;
+
+  const top = () => {
+    page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: LIME });
+    w.text(input.agency, left, height - 40, { size: 9, bold: true, color: MUTED });
+    w.text(`${input.client.name} · ${input.client.ref}`, width - left, height - 40, { size: 9, color: MUTED, align: 'right' });
+    return height - 64;
+  };
+  const newPage = () => {
+    page = doc.addPage([595.28, 841.89]);
+    w = new Writer(page, fonts);
+    return top();
+  };
+
+  let y = top();
+  w.text(latin(input.form.title), left, y, { size: 18, bold: true });
+  y = w.para(latin(input.form.use), left, y - 16, width - left * 2, { size: 8.5, color: MUTED }) - 6;
+  w.text(`Prepared ${input.generated} from the client's file. Check every answer against the original documents before submitting.`, left, y, { size: 8, color: MUTED });
+  y -= 22;
+
+  for (const s of input.sections) {
+    if (y < 120) y = newPage();
+    page.drawRectangle({ x: left, y: y - 4, width: width - left * 2, height: 18, color: PAPER });
+    w.text(latin(s.title.toUpperCase()), left + 8, y + 1, { size: 8, bold: true });
+    y -= 24;
+    for (const r of s.rows) {
+      const value = latin(r.value ?? '(missing)');
+      const lines = Math.max(1, value.split('\n').length + Math.floor(w.width(value, 9) / valueW));
+      if (y - lines * 13 < 70) y = newPage();
+      w.text(latin(r.label), left, y, { size: 8.5, color: MUTED });
+      const end = w.para(value, valueX, y, valueW, { size: 9, color: r.value ? INK : MUTED });
+      y = Math.min(end, y - 13) - 4;
+      page.drawLine({ start: { x: left, y: y + 6 }, end: { x: width - left, y: y + 6 }, thickness: 0.4, color: LINE });
+    }
+    y -= 8;
+  }
+  const pages = doc.getPages();
+  pages.forEach((p, i) => new Writer(p, fonts).text(`${i + 1} / ${pages.length}`, width - left, 30, { size: 7.5, color: MUTED, align: 'right' }));
+  return Buffer.from(await doc.save());
+}

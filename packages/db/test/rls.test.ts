@@ -176,6 +176,14 @@ describe('row-level security', () => {
     expect(seenByB).toEqual([0, 0, 0]);
   });
 
+  it('isolates form answer requests (Phase 6b)', async () => {
+    await withTenant(a.id, async (tx) => {
+      const client = await tx.client.create({ data: { tenantId: a.id, ref: `C-F-${run}`, firstName: 'Forms', formAnswers: { 'birth.city': { v: 'Madurai', by: 'client', at: 'x' } } } });
+      await tx.formRequest.create({ data: { tenantId: a.id, clientId: client.id, formId: 'us-ds160', keys: ['birth.country'] } });
+    });
+    expect(await withTenant(b.id, async (tx) => [await tx.formRequest.count(), await tx.client.count({ where: { ref: `C-F-${run}` } })])).toEqual([0, 0]);
+  });
+
   it('users only list their own workspaces', async () => {
     const forA = await tenantsForUser(userA);
     expect(forA.map((t) => t.id)).toEqual([a.id]);

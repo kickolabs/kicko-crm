@@ -18,6 +18,11 @@ import { prefill } from '@/server/eligibility';
 import { db } from '@/lib/tenant';
 import { fmtDateTime } from '@/lib/format';
 import { EligibilityPanel } from './eligibility-panel';
+import { FormSheetView } from './form-sheet';
+import { clientSheet, formsOverview } from '@/server/forms';
+import { formById, sheetText } from '@/lib/forms/sheet';
+import { QUESTIONS, type AnswerKey, type Answers, type Question } from '@/lib/forms/questions';
+import { scopeOf } from '@/server/scope';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { stagesOf } from '@/server/cases';
@@ -27,17 +32,17 @@ import { Timeline } from '../../_components/timeline';
 import { FamilyPanel, OpenCaseButton, ProfileForm, RepeaterEditor } from './client-forms';
 import { EDU_COLUMNS, TEST_COLUMNS, WORK_COLUMNS } from './columns';
 
-const TABS = ['overview', 'messages', 'profile', 'background', 'eligibility', 'family', 'billing'] as const;
+const TABS = ['overview', 'messages', 'profile', 'background', 'eligibility', 'forms', 'family', 'billing'] as const;
 
 export default async function ClientPage({
   params,
   searchParams,
 }: {
   params: Promise<{ tenant: string; id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; form?: string }>;
 }) {
   const { tenant: slug, id } = await params;
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, form: formParam } = await searchParams;
   const tab = (TABS as readonly string[]).includes(rawTab ?? '') ? rawTab! : 'overview';
   const ctx = await getCtx(slug);
   const [client, team, products, calling] = await Promise.all([getClient(ctx, id), getTeam(ctx), listProducts(ctx), callingFor(ctx)]);
@@ -91,6 +96,8 @@ export default async function ClientPage({
       </div>
 
       {tab === 'eligibility' && <EligibilityTab />}
+
+      {tab === 'forms' && <FormsTab />}
 
       {tab === 'overview' && (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -188,6 +195,53 @@ export default async function ClientPage({
       )}
     </div>
   );
+
+  async function FormsTab() {
+    const scope = scopeOf(ctx);
+    const form = formParam ? formById(formParam) : null;
+    if (!form) {
+      const forms = await formsOverview(scope, client!.id);
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {forms.map((f) => (
+            <Link key={f.id} href={`?tab=forms&form=${f.id}`} className="card flex flex-col gap-2 p-5 hover:shadow-[var(--shadow-pop)]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold tracking-wide text-muted uppercase">{f.authority}</span>
+                {f.requested && <Badge tone="info">Waiting for client</Badge>}
+              </div>
+              <span className="font-bold">{f.title}</span>
+              <span className="text-xs text-muted">{f.use}</span>
+              <span className="mt-1 flex items-center gap-2 text-xs font-semibold">
+                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper-2"><span className="block h-full bg-ink" style={{ width: `${Math.round((f.filled / f.total) * 100)}%` }} /></span>
+                {f.filled}/{f.total}
+              </span>
+            </Link>
+          ))}
+        </div>
+      );
+    }
+    const { sheet } = await clientSheet(scope, client!.id, form.id);
+    const answers = client!.formAnswers as Answers;
+    const keys = [...new Set(sheet.sections.flatMap((s) => s.rows.map((r) => r.ask).filter(Boolean)))] as AnswerKey[];
+    const requested = (await db(ctx, (tx) => tx.formRequest.count({ where: { clientId: client!.id, formId: form.id, status: 'OPEN' } }))) > 0;
+    return (
+      <div className="flex flex-col gap-3">
+        <Link href="?tab=forms" className="text-[13px] font-semibold text-muted hover:text-ink">← All forms</Link>
+        <FormSheetView
+          slug={slug}
+          clientId={client!.id}
+          sheet={{ ...sheet, form: { id: form.id, title: form.title, authority: form.authority, use: form.use } }}
+          text={sheetText(sheet, name)}
+          canWrite={writable}
+          requested={requested}
+          answerFields={keys.map((k) => {
+            const q: Question = QUESTIONS[k];
+            return { key: k, label: q.label, type: q.type, hint: q.hint, details: q.details, value: answers[k]?.v ?? '', detailsValue: answers[`${k}.details`]?.v ?? '' };
+          })}
+        />
+      </div>
+    );
+  }
 
   async function EligibilityTab() {
     const checks = await db(ctx, (tx) => tx.eligibilityCheck.findMany({ where: { clientId: client!.id }, orderBy: { createdAt: 'desc' }, take: 10 }));

@@ -284,6 +284,9 @@ model Client {
   eligibility     EligibilityCheck[]
   subAgentId      String?
   subAgent        SubAgent?      @relation(fields: [subAgentId], references: [id], onDelete: SetNull)
+  // Answers for government forms not covered by the profile: { key: { v, by: 'client' | 'staff', at } }
+  formAnswers     Json           @default("{}")
+  formRequests    FormRequest[]
   aiHandoffAt     DateTime?
   aiHandoffReason String?
   aiResumedAt     DateTime?
@@ -939,6 +942,24 @@ model Call {
   @@index([tenantId, leadId])
   @@index([tenantId, clientId])
   @@index([tenantId, agentId, startedAt])
+}
+
+// ─── Phase 6b: government form auto-fill ────────────────────────────────────
+
+// Staff asked the client (via the portal) to answer questions a form needs.
+model FormRequest {
+  id          String    @id @default(cuid())
+  tenantId    String
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  formId      String
+  keys        Json // answer keys requested
+  status      String    @default("OPEN") // OPEN | DONE
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([tenantId, clientId, status])
 }
 
 // ─── Phase 6a: sub-agent network ────────────────────────────────────────────

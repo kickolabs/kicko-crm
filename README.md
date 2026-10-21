@@ -87,6 +87,20 @@ Settings → AI assistant. Choose **Off**, **Always on** or **Outside office hou
 - It never gives immigration advice or guarantees. Complaints, requests for a person, and anything it's unsure about are handed to a human: the chat is flagged in the inbox and a priority task goes to the owner. Staff can **Take over** or **Resume AI** per chat, and any staff reply pauses it for 12 hours. Replying STOP opts the customer out. At most 30 AI replies per contact per day.
 - Without `ANTHROPIC_API_KEY` it runs in sandbox: keyword rules plus knowledge-base matching, English only.
 
+## Government form answer sheets
+
+Client → **Forms** tab. These are copy-ready answer sheets for the forms consultants fill most:
+- **Canada:** IRCC personal details and background, and IMM 5645 family information
+- **Australia:** ImmiAccount personal particulars (the core of Form 80)
+- **USA:** DS-160
+
+Each sheet lists the form's questions in its own order and date format (IRCC 1999-04-12 · DS-160 12-APR-1999 · ImmiAccount 12 Apr 1999), with copy buttons, "Copy all" and a PDF export.
+
+- Answers come from the profile. Anything the profile doesn't hold (place of birth, parents, travel history, refusals and so on) is a shared question, stored once per client and reused by every form.
+- **Ask client** sends the missing questions to the client portal ("Your consultant needs N details"). A "Yes" to a background question needs details. Each answer shows who gave it: Profile, Client answered or Staff.
+- Why sheets, not filled PDFs: official IRCC PDFs are locked (XFA) and can't be filled by software, and ImmiAccount and DS-160 are online-only. Consultants type into portals, so the sheet is what saves the time.
+- To add a form, define it in `lib/forms/sheet.ts`. Its questions reuse the shared catalog in `lib/forms/questions.ts`.
+
 ## Sub-agent network
 
 Partners → **Sub-agents**. Add the agents and freelance counsellors who refer clients, with their commission rule: a **% of every payment** the referred client makes (excluding GST, pro rata for part payments), or a **fixed fee** per client who signs up.

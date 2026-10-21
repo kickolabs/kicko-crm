@@ -6,8 +6,15 @@ import { formObject, run, type ActionResult } from '@/lib/action';
 import * as portal from '@/server/portal';
 import { endPortalSession, getPortal, redeemLoginToken, requestLoginLink, requestLoginLinkByPhone } from '@/server/portal-auth';
 import { UserError } from '@/server/scope';
+import { portalSaveAnswers } from '@/server/forms';
 
 type Prev = ActionResult | null;
+
+export async function portalAnswersAction(slug: string, _: Prev, fd: FormData) {
+  const res = await run(async () => portalSaveAnswers(await session(slug), formObject(fd)), 'Thank you');
+  revalidatePath(`/portal/${slug}`, 'layout');
+  return res;
+}
 
 async function session(slug: string) {
   const p = await getPortal(slug);

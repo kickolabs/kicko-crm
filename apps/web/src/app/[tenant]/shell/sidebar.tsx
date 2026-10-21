@@ -121,7 +121,7 @@ export function Sidebar({
         })}
         <div className="mt-auto hidden rounded-[14px] bg-card p-3.5 text-xs leading-relaxed text-muted shadow-[var(--shadow-card)] lg:block">
           <span className="eyebrow mb-1 block">Coming next</span>
-          Sub-agent network & government form auto-fill.
+          Plans & subscriptions, admin console, CSV import.
         </div>
       </nav>
     </>

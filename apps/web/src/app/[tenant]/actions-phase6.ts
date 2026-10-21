@@ -7,6 +7,7 @@ import { assertCan, getCtx } from '@/lib/tenant';
 import { createPartnerLink, revokePartnerAccess } from '@/server/partner-auth';
 import { scopeOf, UserError } from '@/server/scope';
 import { markCommissionsPaid, saveSubAgent, setLeadSubAgent, voidCommission } from '@/server/sub-agents';
+import { requestAnswers, saveAnswers } from '@/server/forms';
 
 type Prev = ActionResult | null;
 const refresh = (slug: string) => revalidatePath(`/${slug}`, 'layout');
@@ -64,6 +65,28 @@ export async function setLeadSubAgentAction(slug: string, leadId: string, subAge
   const res = await run(async () => {
     if (!can(ctx.role, 'lead.write')) throw new UserError("You don't have permission to edit leads");
     await setLeadSubAgent(scopeOf(ctx), leadId, subAgentId || null);
+  });
+  refresh(slug);
+  return res;
+}
+
+// ─── Government form answers ────────────────────────────────────────────────
+
+export async function saveFormAnswersAction(slug: string, clientId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await saveAnswers(scopeOf(ctx), clientId, formObject(fd));
+  }, 'Saved');
+  refresh(slug);
+  return res;
+}
+
+export async function requestFormAnswersAction(slug: string, clientId: string, formId: string): Promise<ActionResult<number>> {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    return requestAnswers(scopeOf(ctx), clientId, formId);
   });
   refresh(slug);
   return res;

@@ -34,6 +34,7 @@ const LABEL: Record<string, string> = {
   CALL: 'Call',
   ELIGIBILITY: 'Eligibility',
   SUB_AGENT: 'Sub-agent',
+  FORMS: 'Forms',
   DOC_AI_CHECK: 'AI check',
 };
 
