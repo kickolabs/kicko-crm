@@ -207,3 +207,30 @@ describe('row-level security', () => {
     expect(forA[0].role).toBe('OWNER');
   });
 });
+
+describe('deleting a workspace', () => {
+  it('removes every row that belongs to it', async () => {
+    const owner = `test-user-del-${run}`;
+    await prisma.user.create({ data: { id: owner, name: owner, email: `${owner}@example.test` } });
+    const t = await provisionTenant({ name: 'Agency Gone', slug: `gone-${run}`, ownerUserId: owner });
+    // A full chain, including links that refuse deletion on their own (case → client, payment → client, …).
+    await withTenant(t.id, async (tx) => {
+      const product = await tx.visaProduct.findFirstOrThrow();
+      const client = await tx.client.create({ data: { tenantId: t.id, ref: 'C-1', firstName: 'Gone' } });
+      const kase = await tx.case.create({ data: { tenantId: t.id, ref: 'K-1', clientId: client.id, productId: product.id, stageKey: 'x' } });
+      const inst = await tx.institution.create({ data: { tenantId: t.id, name: 'Uni', country: 'CA' } });
+      const app = await tx.application.create({ data: { tenantId: t.id, caseId: kase.id, institutionId: inst.id } });
+      await tx.commissionClaim.create({ data: { tenantId: t.id, applicationId: app.id, institutionId: inst.id, amount: 100, currency: 'CAD' } });
+      const inv = await tx.invoice.create({ data: { tenantId: t.id, ref: 'INV-1', clientId: client.id } });
+      await tx.payment.create({ data: { tenantId: t.id, invoiceId: inv.id, clientId: client.id, amount: 100, method: 'CASH', paidAt: new Date(), receiptRef: 'R-1' } });
+    });
+
+    await prisma.tenant.delete({ where: { id: t.id } });
+
+    const left = await withTenant(t.id, (tx) =>
+      Promise.all([tx.membership.count(), tx.visaProduct.count(), tx.client.count(), tx.case.count(), tx.invoice.count(), tx.payment.count(), tx.institution.count(), tx.application.count(), tx.commissionClaim.count(), tx.subscription.count()]),
+    );
+    expect(left).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    await prisma.user.delete({ where: { id: owner } });
+  });
+});
