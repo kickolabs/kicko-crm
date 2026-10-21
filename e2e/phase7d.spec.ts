@@ -138,7 +138,7 @@ test.describe.serial('Phase 7d · custom fields & reports', () => {
     await expect(page.getByLabel('Group by')).toBeDisabled();
     await expect(page.getByLabel('Period')).toBeEnabled();
     await page.goto(`/${slug}/settings?tab=fields`);
-    await expect(page.getByText('Custom fields & reports is part of the Pro plan')).toBeVisible();
+    await expect(page.getByText('Custom fields & report builder is part of the Pro plan')).toBeVisible();
     await page.goto(leadUrl);
     await expect(page.getByText('12,50,000')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit details' })).toHaveCount(0);

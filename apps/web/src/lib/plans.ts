@@ -37,7 +37,7 @@ export const PLANS: Record<PlanId, {
     creditsPerUser: 0, // no AI features on Starter, so no credits to spend
     storageGb: 10,
     features: [],
-    highlights: ['Leads, clients, cases & documents', 'GST invoices & receipts', 'Client portal, web form & walk-in kiosk', 'WhatsApp inbox, templates & automations'],
+    highlights: ['Leads, clients, cases & documents', 'GST invoices & receipts', 'Client portal, web form & walk-in kiosk', 'WhatsApp inbox, templates & automations', 'Reports & spreadsheet import'],
   },
   growth: {
     name: 'Growth',
@@ -55,7 +55,7 @@ export const PLANS: Record<PlanId, {
     creditsPerUser: 1000,
     storageGb: 200,
     features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'voice_agent', 'sub_agents', 'doc_checks', 'custom_fields', 'api'],
-    highlights: ['Everything in Growth', 'AI voice agent', 'Sub-agent network', 'AI document checks, custom fields & API'],
+    highlights: ['Everything in Growth', 'AI voice agent', 'Sub-agent network', 'AI document checks & API', 'Custom fields & report builder'],
   },
 };
 
@@ -69,7 +69,7 @@ export const FEATURE_LABEL: Record<Feature, string> = {
   voice_agent: 'AI voice agent',
   sub_agents: 'Sub-agent network',
   doc_checks: 'AI document checks',
-  custom_fields: 'Custom fields & reports',
+  custom_fields: 'Custom fields & report builder',
   api: 'API access',
 };
 
