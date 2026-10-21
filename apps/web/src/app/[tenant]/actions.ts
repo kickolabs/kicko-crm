@@ -1,0 +1,329 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import type { CaseOutcome, CaseStatus, LeadStatus, Role } from '@kicko/db';
+import { formObject, run, type ActionResult } from '@/lib/action';
+import { assertCan, getCtx } from '@/lib/tenant';
+import { scopeOf, UserError } from '@/server/scope';
+import * as leads from '@/server/leads';
+import * as cases from '@/server/cases';
+import * as clients from '@/server/clients';
+import * as work from '@/server/work';
+import * as checkins from '@/server/checkins';
+import * as team from '@/server/team';
+import * as settings from '@/server/settings';
+
+type Prev = ActionResult | null;
+
+const refresh = (slug: string) => revalidatePath(`/${slug}`, 'layout');
+
+// ─── Leads ──────────────────────────────────────────────────────────────────
+
+export async function createLeadAction(slug: string, _: Prev, fd: FormData): Promise<ActionResult> {
+  const ctx = await getCtx(slug);
+  const raw = formObject(fd);
+  const res = await run(async () => {
+    assertCan(ctx, 'lead.write');
+    const input = { ...raw, waOptIn: raw.waOptIn === 'on' } as unknown as leads.LeadInput;
+    return leads.createLead(scopeOf(ctx), input, { allowDuplicate: raw.allowDuplicate === '1' });
+  });
+  if (res.ok && res.data?.status === 'duplicate') {
+    const m = res.data.matches[0]!;
+    return {
+      ok: false,
+      error: `Possible duplicate: ${m.kind} ${m.ref} ${m.name} has the same ${m.matchedOn}. Submit again to create anyway.`,
+      fieldErrors: { allowDuplicate: '1', duplicateHref: `/${slug}/${m.kind === 'lead' ? 'leads' : 'clients'}/${m.id}` },
+    };
+  }
+  if (res.ok && res.data?.status === 'created') {
+    refresh(slug);
+    redirect(`/${slug}/leads/${res.data.leadId}`);
+  }
+  return res;
+}
+
+export async function updateLeadAction(slug: string, leadId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'lead.write');
+    const { waOptIn: _ignored, ...raw } = formObject(fd);
+    await leads.updateLead(scopeOf(ctx), leadId, raw as unknown as leads.LeadInput);
+  }, 'Saved');
+  refresh(slug);
+  return res;
+}
+
+export async function setLeadStatusAction(slug: string, leadId: string, status: LeadStatus, lostReason?: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'lead.write');
+    await leads.setLeadStatus(scopeOf(ctx), leadId, status, lostReason);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function markLostAction(slug: string, leadId: string, _: Prev, fd: FormData) {
+  const reason = String(fd.get('reason') ?? '').trim();
+  if (!reason) return { ok: false, error: 'Pick or type a reason', fieldErrors: { reason: 'Required' } } as ActionResult;
+  return setLeadStatusAction(slug, leadId, 'LOST', reason);
+}
+
+export async function convertLeadAction(slug: string, leadId: string, _: Prev, fd: FormData): Promise<ActionResult> {
+  const ctx = await getCtx(slug);
+  const productId = String(fd.get('productId') ?? '') || null;
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    return leads.convertLead(scopeOf(ctx), leadId, { productId });
+  });
+  if (res.ok && res.data) {
+    refresh(slug);
+    redirect(res.data.caseId ? `/${slug}/cases/${res.data.caseId}` : `/${slug}/clients/${res.data.clientId}`);
+  }
+  return res;
+}
+
+// ─── Clients ────────────────────────────────────────────────────────────────
+
+export async function updateClientAction(slug: string, clientId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await clients.updateClientProfile(scopeOf(ctx), clientId, formObject(fd));
+  }, 'Profile saved');
+  refresh(slug);
+  return res;
+}
+
+export async function updateClientJsonAction(slug: string, clientId: string, field: 'tests' | 'education' | 'work', value: unknown) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await clients.updateClientJson(scopeOf(ctx), clientId, field, value);
+  }, 'Saved');
+  refresh(slug);
+  return res;
+}
+
+export async function addFamilyAction(slug: string, clientId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const raw = formObject(fd);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await clients.addFamilyMember(scopeOf(ctx), clientId, { ...raw, relation: raw.relation as 'SPOUSE', included: raw.included === 'on' });
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function removeFamilyAction(slug: string, memberId: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await clients.removeFamilyMember(scopeOf(ctx), memberId);
+  });
+  refresh(slug);
+  return res;
+}
+
+// ─── Cases ──────────────────────────────────────────────────────────────────
+
+export async function openCaseAction(slug: string, clientId: string, _: Prev, fd: FormData): Promise<ActionResult> {
+  const ctx = await getCtx(slug);
+  const productId = String(fd.get('productId') ?? '');
+  const res = await run(async () => {
+    assertCan(ctx, 'case.write');
+    if (!productId) throw new UserError('Choose a visa product');
+    return cases.openCase(scopeOf(ctx), { clientId, productId, ownerId: String(fd.get('ownerId') ?? '') || null });
+  });
+  if (res.ok && res.data) {
+    refresh(slug);
+    redirect(`/${slug}/cases/${res.data.id}`);
+  }
+  return res;
+}
+
+export async function moveStageAction(slug: string, caseId: string, toKey: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'case.write');
+    await cases.moveStage(scopeOf(ctx), caseId, toKey);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function setCaseStatusAction(slug: string, caseId: string, status: CaseStatus, outcome?: CaseOutcome) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'case.write');
+    await cases.setCaseStatus(scopeOf(ctx), caseId, status, outcome);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function updateCaseDetailsAction(slug: string, caseId: string, dateKeys: string[], _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'case.write');
+    const dates = Object.fromEntries(dateKeys.map((k) => [k, String(fd.get(`date_${k}`) ?? '') || null]));
+    await cases.updateCaseDetails(scopeOf(ctx), caseId, { ownerId: String(fd.get('ownerId') ?? '') || null, dates });
+  }, 'Saved');
+  refresh(slug);
+  return res;
+}
+
+// ─── Tasks, appointments, notes ─────────────────────────────────────────────
+
+export async function createTaskAction(slug: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'task.write');
+    await work.createTask(scopeOf(ctx), formObject(fd));
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function toggleTaskAction(slug: string, taskId: string, done: boolean) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'task.write');
+    await work.toggleTask(scopeOf(ctx), taskId, done);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function deleteTaskAction(slug: string, taskId: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'task.write');
+    await work.deleteTask(scopeOf(ctx), taskId);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function createAppointmentAction(slug: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'task.write');
+    await work.createAppointment(scopeOf(ctx), formObject(fd) as never);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function setAppointmentStatusAction(
+  slug: string,
+  id: string,
+  status: 'SCHEDULED' | 'COMPLETED' | 'NO_SHOW' | 'CANCELLED',
+) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'task.write');
+    await work.setAppointmentStatus(scopeOf(ctx), id, status);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function addNoteAction(slug: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    await work.addNote(scopeOf(ctx), formObject(fd));
+  });
+  refresh(slug);
+  return res;
+}
+
+// ─── Walk-ins ───────────────────────────────────────────────────────────────
+
+export async function setCheckInStatusAction(slug: string, id: string, status: 'WAITING' | 'WITH_STAFF' | 'DONE' | 'LEFT') {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'checkin.write');
+    await checkins.setCheckInStatus(scopeOf(ctx), id, status);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function staffCheckInAction(slug: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'checkin.write');
+    await checkins.checkIn(scopeOf(ctx), formObject(fd) as never);
+  }, 'Added to the queue');
+  refresh(slug);
+  return res;
+}
+
+// ─── Team & settings ────────────────────────────────────────────────────────
+
+export async function inviteAction(slug: string, _: Prev, fd: FormData): Promise<ActionResult<{ link: string }>> {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'team.manage');
+    const invite = await team.createInvite(scopeOf(ctx), formObject(fd) as never);
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    return { link: `${base}/invite/${slug}/${invite.token}` };
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function revokeInviteAction(slug: string, inviteId: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'team.manage');
+    await team.revokeInvite(scopeOf(ctx), inviteId);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function updateMemberAction(slug: string, userId: string, patch: { role?: Role; active?: boolean }) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'team.manage');
+    if (patch.role === 'OWNER' && ctx.role !== 'OWNER') throw new UserError('Only an owner can make someone an owner');
+    await team.updateMember(scopeOf(ctx), userId, patch);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function updateGeneralAction(slug: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await settings.updateGeneral(scopeOf(ctx), formObject(fd) as never);
+  }, 'Settings saved');
+  refresh(slug);
+  return res;
+}
+
+export async function rotateFormKeyAction(slug: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await settings.rotateFormKey(scopeOf(ctx));
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function updateProductAction(slug: string, productId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const raw = formObject(fd);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await settings.updateProduct(scopeOf(ctx), productId, { ...raw, active: raw.active === 'on' } as never);
+  }, 'Workflow saved');
+  refresh(slug);
+  return res;
+}

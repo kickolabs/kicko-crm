@@ -1,0 +1,315 @@
+import 'server-only';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { computeInvoice, formatMoney, type TaxMode } from '@/lib/money';
+import { rupeesInWords } from '@/lib/words';
+
+// Server-rendered A4 PDFs for invoices and receipts, in the Kicko paper style.
+
+const INK = rgb(0.071, 0.078, 0.09);
+const MUTED = rgb(0.353, 0.376, 0.412);
+const LINE = rgb(0.88, 0.88, 0.86);
+const LIME = rgb(0.784, 1, 0.239);
+const PAPER = rgb(0.957, 0.953, 0.933);
+
+function fontPath(file: string) {
+  for (const base of [path.join(process.cwd(), 'node_modules'), path.join(process.cwd(), '../../node_modules')]) {
+    const p = path.join(base, '@fontsource/plus-jakarta-sans/files', file);
+    if (existsSync(p)) return p;
+  }
+  throw new Error(`Font not found: ${file}`);
+}
+
+type Fonts = { reg: PDFFont; bold: PDFFont; regX: PDFFont; boldX: PDFFont };
+
+async function setup() {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const load = (f: string) => readFile(fontPath(f)).then((b) => doc.embedFont(b, { subset: true }));
+  const [reg, bold, regX, boldX] = await Promise.all([
+    load('plus-jakarta-sans-latin-400-normal.woff'),
+    load('plus-jakarta-sans-latin-800-normal.woff'),
+    load('plus-jakarta-sans-latin-ext-400-normal.woff'),
+    load('plus-jakarta-sans-latin-ext-800-normal.woff'),
+  ]);
+  return { doc, fonts: { reg, bold, regX, boldX } as Fonts };
+}
+
+/** Draws text, switching to the latin-ext font for glyphs the latin subset lacks (e.g. ₹). */
+class Writer {
+  constructor(
+    private page: PDFPage,
+    private f: Fonts,
+  ) {}
+
+  private runs(text: string, bold: boolean) {
+    const main = bold ? this.f.bold : this.f.reg;
+    const ext = bold ? this.f.boldX : this.f.regX;
+    const out: { t: string; font: PDFFont }[] = [];
+    for (const ch of text) {
+      const font = ch === '₹' ? ext : main;
+      const last = out[out.length - 1];
+      if (last && last.font === font) last.t += ch;
+      else out.push({ t: ch, font });
+    }
+    return out;
+  }
+
+  width(text: string, size: number, bold = false) {
+    return this.runs(text, bold).reduce((w, r) => w + r.font.widthOfTextAtSize(r.t, size), 0);
+  }
+
+  text(text: string, x: number, y: number, o: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb>; align?: 'left' | 'right' } = {}) {
+    const size = o.size ?? 10;
+    let cx = o.align === 'right' ? x - this.width(text, size, o.bold) : x;
+    for (const r of this.runs(text, Boolean(o.bold))) {
+      this.page.drawText(r.t, { x: cx, y, size, font: r.font, color: o.color ?? INK });
+      cx += r.font.widthOfTextAtSize(r.t, size);
+    }
+  }
+
+  /** Wrapped paragraph; returns the y below it. */
+  para(text: string, x: number, y: number, maxW: number, o: { size?: number; color?: ReturnType<typeof rgb>; lineGap?: number } = {}) {
+    const size = o.size ?? 9;
+    const lh = size * (o.lineGap ?? 1.45);
+    for (const raw of text.split('\n')) {
+      let line = '';
+      for (const word of raw.split(' ')) {
+        const next = line ? `${line} ${word}` : word;
+        if (this.width(next, size) > maxW && line) {
+          this.text(line, x, y, { size, color: o.color });
+          y -= lh;
+          line = word;
+        } else line = next;
+      }
+      this.text(line, x, y, { size, color: o.color });
+      y -= lh;
+    }
+    return y;
+  }
+}
+
+export type PdfAgency = {
+  name: string;
+  legalName?: string;
+  address?: string;
+  gstin?: string;
+  pan?: string;
+  bankDetails?: string;
+  upiId?: string;
+  terms?: string;
+};
+
+export type PdfClient = { name: string; ref: string; address?: string | null; phone?: string | null; email?: string | null };
+
+const fmtD = (d: Date, tz: string) =>
+  new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: tz }).format(d);
+
+function header(w: Writer, page: PDFPage, agency: PdfAgency, title: string, number: string) {
+  const { width, height } = page.getSize();
+  page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: LIME });
+  // Logo mark
+  page.drawRectangle({ x: 48, y: height - 92, width: 30, height: 30, color: INK });
+  page.drawLine({ start: { x: 56, y: height - 70 }, end: { x: 56, y: height - 84 }, thickness: 2.2, color: LIME });
+  page.drawLine({ start: { x: 56, y: height - 77 }, end: { x: 66, y: height - 68 }, thickness: 2.2, color: LIME });
+  page.drawLine({ start: { x: 60, y: height - 74 }, end: { x: 70, y: height - 85 }, thickness: 2.2, color: LIME });
+
+  w.text(agency.legalName || agency.name, 88, height - 74, { size: 13, bold: true });
+  let y = height - 88;
+  if (agency.address) y = w.para(agency.address, 88, y, 250, { size: 8.5, color: MUTED });
+  const ids = [agency.gstin && `GSTIN ${agency.gstin}`, agency.pan && `PAN ${agency.pan}`].filter(Boolean).join('   ·   ');
+  if (ids) w.text(ids, 88, y, { size: 8.5, color: MUTED });
+
+  w.text(title, width - 48, height - 76, { size: 22, bold: true, align: 'right' });
+  w.text(number, width - 48, height - 92, { size: 10, color: MUTED, align: 'right' });
+  return Math.min(y, height - 100) - 24;
+}
+
+function partyBlock(w: Writer, x: number, y: number, label: string, client: PdfClient) {
+  w.text(label.toUpperCase(), x, y, { size: 7.5, bold: true, color: MUTED });
+  w.text(client.name, x, y - 15, { size: 11, bold: true });
+  let yy = y - 29;
+  for (const line of [client.ref, client.phone, client.email].filter(Boolean) as string[]) {
+    w.text(line, x, yy, { size: 9, color: MUTED });
+    yy -= 12;
+  }
+  if (client.address) yy = w.para(client.address, x, yy, 220, { size: 9, color: MUTED });
+  return yy;
+}
+
+function meta(w: Writer, xRight: number, y: number, rows: [string, string][]) {
+  for (const [k, v] of rows) {
+    w.text(k, xRight - 150, y, { size: 9, color: MUTED });
+    w.text(v, xRight, y, { size: 9, bold: true, align: 'right' });
+    y -= 14;
+  }
+  return y;
+}
+
+function footer(w: Writer, page: PDFPage, agency: PdfAgency) {
+  const { width } = page.getSize();
+  page.drawLine({ start: { x: 48, y: 62 }, end: { x: width - 48, y: 62 }, thickness: 0.6, color: LINE });
+  w.text(`${agency.name} · This is a computer-generated document and does not require a signature.`, 48, 46, { size: 7.5, color: MUTED });
+  w.text('Kicko', width - 48, 46, { size: 7.5, bold: true, color: MUTED, align: 'right' });
+}
+
+export async function renderInvoicePdf(input: {
+  tz: string;
+  agency: PdfAgency;
+  client: PdfClient;
+  invoice: {
+    ref: string;
+    status: string;
+    issueDate: Date;
+    taxMode: TaxMode;
+    currency: string;
+    amountPaid: number;
+    notes?: string | null;
+    caseRef?: string | null;
+    items: { description: string; quantity: number; unitPrice: number; taxRate: number }[];
+    installments: { label: string; amount: number; paidAmount: number; dueDate: Date }[];
+  };
+}) {
+  const { doc, fonts } = await setup();
+  const page = doc.addPage([595.28, 841.89]);
+  const w = new Writer(page, fonts);
+  const { width } = page.getSize();
+  const R = width - 48;
+  const inv = input.invoice;
+  const cur = (n: number) => formatMoney(n, inv.currency);
+  const totals = computeInvoice(inv.items, inv.taxMode);
+
+  let y = header(w, page, input.agency, inv.status === 'DRAFT' ? 'DRAFT INVOICE' : 'TAX INVOICE', inv.ref);
+  const yParty = partyBlock(w, 48, y, 'Bill to', input.client);
+  const yMeta = meta(w, R, y, [
+    ['Invoice date', fmtD(inv.issueDate, input.tz)],
+    ...(inv.caseRef ? ([['Case', inv.caseRef]] as [string, string][]) : []),
+    ['Place of supply', inv.taxMode === 'GST_INTER' ? 'Inter-state' : inv.taxMode === 'GST_INTRA' ? 'Intra-state' : '—'],
+    ['Status', inv.status.replace('_', ' ').toLowerCase()],
+  ]);
+  y = Math.min(yParty, yMeta) - 18;
+
+  // Items table
+  page.drawRectangle({ x: 48, y: y - 6, width: R - 48, height: 22, color: PAPER });
+  const cols = { desc: 58, qty: 330, rate: 400, tax: 450, amt: R - 10 };
+  w.text('DESCRIPTION', cols.desc, y, { size: 7.5, bold: true, color: MUTED });
+  w.text('QTY', cols.qty, y, { size: 7.5, bold: true, color: MUTED, align: 'right' });
+  w.text('RATE', cols.rate, y, { size: 7.5, bold: true, color: MUTED, align: 'right' });
+  w.text('GST', cols.tax, y, { size: 7.5, bold: true, color: MUTED, align: 'right' });
+  w.text('AMOUNT', cols.amt, y, { size: 7.5, bold: true, color: MUTED, align: 'right' });
+  y -= 26;
+  for (const it of totals.items) {
+    const yStart = y;
+    const yEnd = w.para(it.description, cols.desc, y, 250, { size: 9.5 });
+    w.text(String(it.quantity), cols.qty, yStart, { size: 9.5, align: 'right' });
+    w.text(cur(it.unitPrice), cols.rate, yStart, { size: 9.5, align: 'right' });
+    w.text(inv.taxMode === 'NONE' ? '—' : `${it.taxRate / 100}%`, cols.tax, yStart, { size: 9.5, align: 'right' });
+    w.text(cur(it.amount), cols.amt, yStart, { size: 9.5, bold: true, align: 'right' });
+    y = yEnd - 6;
+    page.drawLine({ start: { x: 48, y: y + 8 }, end: { x: R, y: y + 8 }, thickness: 0.5, color: LINE });
+  }
+
+  // Totals
+  y -= 6;
+  const tot: [string, string, boolean?][] = [['Subtotal', cur(totals.subtotal)]];
+  if (inv.taxMode === 'GST_INTRA') tot.push(['CGST', cur(totals.cgst)], ['SGST', cur(totals.sgst)]);
+  if (inv.taxMode === 'GST_INTER') tot.push(['IGST', cur(totals.igst)]);
+  for (const [k, v] of tot) {
+    w.text(k, R - 160, y, { size: 9.5, color: MUTED });
+    w.text(v, R - 10, y, { size: 9.5, align: 'right' });
+    y -= 15;
+  }
+  y -= 14; // clear the last tax line before the total bar
+  page.drawRectangle({ x: R - 175, y: y - 10, width: 175, height: 28, color: INK });
+  w.text('Total', R - 160, y, { size: 11, bold: true, color: rgb(0.96, 0.95, 0.93) });
+  w.text(cur(totals.total), R - 10, y, { size: 12, bold: true, color: LIME, align: 'right' });
+  y -= 30;
+  if (inv.amountPaid > 0) {
+    w.text('Paid', R - 160, y, { size: 9.5, color: MUTED });
+    w.text(cur(inv.amountPaid), R - 10, y, { size: 9.5, align: 'right' });
+    y -= 15;
+    w.text('Balance due', R - 160, y, { size: 9.5, bold: true });
+    w.text(cur(totals.total - inv.amountPaid), R - 10, y, { size: 9.5, bold: true, align: 'right' });
+    y -= 15;
+  }
+  if (inv.currency === 'INR') {
+    y = w.para(rupeesInWords(totals.total), 48, y - 4, 300, { size: 8.5, color: MUTED });
+  }
+
+  // Installments
+  if (inv.installments.length > 1) {
+    y -= 14;
+    w.text('PAYMENT SCHEDULE', 48, y, { size: 7.5, bold: true, color: MUTED });
+    y -= 16;
+    for (const s of inv.installments) {
+      const state = s.paidAmount >= s.amount ? 'Paid' : s.paidAmount > 0 ? `Part paid ${cur(s.paidAmount)}` : `Due ${fmtD(s.dueDate, input.tz)}`;
+      w.text(s.label, 48, y, { size: 9.5 });
+      w.text(state, 330, y, { size: 9, color: MUTED });
+      w.text(cur(s.amount), R - 10, y, { size: 9.5, bold: true, align: 'right' });
+      y -= 15;
+    }
+  }
+
+  // Payment details & notes
+  const pay = [input.agency.upiId && `UPI: ${input.agency.upiId}`, input.agency.bankDetails].filter(Boolean).join('\n');
+  if (pay) {
+    y -= 14;
+    w.text('HOW TO PAY', 48, y, { size: 7.5, bold: true, color: MUTED });
+    y = w.para(pay, 48, y - 14, 300, { size: 9 });
+  }
+  const notes = [inv.notes, input.agency.terms].filter(Boolean).join('\n\n');
+  if (notes) {
+    y -= 10;
+    w.text('NOTES', 48, y, { size: 7.5, bold: true, color: MUTED });
+    w.para(notes, 48, y - 14, R - 48, { size: 8.5, color: MUTED });
+  }
+  footer(w, page, input.agency);
+  return doc.save();
+}
+
+export async function renderReceiptPdf(input: {
+  tz: string;
+  agency: PdfAgency;
+  client: PdfClient;
+  payment: { receiptRef: string; amount: number; method: string; reference?: string | null; paidAt: Date };
+  invoice: { ref: string; total: number; amountPaid: number; currency: string };
+}) {
+  const { doc, fonts } = await setup();
+  const page = doc.addPage([595.28, 841.89]);
+  const w = new Writer(page, fonts);
+  const R = page.getSize().width - 48;
+  const cur = (n: number) => formatMoney(n, input.invoice.currency);
+  const p = input.payment;
+
+  let y = header(w, page, input.agency, 'RECEIPT', p.receiptRef);
+  const yParty = partyBlock(w, 48, y, 'Received from', input.client);
+  const yMeta = meta(w, R, y, [
+    ['Date', fmtD(p.paidAt, input.tz)],
+    ['Against invoice', input.invoice.ref],
+    ['Method', p.method.replace('_', ' ').toLowerCase()],
+    ...(p.reference ? ([['Reference', p.reference.slice(0, 30)]] as [string, string][]) : []),
+  ]);
+  y = Math.min(yParty, yMeta) - 30;
+
+  page.drawRectangle({ x: 48, y: y - 52, width: R - 48, height: 76, color: INK });
+  w.text('AMOUNT RECEIVED', 66, y, { size: 8, bold: true, color: rgb(0.66, 0.69, 0.72) });
+  w.text(cur(p.amount), 66, y - 34, { size: 28, bold: true, color: LIME });
+  if (input.invoice.currency === 'INR') w.text(rupeesInWords(p.amount), R - 18, y - 34, { size: 8.5, color: rgb(0.77, 0.79, 0.82), align: 'right' });
+  y -= 90;
+  for (const [k, v] of [
+    ['Invoice total', cur(input.invoice.total)],
+    ['Paid to date', cur(input.invoice.amountPaid)],
+    ['Balance due', cur(input.invoice.total - input.invoice.amountPaid)],
+  ] as const) {
+    w.text(k, 48, y, { size: 10, color: MUTED });
+    w.text(v, R, y, { size: 10, bold: true, align: 'right' });
+    y -= 18;
+  }
+  y -= 10;
+  w.text('Thank you.', 48, y, { size: 14, bold: true });
+  footer(w, page, input.agency);
+  return doc.save();
+}

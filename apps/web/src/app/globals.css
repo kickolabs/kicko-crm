@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/* Kicko design tokens: light "paper" theme, approved prototype 2026-10-20 */
+@theme {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f4f3ee;
+  --color-paper-2: #efeee8;
+  --color-paper-3: #f7f6f2;
+  --color-card: #ffffff;
+  --color-ink: #121417;
+  --color-ink-2: #3a3f46;
+  --color-muted: #5a6069;
+  --color-faint: #8a9098;
+  --color-line: rgb(18 20 23 / 0.08);
+  --color-line-2: rgb(18 20 23 / 0.15);
+
+  --color-lime: #c8ff3d;
+  --color-lime-soft: #f2f9e4;
+  --color-olive: #4d6b00;
+
+  --color-warn: #b45309;
+  --color-warn-ink: #9a4a07;
+  --color-warn-bg: #fdf0df;
+  --color-ok: #3f7d1e;
+  --color-ok-bg: #e9f7d0;
+  --color-info: #1f4fa0;
+  --color-info-bg: #e5eefb;
+  --color-teal: #0f6b63;
+  --color-teal-bg: #ddf4f1;
+  --color-danger: #b42318;
+  --color-danger-bg: #fde2e2;
+
+  --radius-card: 18px;
+  --shadow-card: 0 0 0 1px rgb(18 20 23 / 0.08), 0 1px 2px rgb(18 20 23 / 0.04);
+  --shadow-pop: 0 0 0 1px rgb(18 20 23 / 0.08), 0 24px 48px rgb(18 20 23 / 0.14);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-ink);
+  }
+}
+
+@utility dotgrid {
+  background-image: radial-gradient(rgb(18 20 23 / 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@utility card {
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+@utility eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(141 194 31 / 0.55); }
+  70% { box-shadow: 0 0 0 8px rgb(141 194 31 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(141 194 31 / 0); }
+}
+.live-dot { animation: live-pulse 2s infinite; }
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.pop-in { animation: pop-in 160ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+
+/* Call HUD waveform: five bars breathing out of phase. */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+.wave > span { display: block; width: 3px; height: 18px; border-radius: 2px; background: var(--color-lime); transform-origin: center; animation: wave 1s ease-in-out infinite; }
+.wave > span:nth-child(2) { animation-delay: -0.8s; }
+.wave > span:nth-child(3) { animation-delay: -0.6s; }
+.wave > span:nth-child(4) { animation-delay: -0.4s; }
+.wave > span:nth-child(5) { animation-delay: -0.2s; }
+.wave.idle > span { animation: none; transform: scaleY(0.25); opacity: 0.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot, .pop-in, .wave > span { animation: none; }
+}
+
+dialog::backdrop {
+  background: rgb(18 20 23 / 0.35);
+  backdrop-filter: blur(2px);
+}

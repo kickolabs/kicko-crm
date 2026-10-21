@@ -1,0 +1,1032 @@
+// Kicko CRM: multi-tenant schema.
+// Every tenant-scoped table carries "tenantId" and is protected by Postgres
+// row-level security (see migrations/*_rls). The app connects as a non-owner
+// role and sets app.tenant_id per transaction via withTenant().
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Global (no RLS) ────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  country   String   @default("IN")
+  timezone  String   @default("Asia/Kolkata")
+  currency  String   @default("INR")
+  // { leadAssignment: "round_robin" | "manual", formKey: string }
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Better-Auth core tables
+model User {
+  id            String       @id
+  name          String
+  email         String       @unique
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  memberships   Membership[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ─── Tenant-scoped (RLS) ────────────────────────────────────────────────────
+
+enum Role {
+  OWNER
+  ADMIN
+  COUNSELLOR
+  DOC_OFFICER
+  ACCOUNTS
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @default(COUNSELLOR)
+  active    Boolean  @default(true)
+  branchId  String?
+  phone     String? // E.164; click-to-call rings this number first
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  tenantId   String
+  email      String
+  role       Role      @default(COUNSELLOR)
+  token      String    @unique
+  invitedBy  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  city      String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model Counter {
+  tenantId String
+  key      String
+  value    Int    @default(0)
+
+  @@id([tenantId, key])
+}
+
+enum VisaCategory {
+  STUDY
+  PR
+  WORK
+  VISIT
+  FAMILY
+}
+
+model VisaProduct {
+  id        String           @id @default(cuid())
+  tenantId  String
+  code      String
+  country   String // ISO-2
+  category  VisaCategory
+  name      String
+  // [{ key, name }]
+  stages    Json
+  // [{ key, name, required, group }]
+  checklist Json
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  cases     Case[]
+  leads     Lead[]
+  packages  ServicePackage[]
+
+  @@unique([tenantId, code])
+}
+
+enum LeadSource {
+  WEB_FORM
+  WHATSAPP
+  CALL
+  WALK_IN
+  REFERRAL
+  ADS
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONSULT_BOOKED
+  WON
+  LOST
+}
+
+model Lead {
+  id               String        @id @default(cuid())
+  tenantId         String
+  ref              String
+  firstName        String
+  lastName         String?
+  email            String?
+  phone            String?
+  phoneNormalized  String?
+  source           LeadSource    @default(OTHER)
+  status           LeadStatus    @default(NEW)
+  interestCountry  String?
+  interestCategory VisaCategory?
+  productId        String?
+  product          VisaProduct?  @relation(fields: [productId], references: [id])
+  ownerId          String?
+  score            Int?
+  message          String?
+  utm              Json?
+  lostReason       String?
+  clientId         String?       @unique
+  client           Client?       @relation(fields: [clientId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  tasks            Task[]
+  notes            Note[]
+  activities       Activity[]
+  appointments     Appointment[]
+  messages         Message[]
+  waOptIn          Boolean       @default(false)
+  waOptInAt        DateTime?
+  waLastInbound    DateTime? // opens the 24-hour customer-service window
+  calls            Call[]
+  aiHandoffAt      DateTime? // WhatsApp assistant handed this conversation to a human
+  aiHandoffReason  String?
+  aiResumedAt      DateTime? // staff resumed the assistant; earlier staff replies don't pause it
+
+  @@unique([tenantId, ref])
+  @@index([tenantId, status])
+  @@index([tenantId, phoneNormalized])
+  @@index([tenantId, email])
+}
+
+model Client {
+  id              String         @id @default(cuid())
+  tenantId        String
+  ref             String
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  phoneNormalized String?
+  dob             DateTime?
+  gender          String?
+  nationality     String?
+  passportNumber  String?
+  passportExpiry  DateTime?
+  maritalStatus   String?
+  address         String?
+  // [{ level, institution, field, year, score }]
+  education       Json           @default("[]")
+  // [{ test: IELTS|PTE|TOEFL|DUOLINGO, overall, l, r, w, s, date }]
+  tests           Json           @default("[]")
+  // [{ employer, title, from, to, anzsco, noc }]
+  work            Json           @default("[]")
+  ownerId         String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  lead            Lead?
+  family          FamilyMember[]
+  cases           Case[]
+  tasks           Task[]
+  notes           Note[]
+  activities      Activity[]
+  appointments    Appointment[]
+  documents       Document[]
+  invoices        Invoice[]
+  payments        Payment[]
+  messages        Message[]
+  portalInvitedAt DateTime?
+  portalLastSeen  DateTime?
+  waOptIn         Boolean        @default(false)
+  waOptInAt       DateTime?
+  waLastInbound   DateTime?
+  calls           Call[]
+  eligibility     EligibilityCheck[]
+  aiHandoffAt     DateTime?
+  aiHandoffReason String?
+  aiResumedAt     DateTime?
+
+  @@unique([tenantId, ref])
+  @@index([tenantId, phoneNormalized])
+  @@index([tenantId, email])
+}
+
+model FamilyMember {
+  id             String    @id @default(cuid())
+  tenantId       String
+  clientId       String
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  relation       String // SPOUSE | CHILD | PARENT | SIBLING
+  name           String
+  dob            DateTime?
+  passportNumber String?
+  included       Boolean   @default(true) // included as dependant on the application
+  createdAt      DateTime  @default(now())
+
+  @@index([tenantId, clientId])
+}
+
+enum CaseStatus {
+  OPEN
+  ON_HOLD
+  CLOSED
+}
+
+enum CaseOutcome {
+  APPROVED
+  REFUSED
+  WITHDRAWN
+}
+
+model Case {
+  id           String         @id @default(cuid())
+  tenantId     String
+  ref          String
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id])
+  productId    String
+  product      VisaProduct    @relation(fields: [productId], references: [id])
+  stageKey     String
+  status       CaseStatus     @default(OPEN)
+  outcome      CaseOutcome?
+  ownerId      String?
+  lodgedAt     DateTime?
+  decisionAt   DateTime?
+  // free-form key dates: { biometrics, medical, intake, ... }
+  dates        Json           @default("{}")
+  stageSince   DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  history      StageHistory[]
+  tasks        Task[]
+  notes        Note[]
+  activities   Activity[]
+  appointments Appointment[]
+  documents    Document[]
+  applications Application[]
+  invoices     Invoice[]
+
+  @@unique([tenantId, ref])
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+}
+
+model StageHistory {
+  id       String   @id @default(cuid())
+  tenantId String
+  caseId   String
+  case     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fromKey  String?
+  toKey    String
+  byUserId String?
+  at       DateTime @default(now())
+
+  @@index([tenantId, caseId])
+}
+
+model Task {
+  id         String    @id @default(cuid())
+  tenantId   String
+  title      String
+  dueAt      DateTime?
+  done       Boolean   @default(false)
+  doneAt     DateTime?
+  priority   Int       @default(2) // 1 high · 2 normal · 3 low
+  assigneeId String?
+  createdBy  String?
+  leadId     String?
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientId   String?
+  client     Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId     String?
+  case       Case?     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId, done, dueAt])
+  @@index([tenantId, assigneeId])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+model Appointment {
+  id        String            @id @default(cuid())
+  tenantId  String
+  title     String
+  startsAt  DateTime
+  endsAt    DateTime
+  mode      String            @default("IN_PERSON") // IN_PERSON | VIDEO | PHONE
+  status    AppointmentStatus @default(SCHEDULED)
+  staffId   String?
+  notes     String?
+  leadId    String?
+  lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientId  String?
+  client    Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId    String?
+  case      Case?             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now())
+
+  @@index([tenantId, startsAt])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  tenantId  String
+  body      String
+  authorId  String?
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId    String?
+  case      Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// Unified timeline: notes, stage changes, conversions, (later) calls & WhatsApp.
+model Activity {
+  id        String   @id @default(cuid())
+  tenantId  String
+  type      String // LEAD_CREATED | STATUS_CHANGED | NOTE | CONVERTED | CASE_OPENED | STAGE_CHANGED | TASK_DONE | APPOINTMENT | DUPLICATE_ENQUIRY | CHECK_IN
+  summary   String
+  data      Json?
+  actorId   String?
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId    String?
+  case      Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, leadId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, caseId])
+}
+
+enum CheckInStatus {
+  WAITING
+  WITH_STAFF
+  DONE
+  LEFT
+}
+
+model CheckIn {
+  id           String        @id @default(cuid())
+  tenantId     String
+  name         String
+  phone        String
+  purpose      String
+  status       CheckInStatus @default(WAITING)
+  assignedToId String?
+  leadId       String?
+  clientId     String?
+  calledAt     DateTime?
+  doneAt       DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([tenantId, status, createdAt])
+}
+
+// ─── Phase 2: documents ─────────────────────────────────────────────────────
+
+enum DocumentStatus {
+  PENDING
+  UPLOADED
+  VERIFIED
+  REJECTED
+  NOT_APPLICABLE
+}
+
+// One row per required or requested document on a case (built from the product checklist).
+model Document {
+  id              String         @id @default(cuid())
+  tenantId        String
+  caseId          String
+  case            Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  clientId        String
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  checklistKey    String? // null for ad-hoc requests
+  name            String
+  group           String         @default("General")
+  required        Boolean        @default(true)
+  status          DocumentStatus @default(PENDING)
+  rejectionReason String?
+  expiresAt       DateTime?
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  sortOrder       Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  files           DocumentFile[]
+
+  @@unique([caseId, checklistKey])
+  @@index([tenantId, status])
+  @@index([tenantId, expiresAt])
+}
+
+// Every upload is kept as a version; the newest is current.
+model DocumentFile {
+  id          String   @id @default(cuid())
+  tenantId    String
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  storageKey  String   @unique
+  fileName    String
+  contentType String
+  size        Int
+  uploadedBy  String? // staff user id; null = client portal
+  aiStatus    String? // pending | done | failed | skipped
+  // { model, sandbox, documentType, matchesExpected, legible, fields{…}, issues[{ severity, message }] }
+  aiCheck     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, documentId])
+}
+
+// ─── Phase 2: billing (money in minor units: paise / cents) ─────────────────
+
+model ServicePackage {
+  id          String       @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  productId   String?
+  product     VisaProduct? @relation(fields: [productId], references: [id])
+  price       Int
+  taxRate     Int          @default(1800) // basis points: 1800 = 18%
+  // [{ label, percent, dueDays }]
+  plan        Json         @default("[]")
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([tenantId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum TaxMode {
+  NONE
+  GST_INTRA // CGST + SGST
+  GST_INTER // IGST
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  tenantId     String
+  ref          String
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id])
+  caseId       String?
+  case         Case?         @relation(fields: [caseId], references: [id])
+  status       InvoiceStatus @default(DRAFT)
+  currency     String        @default("INR")
+  taxMode      TaxMode       @default(GST_INTRA)
+  issueDate    DateTime      @default(now())
+  subtotal     Int           @default(0)
+  taxTotal     Int           @default(0)
+  total        Int           @default(0)
+  amountPaid   Int           @default(0)
+  notes        String?
+  createdBy    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  items        InvoiceItem[]
+  installments Installment[]
+  payments     Payment[]
+  links        PaymentLink[]
+
+  @@unique([tenantId, ref])
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Int
+  taxRate     Int     @default(1800)
+  amount      Int // quantity × unitPrice, before tax
+  sortOrder   Int     @default(0)
+
+  @@index([tenantId, invoiceId])
+}
+
+model Installment {
+  id         String    @id @default(cuid())
+  tenantId   String
+  invoiceId  String
+  invoice    Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  label      String
+  amount     Int
+  paidAmount Int       @default(0)
+  dueDate    DateTime
+  paidAt     DateTime?
+  reminded   DateTime? // when the last overdue reminder task was created
+  sortOrder  Int       @default(0)
+
+  @@index([tenantId, dueDate])
+}
+
+enum PaymentMethod {
+  UPI
+  BANK_TRANSFER
+  CASH
+  CARD
+  CHEQUE
+  RAZORPAY
+  OTHER
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  tenantId   String
+  invoiceId  String
+  invoice    Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId   String
+  client     Client        @relation(fields: [clientId], references: [id])
+  amount     Int
+  method     PaymentMethod
+  reference  String? // UTR, cheque number, gateway payment id
+  paidAt     DateTime
+  receiptRef String
+  recordedBy String? // null = gateway webhook
+  gatewayId  String?       @unique
+  createdAt  DateTime      @default(now())
+
+  @@unique([tenantId, receiptRef])
+  @@index([tenantId, paidAt])
+}
+
+model PaymentLink {
+  id         String    @id @default(cuid())
+  tenantId   String
+  invoiceId  String
+  invoice    Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  provider   String // RAZORPAY
+  providerId String    @unique
+  url        String
+  amount     Int
+  status     String    @default("created") // created | paid | cancelled | expired
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId, invoiceId])
+}
+
+// ─── Phase 2: partners & commissions ────────────────────────────────────────
+
+model Institution {
+  id              String            @id @default(cuid())
+  tenantId        String
+  name            String
+  country         String
+  city            String?
+  kind            String            @default("UNIVERSITY") // UNIVERSITY | COLLEGE | SCHOOL | AGGREGATOR
+  website         String?
+  contactEmail    String?
+  // Commission agreement
+  commissionType  String            @default("PERCENT") // PERCENT | FLAT
+  commissionValue Int               @default(1500) // basis points for PERCENT, minor units for FLAT
+  commissionBasis String            @default("First-year tuition")
+  currency        String            @default("CAD")
+  agreementUntil  DateTime?
+  notes           String?
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  courses         Course[]
+  applications    Application[]
+  claims          CommissionClaim[]
+
+  @@index([tenantId, country])
+}
+
+model Course {
+  id             String        @id @default(cuid())
+  tenantId       String
+  institutionId  String
+  institution    Institution   @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  name           String
+  level          String?
+  durationMonths Int?
+  tuitionFee     Int? // per year, minor units, institution currency
+  intakes        String? // e.g. "Jan, May, Sep"
+  active         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  applications   Application[]
+
+  @@index([tenantId, institutionId])
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  CONDITIONAL_OFFER
+  UNCONDITIONAL_OFFER
+  REJECTED
+  ACCEPTED
+  ENROLLED
+  WITHDRAWN
+}
+
+model Application {
+  id            String            @id @default(cuid())
+  tenantId      String
+  caseId        String
+  case          Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  institutionId String
+  institution   Institution       @relation(fields: [institutionId], references: [id])
+  courseId      String?
+  course        Course?           @relation(fields: [courseId], references: [id])
+  courseName    String? // free text when the course isn't in the catalogue
+  intake        String? // e.g. "Jan 2027"
+  status        ApplicationStatus @default(DRAFT)
+  tuitionFee    Int? // first-year, minor units
+  currency      String            @default("CAD")
+  studentId     String?
+  submittedAt   DateTime?
+  decisionAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  claims        CommissionClaim[]
+
+  @@index([tenantId, caseId])
+  @@index([tenantId, status])
+}
+
+enum ClaimStatus {
+  EXPECTED
+  CLAIMED
+  RECEIVED
+  WRITTEN_OFF
+}
+
+model CommissionClaim {
+  id             String      @id @default(cuid())
+  tenantId       String
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  institutionId  String
+  institution    Institution @relation(fields: [institutionId], references: [id])
+  amount         Int
+  currency       String
+  status         ClaimStatus @default(EXPECTED)
+  dueDate        DateTime?
+  claimedAt      DateTime?
+  invoiceRef     String?
+  receivedAt     DateTime?
+  receivedAmount Int?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([tenantId, status])
+}
+
+// ─── Phase 4.5: integration layer ───────────────────────────────────────────
+
+// An agency's connection to an external provider for one capability
+// (messaging, payments, telephony…). Secret config fields are encrypted
+// individually (AES-256-GCM, "v1.…" strings); the descriptor says which.
+model ProviderConnection {
+  id            String    @id @default(cuid())
+  tenantId      String
+  capability    String // messaging | payments | email | telephony | voice_agent | stt | tts | llm
+  provider      String // e.g. whatsapp-cloud, whatsapp-sandbox, razorpay, payments-sandbox
+  config        Json      @default("{}")
+  status        String    @default("active") // active | error | disabled
+  lastCheckedAt DateTime?
+  lastError     String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, capability])
+}
+
+// Metered usage per agency, for cost tracking and Phase 7 usage-based billing.
+model UsageEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  capability String
+  provider   String
+  unit       String // message | email | minute | input_token | output_token | byte | link
+  quantity   Int
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, capability, createdAt])
+}
+
+// ─── Phase 3: client portal & messaging ─────────────────────────────────────
+
+enum MessageChannel {
+  PORTAL
+  WHATSAPP // Phase 4
+  EMAIL
+  SMS
+}
+
+enum MessageDirection {
+  INBOUND // from the client
+  OUTBOUND // from the agency
+}
+
+enum MessageStatus {
+  RECEIVED // inbound
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// One message stream per contact (client, or a lead before conversion), across channels.
+model Message {
+  id           String           @id @default(cuid())
+  tenantId     String
+  clientId     String?
+  client       Client?          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  leadId       String?
+  lead         Lead?            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  caseId       String?
+  channel      MessageChannel   @default(PORTAL)
+  direction    MessageDirection
+  body         String
+  authorId     String? // staff user for OUTBOUND; null + OUTBOUND = automation
+  readAt       DateTime? // INBOUND: read by staff · OUTBOUND (portal): read by client
+  externalId   String?          @unique // provider message id (WhatsApp wamid, email)
+  status       MessageStatus?
+  phone        String? // WhatsApp wa_id of the contact
+  templateName String?
+  mediaType    String? // image | document | audio | video | sticker
+  mediaKey     String? // storage key once downloaded
+  mediaName    String?
+  mediaMime    String?
+  error        String?
+  aiGenerated  Boolean          @default(false) // written by the WhatsApp assistant
+  aiMeta       Json? // { model, sandbox, actions[], confidence }
+  createdAt    DateTime         @default(now())
+
+  @@index([tenantId, clientId, createdAt])
+  @@index([tenantId, leadId, createdAt])
+  @@index([tenantId, direction, readAt])
+}
+
+// ─── Phase 5: calls & AI ────────────────────────────────────────────────────
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  QUEUED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  NO_ANSWER
+  BUSY
+  FAILED
+  CANCELED
+}
+
+// A phone call through the agency's telephony provider (Exotel, Twilio, sandbox…).
+model Call {
+  id             String        @id @default(cuid())
+  tenantId       String
+  provider       String
+  providerCallId String?       @unique
+  direction      CallDirection
+  status         CallStatus    @default(QUEUED)
+  contactPhone   String // the client/lead side, E.164
+  agentId        String? // staff user who placed or was routed the call
+  agentPhone     String?
+  leadId         String?
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientId       String?
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId         String?
+  startedAt      DateTime      @default(now())
+  answeredAt     DateTime?
+  endedAt        DateTime?
+  durationSec    Int?
+  recordingRef   String? // provider reference until downloaded
+  recordingKey   String? // storage key
+  recordingMime  String?
+  // [{ speaker: 'agent' | 'contact' | 'Speaker 1'…, start, end, text }]
+  transcript     Json?
+  language       String?
+  aiStatus       String? // pending | done | failed | skipped
+  aiError        String?
+  summary        String?
+  // { sentiment, intent, nextSteps[], tasks[{ title, dueInDays }], fields{…} }
+  ai             Json?
+  outcome        String? // staff disposition
+  // AI voice agent calls (Bolna, Retell, sandbox)
+  aiAgent        Boolean       @default(false)
+  purpose        String? // qualify | reception
+  scheduledAt    DateTime? // queued AI calls: when to dial
+  attempt        Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([tenantId, status, scheduledAt])
+  @@index([tenantId, startedAt])
+  @@index([tenantId, leadId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, agentId, startedAt])
+}
+
+// Saved points calculations (Canada CRS, Australia points test) for a client.
+model EligibilityCheck {
+  id          String   @id @default(cuid())
+  tenantId    String
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  kind        String // CRS | AU_POINTS
+  inputs      Json
+  score       Int
+  breakdown   Json
+  // { summary, strengths[], improvements[{ change, points }], model, sandbox }
+  explanation Json?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, clientId, createdAt])
+}
+
+// The agency's own answers, used by the WhatsApp assistant (and later the voice agent).
+model KnowledgeItem {
+  id        String   @id @default(cuid())
+  tenantId  String
+  question  String
+  answer    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// Approved WhatsApp message templates, synced from Meta (or seeded in sandbox).
+model WhatsAppTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  language  String   @default("en")
+  category  String // UTILITY | MARKETING | AUTHENTICATION
+  status    String // APPROVED | PENDING | REJECTED | PAUSED
+  body      String // body text with {{1}} … placeholders
+  variables Int      @default(0)
+  syncedAt  DateTime @default(now())
+
+  @@unique([tenantId, name, language])
+}
+
+enum AutomationTrigger {
+  CASE_STAGE // case moves to a stage
+  DOC_REJECTED // a document is rejected
+  INVOICE_ISSUED
+  PAYMENT_OVERDUE // from the daily job
+  PAYMENT_RECEIVED
+}
+
+// "When X happens, send WhatsApp template Y." Variables are filled per trigger.
+model Automation {
+  id           String            @id @default(cuid())
+  tenantId     String
+  trigger      AutomationTrigger
+  stageKey     String? // CASE_STAGE only; null = any stage
+  templateName String
+  language     String            @default("en")
+  active       Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+
+  @@index([tenantId, trigger])
+}
+
+// One-time login links. Only a SHA-256 hash of the token is stored.
+model PortalToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  clientId  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdBy String? // staff who sent the invite; null = self-service request
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, clientId])
+}
+
+model PortalSession {
+  id         String   @id @default(cuid())
+  tenantId   String
+  clientId   String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  userAgent  String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, clientId])
+}

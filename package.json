@@ -1,0 +1,25 @@
+{
+  "name": "kicko-crm",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:start": "npm run start --workspace @kicko/db",
+    "db:migrate": "npm run migrate --workspace @kicko/db",
+    "db:seed:demo": "npm run seed:demo --workspace @kicko/db",
+    "db:reset": "npm run reset --workspace @kicko/db",
+    "dev": "npm run dev --workspace @kicko/web",
+    "build": "npm run generate --workspace @kicko/db && npm run build --workspace @kicko/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  }
+}

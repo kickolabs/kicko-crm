@@ -1,0 +1,17 @@
+import { timingSafeEqual } from 'node:crypto';
+import { NextResponse, type NextRequest } from 'next/server';
+import { runDailyReminders } from '@/server/reminders';
+
+export const maxDuration = 300;
+
+// Vercel Cron sends "Authorization: Bearer $CRON_SECRET". Locally:
+//   curl -H "Authorization: Bearer <CRON_SECRET>" http://localhost:3000/api/cron/daily
+export async function GET(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  const given = Buffer.from(req.headers.get('authorization') ?? '');
+  const expected = Buffer.from(`Bearer ${secret}`);
+  if (!secret || given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return NextResponse.json({ ok: true, created: await runDailyReminders() });
+}

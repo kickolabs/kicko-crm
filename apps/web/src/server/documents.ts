@@ -1,0 +1,177 @@
+import 'server-only';
+import { after } from 'next/server';
+import { checkDocumentFile } from './doc-checks';
+import type { DocumentStatus, Tx } from '@kicko/db';
+import type { ChecklistItem } from '@kicko/db/visa-catalog';
+import { z } from 'zod';
+import { parseLocal } from '@/lib/format';
+import { inTenant, logActivity, UserError, type Scope } from './scope';
+import { ALLOWED_TYPES, MAX_UPLOAD_BYTES, createDownloadUrl, createUploadUrl, newKey, objectSize } from './storage';
+
+/** Make sure every checklist item of the case's product has a Document row. Idempotent. */
+export async function syncChecklistTx(tx: Tx, scope: Scope, caseId: string) {
+  const c = await tx.case.findUnique({ where: { id: caseId }, include: { product: true } });
+  if (!c) return;
+  const checklist = (c.product.checklist as ChecklistItem[]) ?? [];
+  await tx.document.createMany({
+    data: checklist.map((item, i) => ({
+      tenantId: scope.tenantId,
+      caseId,
+      clientId: c.clientId,
+      checklistKey: item.key,
+      name: item.name,
+      group: item.group,
+      required: item.required,
+      sortOrder: i,
+    })),
+    skipDuplicates: true,
+  });
+}
+
+export function syncChecklist(scope: Scope, caseId: string) {
+  return inTenant(scope, (tx) => syncChecklistTx(tx, scope, caseId));
+}
+
+export const requestInput = z.object({
+  name: z.string().trim().min(2, 'Name the document').max(160),
+  group: z.string().trim().max(60).optional().transform((v) => v || 'Additional'),
+  required: z.boolean().default(true),
+});
+
+/** Ad-hoc request, e.g. "Explanation letter for study gap". */
+export async function requestDocument(scope: Scope, caseId: string, raw: unknown) {
+  const input = requestInput.parse(raw);
+  return inTenant(scope, async (tx) => {
+    const c = await tx.case.findUnique({ where: { id: caseId } });
+    if (!c) throw new UserError('Case not found');
+    const count = await tx.document.count({ where: { caseId } });
+    const doc = await tx.document.create({
+      data: { tenantId: scope.tenantId, caseId, clientId: c.clientId, name: input.name, group: input.group, required: input.required, sortOrder: count },
+    });
+    await logActivity(tx, scope, { type: 'DOC_REQUESTED', summary: `Requested: ${input.name}`, caseId, clientId: c.clientId });
+    return doc;
+  });
+}
+
+const uploadInput = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  contentType: z.string().refine((t) => t in ALLOWED_TYPES, 'Upload a PDF, image or Word document'),
+  size: z.number().int().positive().max(MAX_UPLOAD_BYTES, 'Files must be 20 MB or smaller'),
+});
+
+/** Step 1: reserve a storage key and get a short-lived upload URL. */
+export async function startUpload(scope: Scope, documentId: string, raw: unknown) {
+  const input = uploadInput.parse(raw);
+  await inTenant(scope, async (tx) => {
+    const doc = await tx.document.findUnique({ where: { id: documentId } });
+    if (!doc) throw new UserError('Document not found');
+    if (doc.status === 'VERIFIED') throw new UserError('This document is verified. Reject it first to replace the file.');
+  });
+  const key = newKey(scope.tenantId, 'documents', input.contentType);
+  const target = await createUploadUrl(key, input.contentType, input.size);
+  return { key, ...target };
+}
+
+/** Step 2: after the browser uploaded the bytes, record the file (only if it really landed in storage). */
+export async function finishUpload(scope: Scope, documentId: string, raw: unknown) {
+  const input = uploadInput.extend({ key: z.string() }).parse(raw);
+  if (!input.key.startsWith(`tenants/${scope.tenantId}/documents/`)) throw new UserError('Invalid upload');
+  const size = await objectSize(input.key);
+  if (size == null) throw new UserError('Upload did not complete. Please try again.');
+  return inTenant(scope, async (tx) => {
+    const doc = await tx.document.findUnique({ where: { id: documentId } });
+    if (!doc) throw new UserError('Document not found');
+    const file = await tx.documentFile.create({
+      data: {
+        tenantId: scope.tenantId,
+        documentId,
+        storageKey: input.key,
+        fileName: input.fileName,
+        contentType: input.contentType,
+        size,
+        uploadedBy: scope.actorId,
+      },
+    });
+    after(() => checkDocumentFile(scope, file.id));
+    await tx.document.update({ where: { id: documentId }, data: { status: 'UPLOADED', rejectionReason: null, verifiedAt: null, verifiedBy: null } });
+    await logActivity(tx, scope, {
+      type: 'DOC_UPLOADED',
+      summary: `Uploaded ${doc.name}${doc.status === 'REJECTED' ? ' (replacement)' : ''}`,
+      caseId: doc.caseId,
+      clientId: doc.clientId,
+    });
+  });
+}
+
+export const reviewInput = z
+  .object({
+    decision: z.enum(['VERIFIED', 'REJECTED']),
+    reason: z.string().trim().max(500).optional(),
+    expiresAt: z.string().optional(),
+  })
+  .refine((v) => v.decision === 'VERIFIED' || (v.reason && v.reason.length > 2), {
+    message: 'Tell the client what to fix',
+    path: ['reason'],
+  });
+
+export async function reviewDocument(scope: Scope, documentId: string, raw: unknown) {
+  const input = reviewInput.parse(raw);
+  const doc = await reviewTx(scope, documentId, input);
+  if (input.decision === 'REJECTED') {
+    const { fireAutomation } = await import('./whatsapp/automations');
+    await fireAutomation(scope, 'DOC_REJECTED', {
+      clientId: doc.clientId,
+      caseId: doc.caseId,
+      vars: [doc.client.firstName, doc.name, input.reason ?? ''],
+    });
+  }
+}
+
+function reviewTx(scope: Scope, documentId: string, input: z.infer<typeof reviewInput>) {
+  return inTenant(scope, async (tx) => {
+    const doc = await tx.document.findUnique({ where: { id: documentId }, include: { files: { take: 1 }, client: true } });
+    if (!doc) throw new UserError('Document not found');
+    if (!doc.files.length) throw new UserError('Nothing uploaded yet');
+    const verified = input.decision === 'VERIFIED';
+    await tx.document.update({
+      where: { id: documentId },
+      data: {
+        status: input.decision,
+        rejectionReason: verified ? null : input.reason,
+        verifiedBy: verified ? scope.actorId : null,
+        verifiedAt: verified ? new Date() : null,
+        expiresAt: input.expiresAt ? parseLocal(input.expiresAt, 'UTC') : doc.expiresAt,
+      },
+    });
+    await logActivity(tx, scope, {
+      type: verified ? 'DOC_VERIFIED' : 'DOC_REJECTED',
+      summary: verified ? `Verified ${doc.name}` : `Rejected ${doc.name}: ${input.reason}`,
+      caseId: doc.caseId,
+      clientId: doc.clientId,
+    });
+    return doc;
+  });
+}
+
+export async function setDocumentStatus(scope: Scope, documentId: string, status: Extract<DocumentStatus, 'NOT_APPLICABLE' | 'PENDING'>) {
+  return inTenant(scope, async (tx) => {
+    const doc = await tx.document.findUnique({ where: { id: documentId }, include: { files: { take: 1 } } });
+    if (!doc) throw new UserError('Document not found');
+    const next = status === 'PENDING' && doc.files.length ? 'UPLOADED' : status;
+    await tx.document.update({ where: { id: documentId }, data: { status: next, rejectionReason: null } });
+  });
+}
+
+export async function setDocumentExpiry(scope: Scope, documentId: string, date: string | null) {
+  return inTenant(scope, async (tx) => {
+    const res = await tx.document.updateMany({ where: { id: documentId }, data: { expiresAt: date ? parseLocal(date, 'UTC') : null } });
+    if (!res.count) throw new UserError('Document not found');
+  });
+}
+
+/** Signed URL for a file; the lookup runs under RLS so foreign files are never resolvable. */
+export async function fileUrl(scope: Scope, fileId: string, inline: boolean) {
+  const file = await inTenant(scope, (tx) => tx.documentFile.findUnique({ where: { id: fileId } }));
+  if (!file) throw new UserError('File not found');
+  return createDownloadUrl(file.storageKey, file.fileName, inline);
+}
