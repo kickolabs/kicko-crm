@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { LogoMark } from '@/components/logo';
 import { requireAdmin } from '@/server/admin';
+import { signOutAction } from '../(auth)/actions';
 
 export const metadata = { title: { default: 'Kicko admin', template: '%s · Kicko admin' }, robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <span className="rounded bg-lime px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-ink">ADMIN</span>
         </Link>
         <span className="ml-auto text-xs text-paper/60">{admin.email}</span>
+        <form action={signOutAction}>
+          <button type="submit" className="rounded-[9px] px-2.5 py-1 text-xs font-semibold text-paper/80 hover:bg-paper/10 hover:text-paper">Sign out</button>
+        </form>
       </header>
       <main className="mx-auto flex max-w-[1280px] flex-col gap-5 px-5 py-6">{children}</main>
     </div>
