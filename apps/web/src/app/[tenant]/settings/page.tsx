@@ -13,6 +13,8 @@ import { ConnectionCard } from './connection-card';
 import { UpgradeCard } from '@/components/upgrade';
 import { hasFeature } from '@/lib/plans';
 import { IntegrationsTab } from './integrations-tab';
+import { CustomFieldsSettings } from './custom-fields-settings';
+import { listFields } from '@/server/custom-fields';
 import { CreditsCard, CurrentPlan, PlanPicker } from './plan-settings';
 import { creditSummary } from '@/server/plan';
 import { formatMoney } from '@/lib/money';
@@ -51,6 +53,7 @@ const TABS = [
   ['calling', 'Calling'],
   ['voice', 'AI voice agent'],
   ['integrations', 'Integrations'],
+  ['fields', 'Custom fields'],
   ['capture', 'Lead capture'],
   ['workflows', 'Visa workflows'],
 ] as const;
@@ -123,9 +126,17 @@ export default async function SettingsPage({
         />
       )}
 
+      {tab === 'fields' && <FieldsTab />}
+
       {tab === 'workflows' && <WorkflowsTab slug={slug} productId={sp.product} ctx={ctx} />}
     </div>
   );
+
+  async function FieldsTab() {
+    if (!hasFeature(ctx.subscription!, 'custom_fields')) return <UpgradeCard slug={slug} feature="custom_fields" canManage />;
+    const fields = await listFields(scopeOf(ctx), undefined, { archived: true });
+    return <CustomFieldsSettings slug={slug} fields={fields} />;
+  }
 
   async function WhatsAppTab() {
     const [w, templates, rules, products] = await Promise.all([

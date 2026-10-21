@@ -232,6 +232,8 @@ model Lead {
   aiHandoffAt      DateTime? // WhatsApp assistant handed this conversation to a human
   aiHandoffReason  String?
   aiResumedAt      DateTime? // staff resumed the assistant; earlier staff replies don't pause it
+  // Agency-defined fields: { [CustomField.key]: string | number | boolean }
+  customFields     Json          @default("{}")
 
   @@unique([tenantId, ref])
   @@index([tenantId, status])
@@ -290,6 +292,7 @@ model Client {
   aiHandoffAt     DateTime?
   aiHandoffReason String?
   aiResumedAt     DateTime?
+  customFields    Json           @default("{}")
 
   @@unique([tenantId, ref])
   @@index([tenantId, phoneNormalized])
@@ -340,6 +343,7 @@ model Case {
   // free-form key dates: { biometrics, medical, intake, ... }
   dates        Json           @default("{}")
   stageSince   DateTime       @default(now())
+  customFields Json           @default("{}")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   history      StageHistory[]
@@ -999,6 +1003,37 @@ model PlatformInvoice {
   createdAt         DateTime @default(now())
 
   @@index([tenantId, paidAt])
+}
+
+// Agency-defined fields on leads, clients and cases (Pro plan). Values live in each
+// record's customFields JSON under `key`, which never changes after creation.
+model CustomField {
+  id        String   @id @default(cuid())
+  tenantId  String
+  entity    String // leads | clients | cases
+  key       String
+  label     String
+  type      String // text | number | date | select | yesno
+  options   String[]
+  sortOrder Int      @default(0)
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, entity, key])
+  @@index([tenantId, entity])
+}
+
+// A report someone saved from the report builder; spec is a ReportSpec.
+model SavedReport {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  spec        Json
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 // A spreadsheet import (leads or clients). createdIds make the import undoable.

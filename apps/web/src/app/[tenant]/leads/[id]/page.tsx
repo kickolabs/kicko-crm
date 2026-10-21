@@ -5,6 +5,7 @@ import { CATEGORY_LABEL, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, LEAD_S
 import { fmtDateTime, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
+import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { getLead, listProducts } from '@/server/queries';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
 import { Timeline } from '../../_components/timeline';
@@ -105,6 +106,7 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
               </div>
             )}
           </Card>
+          <CustomFieldsPanel ctx={ctx} entity="leads" recordId={lead.id} values={lead.customFields} canEdit={can(ctx.role, 'lead.write')} />
           {thread && (thread.whatsapp || thread.messages.length > 0) && (
             <Card className="flex h-[60vh] flex-col overflow-hidden">
               <CardHeader title="WhatsApp" sub={thread.whatsapp?.optIn ? 'Opted in to WhatsApp updates' : undefined} />

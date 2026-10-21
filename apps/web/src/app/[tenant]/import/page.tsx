@@ -4,7 +4,7 @@ import { Badge, Card, CardHeader, EmptyState, PageHeader } from '@/components/ui
 import { fmtDateTime } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
-import { listImports } from '@/server/import';
+import { importableFields, listImports } from '@/server/import';
 import { scopeOf } from '@/server/scope';
 import { undoImportAction } from '../actions-import';
 import { ImportWizard } from './import-wizard';
@@ -24,7 +24,7 @@ export default async function ImportPage({ params, searchParams }: { params: Pro
       </div>
     );
   }
-  const [team, imports] = await Promise.all([getTeam(ctx), listImports(scopeOf(ctx))]);
+  const [team, imports, leadFields, clientFields] = await Promise.all([getTeam(ctx), listImports(scopeOf(ctx)), importableFields(scopeOf(ctx), 'leads'), importableFields(scopeOf(ctx), 'clients')]);
   const tz = ctx.tenant.timezone;
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
 
@@ -36,6 +36,7 @@ export default async function ImportPage({ params, searchParams }: { params: Pro
         team={team.filter((m) => m.role !== 'ACCOUNTS').map((m) => ({ userId: m.userId, name: m.name }))}
         country={ctx.tenant.country}
         initialEntity={type === 'clients' ? 'clients' : 'leads'}
+        custom={{ leads: leadFields, clients: clientFields }}
       />
 
       <Card>

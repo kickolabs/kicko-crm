@@ -41,6 +41,8 @@ export function CommandBar({ slug }: { slug: string }) {
         ['My tasks', `/${slug}/tasks`],
         ['Calendar', `/${slug}/calendar`],
         ['Walk-in queue', `/${slug}/walk-ins`],
+        ['Reports', `/${slug}/reports`],
+        ['Import from a spreadsheet', `/${slug}/import`],
         ['Settings', `/${slug}/settings`],
       ].map(([title, href]) => ({ kind: 'Go to', id: href!, title: title!, href: href! })),
     [slug],

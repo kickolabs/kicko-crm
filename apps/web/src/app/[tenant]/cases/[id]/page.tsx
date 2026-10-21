@@ -11,6 +11,7 @@ import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
 import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
+import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { stagesOf } from '@/server/cases';
 import { getCase } from '@/server/queries';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
@@ -174,6 +175,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
               )}
             </div>
           </Card>
+          <CustomFieldsPanel ctx={ctx} entity="cases" recordId={c.id} values={c.customFields} canEdit={can(ctx.role, 'case.write')} />
           <AppointmentsPanel slug={slug} items={c.appointments} tz={tz} links={{ caseId: c.id }} team={team} me={ctx.user.id} />
           {dependants.length > 0 && (
             <Card>

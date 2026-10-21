@@ -27,6 +27,7 @@ import { QUESTIONS, type AnswerKey, type Answers, type Question } from '@/lib/fo
 import { scopeOf } from '@/server/scope';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
+import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { stagesOf } from '@/server/cases';
 import { getClient, listProducts } from '@/server/queries';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
@@ -131,6 +132,7 @@ export default async function ClientPage({
                 })}
               </ul>
             </Card>
+            <CustomFieldsPanel ctx={ctx} entity="clients" recordId={client.id} values={client.customFields} canEdit={writable} />
             <Card>
               <CardHeader title="Notes & activity" />
               <div className="flex flex-col gap-5 px-5 py-4">

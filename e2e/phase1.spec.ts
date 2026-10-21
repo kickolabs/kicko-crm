@@ -31,7 +31,7 @@ test.describe.serial('Phase 1', () => {
   test('agency signs up and lands on the command dashboard', async () => {
     await signUp(page, owner, agency);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/All clear|need/);
-    await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Leads' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: /^Leads/ })).toBeVisible();
   });
 
   test('command bar opens with Ctrl+K (⌘K on Mac) and shows the right hint', async () => {

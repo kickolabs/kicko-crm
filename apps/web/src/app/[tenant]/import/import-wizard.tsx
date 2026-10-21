@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
 import { Check, FileSpreadsheet, Upload } from 'lucide-react';
 import { Badge, Button, buttonCls, Card, Select } from '@/components/ui';
-import { cleanRow, dupKeys, FIELDS, guessMapping, LIMITS, sampleCsv, type DateOrder, type Entity, type Mapping } from '@/lib/import/fields';
+import type { CfDef } from '@/lib/custom-fields';
+import { cleanRow, dupKeys, fieldsFor, guessMapping, LIMITS, sampleCsv, type DateOrder, type Entity, type Mapping } from '@/lib/import/fields';
 import { readSpreadsheet, SheetError, type Sheet } from '@/lib/import/read-file';
 import { findExistingAction, finishImportAction, importChunkAction, startImportAction, undoImportAction } from '../actions-import';
 
@@ -18,7 +19,7 @@ type RowState = { row: number; status: 'new' | 'update' | 'skip' | 'link' | 'err
 const LABEL: Record<Entity, { one: string; many: string }> = { leads: { one: 'lead', many: 'leads' }, clients: { one: 'client', many: 'clients' } };
 const STEPS: [Step, string][] = [['upload', 'Choose file'], ['map', 'Match columns'], ['preview', 'Check'], ['done', 'Import']];
 
-export function ImportWizard({ slug, team, country, initialEntity }: { slug: string; team: Member[]; country: string; initialEntity: Entity }) {
+export function ImportWizard({ slug, team, country, initialEntity, custom }: { slug: string; team: Member[]; country: string; initialEntity: Entity; custom: Record<Entity, CfDef[]> }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('upload');
   const [entity, setEntity] = useState<Entity>(initialEntity);
@@ -42,7 +43,7 @@ export function ImportWizard({ slug, team, country, initialEntity }: { slug: str
     try {
       const sheet = await readSpreadsheet(f);
       setFile({ name: f.name, sheet });
-      setMapping(guessMapping(entity, sheet.headers));
+      setMapping(guessMapping(entity, sheet.headers, custom[entity]));
       setStep('map');
     } catch (e) {
       setError(e instanceof SheetError ? e.message : 'This file couldn’t be read.');
@@ -53,8 +54,8 @@ export function ImportWizard({ slug, team, country, initialEntity }: { slug: str
   }
 
   const cleaned = useMemo(
-    () => (file && step !== 'upload' ? file.sheet.rows.map((cells) => cleanRow(entity, cells, mapping, { country, dateOrder })) : []),
-    [file, step, entity, mapping, country, dateOrder],
+    () => (file && step !== 'upload' ? file.sheet.rows.map((cells) => cleanRow(entity, cells, mapping, { country, dateOrder, custom: custom[entity] })) : []),
+    [file, step, entity, mapping, country, dateOrder, custom],
   );
 
   // What will happen to each row (needs `existing` from the server).
@@ -207,7 +208,7 @@ export function ImportWizard({ slug, team, country, initialEntity }: { slug: str
                 <tr><th className="px-4 py-2">Kicko field</th><th className="px-4 py-2">Column in your file</th><th className="px-4 py-2">First value</th></tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {FIELDS[entity].map((f) => {
+                {fieldsFor(entity, custom[entity]).map((f) => {
                   const col = mapping[f.key] ?? -1;
                   return (
                     <tr key={f.key}>

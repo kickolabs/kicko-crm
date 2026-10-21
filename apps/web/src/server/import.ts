@@ -3,7 +3,16 @@ import { Prisma, prisma, type LeadSource, type LeadStatus, type Tx, type VisaCat
 import { z } from 'zod';
 import { cleanRow, dupKeys, LIMITS, type Cleaned, type Entity } from '@/lib/import/fields';
 import { fullName } from '@/lib/format';
+import type { CfDef, CfValues } from '@/lib/custom-fields';
+import { listFields } from './custom-fields';
+import { featureOn } from './plan';
 import { inTenant, UserError, type Scope } from './scope';
+
+/** Custom fields an import can fill (Pro plan). */
+export async function importableFields(scope: Scope, entity: Entity): Promise<CfDef[]> {
+  if (!(await featureOn(scope.tenantId, 'custom_fields'))) return [];
+  return (await listFields(scope, entity)).map(({ key, label, type, options }) => ({ key, label, type, options }));
+}
 
 // Spreadsheet import of leads and clients. The browser parses the file and sends
 // rows in chunks; every row is cleaned again here. Each import is a batch that
@@ -106,6 +115,8 @@ const pickDefined = <T extends Record<string, unknown>>(o: T) =>
 
 export async function importChunk(scope: Scope, batchId: string, raw: z.input<typeof chunkInput>) {
   const input = chunkInput.parse(raw);
+  const entityOf = await inTenant(scope, (tx) => tx.importBatch.findUnique({ where: { id: batchId }, select: { entity: true } }));
+  const custom = entityOf ? await importableFields(scope, entityOf.entity as Entity) : [];
   return inTenant(scope, async (tx) => {
     const batch = await tx.importBatch.findUnique({ where: { id: batchId } });
     if (!batch || batch.status !== 'running') throw new UserError('This import has already finished');
@@ -118,7 +129,7 @@ export async function importChunk(scope: Scope, batchId: string, raw: z.input<ty
     const cleaned: { row: number; data: Cleaned }[] = [];
     input.rows.forEach((cells, i) => {
       const row = input.firstRow + i;
-      const r = cleanRow(entity, cells, input.mapping, { country: scope.country, dateOrder: o.dateOrder });
+      const r = cleanRow(entity, cells, input.mapping, { country: scope.country, dateOrder: o.dateOrder, custom });
       if (r.ok) cleaned.push({ row, data: r.data });
       else issues.push({ row, message: r.error });
     });
@@ -186,7 +197,10 @@ export async function importChunk(scope: Scope, batchId: string, raw: z.input<ty
 }
 
 async function updateExisting(tx: Tx, scope: Scope, entity: Entity, id: string, d: Cleaned, ownerId: string | null, fileName: string) {
-  const common = pickDefined({ firstName: d.firstName, lastName: d.lastName, phone: d.phone, phoneNormalized: d.phoneNormalized, email: d.email, ownerId: d.owner ? ownerId : null });
+  const current =
+    entity === 'leads' ? await tx.lead.findUnique({ where: { id }, select: { customFields: true } }) : await tx.client.findUnique({ where: { id }, select: { customFields: true } });
+  const customFields = d.custom ? ({ ...((current?.customFields ?? {}) as CfValues), ...d.custom } as Prisma.InputJsonObject) : undefined;
+  const common = pickDefined({ firstName: d.firstName, lastName: d.lastName, phone: d.phone, phoneNormalized: d.phoneNormalized, email: d.email, ownerId: d.owner ? ownerId : null, customFields });
   if (entity === 'leads') {
     await tx.lead.update({
       where: { id },
@@ -223,6 +237,7 @@ async function createLeads(tx: Tx, scope: Scope, rows: Pending[], ownerOf: (d: C
       interestCategory: (d.interestCategory as VisaCategory | null) ?? null,
       ownerId: ownerOf(d),
       message: d.notes,
+      customFields: (d.custom ?? {}) as Prisma.InputJsonObject,
       createdAt: d.createdAt ?? now,
     })),
   });
@@ -251,6 +266,7 @@ async function createClients(tx: Tx, scope: Scope, rows: Pending[], ownerOf: (d:
       maritalStatus: d.maritalStatus ?? null,
       address: d.address ?? null,
       ownerId: ownerOf(d),
+      customFields: (d.custom ?? {}) as Prisma.InputJsonObject,
       createdAt: d.createdAt ?? now,
     })),
   });

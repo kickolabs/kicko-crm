@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import {
+  BarChart3,
   Inbox,
   Phone,
   Building2,
@@ -55,6 +56,7 @@ export function Sidebar({
     { href: `${base}/walk-ins`, label: 'Walk-ins', icon: DoorOpen, count: counts.waiting, hot: counts.waiting > 0 },
   ];
   if (canBilling) items.push({ href: `${base}/billing`, label: 'Billing', icon: Receipt });
+  items.push({ href: `${base}/reports`, label: 'Reports', icon: BarChart3 });
   items.push({ href: `${base}/partners`, label: 'Partners', icon: Building2 });
   if (canSettings) items.push({ href: `${base}/settings`, label: 'Settings', icon: Settings });
 
@@ -119,10 +121,12 @@ export function Sidebar({
             </Link>
           );
         })}
-        <div className="mt-auto hidden rounded-[14px] bg-card p-3.5 text-xs leading-relaxed text-muted shadow-[var(--shadow-card)] lg:block">
-          <span className="eyebrow mb-1 block">Coming next</span>
-          Admin console, CSV import, custom fields.
-        </div>
+        {canSettings && (
+          <Link href={`${base}/import`} className="mt-auto hidden rounded-[14px] bg-card p-3.5 text-xs leading-relaxed text-muted shadow-[var(--shadow-card)] hover:text-ink lg:block">
+            <span className="eyebrow mb-1 block">Switching to Kicko?</span>
+            Import your leads and clients from Excel or another CRM →
+          </Link>
+        )}
       </nav>
     </>
   );
