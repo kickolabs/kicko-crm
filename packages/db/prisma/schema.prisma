@@ -1001,6 +1001,31 @@ model PlatformInvoice {
   @@index([tenantId, paidAt])
 }
 
+// A spreadsheet import (leads or clients). createdIds make the import undoable.
+model ImportBatch {
+  id          String    @id @default(cuid())
+  tenantId    String
+  entity      String // leads | clients
+  fileName    String
+  createdById String?
+  status      String    @default("running") // running | done | undone
+  totalRows   Int
+  created     Int       @default(0)
+  updated     Int       @default(0)
+  skipped     Int       @default(0)
+  failed      Int       @default(0)
+  createdIds  String[]
+  // [{ row, message }] for rows that were skipped or failed (first 1,000)
+  issues      Json      @default("[]")
+  options     Json?
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  undoneAt    DateTime?
+  undoneById  String?
+
+  @@index([tenantId, createdAt])
+}
+
 // Super-admin actions (Kicko staff), e.g. trial extensions, plan changes. Global, no RLS.
 model AdminAction {
   id         String   @id @default(cuid())

@@ -48,6 +48,9 @@ export default async function LeadsPage({
                 </Link>
               ))}
             </div>
+            {can(ctx.role, 'settings.manage') && (
+              <Link href={`/${slug}/import`} className={buttonCls('secondary')}>Import</Link>
+            )}
             {can(ctx.role, 'lead.write') && (
               <NewLeadButton
                 slug={slug}

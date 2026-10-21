@@ -4,6 +4,7 @@ import { fmtDateTime } from '@/lib/format';
 
 const DOT: Record<string, string> = {
   LEAD_CREATED: 'bg-lime ring-ink',
+  IMPORTED: 'bg-lime ring-ink',
   CONVERTED: 'bg-lime ring-ink',
   CASE_OPENED: 'bg-lime ring-ink',
   STAGE_CHANGED: 'bg-card ring-[#6FA82A]',
@@ -36,6 +37,7 @@ const LABEL: Record<string, string> = {
   SUB_AGENT: 'Sub-agent',
   FORMS: 'Forms',
   DOC_AI_CHECK: 'AI check',
+  IMPORTED: 'Import',
 };
 
 export function Timeline({

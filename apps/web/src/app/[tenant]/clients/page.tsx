@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Badge, Card, EmptyState, Input, PageHeader, buttonCls } from '@/components/ui';
 import { fmtDate, fullName } from '@/lib/format';
+import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { listClients } from '@/server/queries';
 
@@ -22,7 +23,11 @@ export default async function ClientsPage({
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
-      <PageHeader title="Clients" sub="Clients are created by converting a lead." />
+      <PageHeader
+        title="Clients"
+        sub="Clients are created by converting a lead, or imported."
+        actions={can(ctx.role, 'settings.manage') && <Link href={`/${slug}/import?type=clients`} className={buttonCls('secondary')}>Import</Link>}
+      />
       <form className="flex gap-2.5" role="search">
         <label className="sr-only" htmlFor="q">Search clients</label>
         <Input name="q" defaultValue={q} placeholder="Name, phone, email, ref or passport no." className="w-80" />
