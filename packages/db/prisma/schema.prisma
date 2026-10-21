@@ -944,6 +944,69 @@ model Call {
   @@index([tenantId, agentId, startedAt])
 }
 
+// ─── Phase 7a: plans, subscriptions, AI credits ─────────────────────────────
+
+// The agency's Kicko subscription (one per workspace).
+model Subscription {
+  id                     String    @id @default(cuid())
+  tenantId               String    @unique
+  plan                   String    @default("pro") // starter | growth | pro
+  interval               String    @default("year") // month | year
+  status                 String    @default("trialing") // trialing | active | past_due | read_only | suspended | canceled
+  statusSince            DateTime  @default(now())
+  seats                  Int       @default(3)
+  currency               String    @default("INR")
+  discountPct            Int       @default(0) // e.g. founding offer
+  trialEndsAt            DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  topUpCredits           Int       @default(0) // purchased credits; carry over
+  provider               String? // razorpay | billing-sandbox | manual
+  providerSubscriptionId String?   @unique
+  pendingChange          Json? // plan/interval/seats chosen at checkout, applied when paid
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+}
+
+// AI credit usage and purchases.
+model CreditEntry {
+  id        String   @id @default(cuid())
+  tenantId  String
+  kind      String // usage | top_up | adjustment
+  action    String? // call_notes | wa_reply | doc_check | voice_notes
+  credits   Int // positive number
+  fromTopUp Int      @default(0) // part of a usage taken from purchased credits
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, kind, createdAt])
+}
+
+// Kicko's own tax invoices to agencies.
+model PlatformInvoice {
+  id                String   @id @default(cuid())
+  tenantId          String
+  number            String   @unique
+  description       String
+  subtotal          Int
+  cgst              Int      @default(0)
+  sgst              Int      @default(0)
+  igst              Int      @default(0)
+  total             Int
+  currency          String   @default("INR")
+  providerPaymentId String?  @unique
+  paidAt            DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId, paidAt])
+}
+
+// Global counters (platform invoice numbers). No tenant column, no RLS.
+model PlatformCounter {
+  key   String @id
+  value Int
+}
+
 // ─── Phase 6b: government form auto-fill ────────────────────────────────────
 
 // Staff asked the client (via the portal) to answer questions a form needs.

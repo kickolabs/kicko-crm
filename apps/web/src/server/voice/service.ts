@@ -20,6 +20,7 @@ import { newKey, putObject } from '../storage';
 import { officeOpen } from '../whatsapp/assistant';
 import { QUESTIONS, voiceAgent, voiceSettings, type QuestionKey, type VoiceCfg, type VoiceConn } from './agent';
 import { personaById } from './personas';
+import { consumeCredits, NO_CREDITS, requireFeature } from '../plan';
 
 // AI voice agent calls: a queue that respects calling hours, outbound qualification,
 // an inbound receptionist, tools the agent calls mid-call, and after-call processing
@@ -95,6 +96,7 @@ async function callVariables(scope: Scope, cfg: VoiceCfg, contact: Contact, call
 // ── Queue & dispatch ────────────────────────────────────────────────────────
 
 export async function queueAiCall(scope: Scope, contact: Contact, opts: { delayMin?: number; attempt?: number; when?: Date; persona?: string } = {}) {
+  await requireFeature(scope.tenantId, 'voice_agent');
   const conn = await voiceAgent(scope);
   if (!conn) throw new UserError('Connect an AI voice agent in Settings → AI voice agent first');
   const cfg = voiceSettings(scope.settings);
@@ -374,6 +376,10 @@ async function finishCall(scope: Scope, conn: VoiceConn, e: Extract<VoiceEvent, 
 
   try {
     const person = await inTenant(scope, (tx) => loadContact(tx, contact));
+    if (!(await consumeCredits(scope.tenantId, 'voice_notes', { callId: call.id }))) {
+      await inTenant(scope, (tx) => tx.call.update({ where: { id: call.id }, data: { aiStatus: 'skipped', aiError: NO_CREDITS } }));
+      return;
+    }
     const notes = await callNotes(scope.tenantId, e.transcript, { contactName: fullName(person), direction: call.direction });
     const actions = ((call.ai as { actions?: string[] } | null)?.actions ?? []) as string[];
     const summary = notes.sandbox && e.summary ? e.summary : notes.data.summary;

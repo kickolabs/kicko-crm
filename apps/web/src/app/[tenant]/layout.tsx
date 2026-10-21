@@ -5,6 +5,9 @@ import { can } from '@/lib/permissions';
 import { Sidebar } from './shell/sidebar';
 import { CommandBar } from './shell/command-bar';
 import { UserMenu } from './shell/user-menu';
+import { PlanBanner, SuspendedScreen } from './shell/plan-banner';
+import { PlanPicker } from './settings/plan-settings';
+import type { Interval, PlanId } from '@/lib/plans';
 
 export async function generateMetadata({ params }: { params: Promise<{ tenant: string }> }): Promise<Metadata> {
   const ctx = await getCtx((await params).tenant);
@@ -34,6 +37,25 @@ export default async function TenantLayout({
     return { leads, cases, tasks, waiting, docs, inbox, missed };
   });
 
+  const canManage = can(ctx.role, 'settings.manage');
+  if (ctx.access === 'suspended') {
+    const s = ctx.subscription!;
+    const seatsUsed = await db(ctx, (tx) => tx.membership.count({ where: { active: true } }));
+    return (
+      <SuspendedScreen name={ctx.tenant.name}>
+        {canManage ? (
+          <PlanPicker
+            slug={slug}
+            sub={{
+              plan: s.plan as PlanId, interval: s.interval as Interval, status: 'suspended', seats: Math.max(s.seats, seatsUsed), seatsUsed, trialDaysLeft: null,
+              renews: null, cancelAtPeriodEnd: false, provider: s.provider, discountPct: s.discountPct, currency: ctx.tenant.country === 'IN' ? 'INR' : 'USD',
+            }}
+          />
+        ) : undefined}
+      </SuspendedScreen>
+    );
+  }
+
   return (
     <div className="dotgrid flex min-h-dvh flex-col lg:flex-row">
       <Sidebar
@@ -48,6 +70,7 @@ export default async function TenantLayout({
           <CommandBar slug={slug} />
           <UserMenu slug={slug} name={ctx.user.name} email={ctx.user.email} role={ctx.role} />
         </div>
+        <PlanBanner slug={slug} sub={ctx.subscription} tz={ctx.tenant.timezone} canManage={canManage} />
         <main className="flex-1 px-4 pt-6 pb-16 sm:px-7">{children}</main>
       </div>
     </div>

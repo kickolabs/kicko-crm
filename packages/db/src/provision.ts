@@ -4,7 +4,7 @@ import { VISA_CATALOG } from './visa-catalog';
 
 export const RESERVED_SLUGS = new Set([
   'api', 'app', 'login', 'logout', 'signup', 'invite', 'f', 'embed', 'static', 'assets',
-  'admin', 'settings', 'portal', 'partner', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
+  'admin', 'settings', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
 ]);
 
 export function slugify(input: string): string {
@@ -95,6 +95,10 @@ export async function provisionTenant(input: { name: string; slug: string; owner
         data: { tenantId: tenant.id, userId: input.ownerUserId, role: 'OWNER' satisfies Role },
       });
       await tx.branch.create({ data: { tenantId: tenant.id, name: 'Head office' } });
+      // 14-day trial with every feature, so agencies see the whole product before choosing a plan.
+      await tx.subscription.create({
+        data: { tenantId: tenant.id, plan: 'pro', status: 'trialing', seats: 10, trialEndsAt: new Date(Date.now() + 14 * 86400_000) },
+      });
       await tx.visaProduct.createMany({
         data: VISA_CATALOG.map((p) => ({
           tenantId: tenant.id,

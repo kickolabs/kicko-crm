@@ -2,6 +2,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { prisma, withTenant, type Role } from '@kicko/db';
 import { z } from 'zod';
+import { assertSeatAvailable } from './plan';
 import { normalizeEmail } from '@/lib/phone';
 import { inTenant, UserError, type Scope } from './scope';
 
@@ -17,6 +18,7 @@ export async function createInvite(scope: Scope, raw: z.input<typeof inviteInput
   const email = normalizeEmail(input.email)!;
   const user = await prisma.user.findUnique({ where: { email } });
   return inTenant(scope, async (tx) => {
+    await assertSeatAvailable(tx, scope.tenantId);
     if (user) {
       const m = await tx.membership.findUnique({ where: { tenantId_userId: { tenantId: scope.tenantId, userId: user.id } } });
       if (m?.active) throw new UserError('That person is already on the team');

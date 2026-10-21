@@ -5,12 +5,15 @@ import { can } from '@/lib/permissions';
 import { db, getCtx } from '@/lib/tenant';
 import { commissionLabel } from '@/server/sub-agents';
 import { AgentEditor } from './agent-forms';
+import { UpgradeCard } from '@/components/upgrade';
+import { hasFeature } from '@/lib/plans';
 
 export const metadata = { title: 'Sub-agents' };
 
 export default async function AgentsPage({ params }: { params: Promise<{ tenant: string }> }) {
   const { tenant: slug } = await params;
   const ctx = await getCtx(slug);
+  if (!hasFeature(ctx.subscription!, 'sub_agents')) return <UpgradeCard slug={slug} feature="sub_agents" canManage={can(ctx.role, 'settings.manage')} />;
   const agents = await db(ctx, (tx) =>
     tx.subAgent.findMany({
       orderBy: [{ active: 'desc' }, { createdAt: 'asc' }],

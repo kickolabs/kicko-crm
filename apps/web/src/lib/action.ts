@@ -24,6 +24,10 @@ export async function run<T>(fn: () => Promise<T>, message?: string): Promise<Ac
       return { ok: false, error: Object.values(fieldErrors)[0] ?? 'Check the form', fieldErrors };
     }
     if (err instanceof UserError || err instanceof ForbiddenError) return { ok: false, error: err.message };
+    // Postgres refused a write: the workspace is read-only (lapsed subscription).
+    if (/read-only transaction/i.test(String((err as Error)?.message))) {
+      return { ok: false, error: 'This workspace is read-only because the subscription has ended. An admin can renew it in Settings → Plan & billing.' };
+    }
     console.error(err);
     return { ok: false, error: 'Something went wrong. Please try again.' };
   }

@@ -6,6 +6,7 @@ import { crs, crsWhatIfs, CRS_DEFAULTS, type CrsInput, type Education } from '@/
 import { celpipToClb, ieltsToAuEnglish, ieltsToClb, type Bands } from '@/lib/eligibility/language';
 import { runStructured } from './ai/run';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
+import { requireFeature } from './plan';
 
 // Points calculators on a client: prefilled from the profile, computed by code
 // (lib/eligibility), explained in plain words by the AI. The AI never sets a score.
@@ -163,6 +164,7 @@ Improvements must be copied exactly from the WHAT-IFS list. Plain, encouraging E
 // ── Save ────────────────────────────────────────────────────────────────────
 
 export async function saveCheck(scope: Scope, clientId: string, kind: 'CRS' | 'AU_POINTS', raw: unknown) {
+  await requireFeature(scope.tenantId, 'eligibility');
   const exists = await inTenant(scope, (tx) => tx.client.findUnique({ where: { id: clientId }, select: { id: true } }));
   if (!exists) throw new UserError('Client not found');
 

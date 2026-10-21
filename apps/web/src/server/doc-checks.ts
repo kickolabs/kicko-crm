@@ -6,6 +6,7 @@ import { fullName } from '@/lib/format';
 import { compareWithProfile, mergeIssues, readDocument, READABLE_TYPES, type DocCheck } from './ai/doc-check';
 import { inTenant, logActivity, type Scope } from './scope';
 import { getObject } from './storage';
+import { consumeCredits, featureOn, NO_CREDITS } from './plan';
 
 // Runs after every upload (staff or client portal). Never throws: a failed check
 // must not affect the upload itself.
@@ -16,6 +17,7 @@ export const docChecksOn = (s: TenantSettings) => s.ai?.docChecks !== false;
 export async function checkDocumentFile(scope: Scope, fileId: string) {
   try {
     if (!docChecksOn(scope.settings)) return;
+    if (!(await featureOn(scope.tenantId, 'doc_checks'))) return;
     const file = await inTenant(scope, (tx) => tx.documentFile.findUnique({ where: { id: fileId }, include: { document: { include: { client: true } } } }));
     if (!file) return;
     const doc = file.document;
@@ -31,6 +33,7 @@ export async function checkDocumentFile(scope: Scope, fileId: string) {
       }
       bytes = await getObject(file.storageKey);
     }
+    if (!(await consumeCredits(scope.tenantId, 'doc_check', { fileId }))) return void (await save('skipped', { reason: NO_CREDITS }));
     const read = await readDocument(scope.tenantId, { bytes, mime: file.contentType, fileName: file.fileName, size: file.size }, { name: doc.name, group: doc.group });
     const issues = mergeIssues(
       read.data.issues,

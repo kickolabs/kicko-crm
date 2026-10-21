@@ -21,10 +21,12 @@ export type Tx = Prisma.TransactionClient;
  * Run `fn` inside a transaction bound to one tenant. Postgres RLS policies read
  * app.tenant_id, so every query in `fn` can only see and write this tenant's rows.
  */
-export function withTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+export function withTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>, opts: { readOnly?: boolean } = {}): Promise<T> {
   if (!tenantId) throw new Error('withTenant: tenantId is required');
   return prisma.$transaction(
     async (tx) => {
+      // A lapsed subscription makes staff work read-only: Postgres refuses every write.
+      if (opts.readOnly) await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       return fn(tx);
     },

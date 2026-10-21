@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
+import { runBillingLifecycle } from '@/server/plan';
 import { runDailyReminders } from '@/server/reminders';
 
 export const maxDuration = 300;
@@ -13,5 +14,7 @@ export async function GET(req: NextRequest) {
   if (!secret || given.length !== expected.length || !timingSafeEqual(given, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  return NextResponse.json({ ok: true, created: await runDailyReminders() });
+  // Lifecycle first, so reminders and automations see today's subscription state.
+  const billing = await runBillingLifecycle();
+  return NextResponse.json({ ok: true, billing, created: await runDailyReminders() });
 }

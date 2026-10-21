@@ -5,6 +5,7 @@ import { detailsKey, isAnswerKey, QUESTIONS, type AnswerKey, type Answers } from
 import { buildSheet, formById, FORMS, type SheetClient } from '@/lib/forms/sheet';
 import type { PortalCtx } from './portal-auth';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
+import { requireFeature } from './plan';
 
 // Government form answer sheets on a client: answers shared across forms, gaps
 // requested from the client through the portal.
@@ -36,6 +37,7 @@ export function toSheetClient(c: ClientWithFamily): SheetClient {
 const loadClient = (tx: Tx, clientId: string) => tx.client.findUnique({ where: { id: clientId }, include: { family: true } });
 
 export async function clientSheet(scope: Scope, clientId: string, formId: string) {
+  await requireFeature(scope.tenantId, 'forms');
   const form = formById(formId);
   if (!form) throw new UserError('Unknown form');
   const c = await inTenant(scope, (tx) => loadClient(tx, clientId));

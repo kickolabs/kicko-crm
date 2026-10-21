@@ -10,7 +10,13 @@ import { listInvites, listProducts } from '@/server/queries';
 import { GeneralForm, InviteForm, LeadCapture, MemberControls, ProductEditor, RevokeInvite } from './settings-forms';
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
 import { ConnectionCard } from './connection-card';
+import { UpgradeCard } from '@/components/upgrade';
+import { hasFeature } from '@/lib/plans';
 import { IntegrationsTab } from './integrations-tab';
+import { CreditsCard, CurrentPlan, PlanPicker } from './plan-settings';
+import { creditSummary } from '@/server/plan';
+import { formatMoney } from '@/lib/money';
+import type { Interval, PlanId, SubStatus } from '@/lib/plans';
 import { CallingPrefsCard, CallSimulatorCard, MyPhoneCard } from './calling-settings';
 import { AssistantSettingsCard, KnowledgeCard, PlaygroundCard } from './assistant-settings';
 import { assistantSettings } from '@/server/whatsapp/assistant';
@@ -36,6 +42,7 @@ import type { PlanStep } from '@/lib/money';
 export const metadata = { title: 'Settings' };
 const TABS = [
   ['general', 'General'],
+  ['plan', 'Plan & billing'],
   ['team', 'Team'],
   ['billing', 'Billing'],
   ['portal', 'Client portal'],
@@ -53,7 +60,7 @@ export default async function SettingsPage({
   searchParams,
 }: {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ tab?: string; product?: string }>;
+  searchParams: Promise<{ tab?: string; product?: string; paid?: string }>;
 }) {
   const { tenant: slug } = await params;
   const sp = await searchParams;
@@ -82,6 +89,8 @@ export default async function SettingsPage({
       )}
 
       {tab === 'team' && <TeamTab slug={slug} ctxRole={ctx.role} me={ctx.user.id} />}
+
+      {tab === 'plan' && <PlanTab />}
 
       {tab === 'billing' && <BillingTab />}
 
@@ -165,7 +174,53 @@ export default async function SettingsPage({
     );
   }
 
+  async function PlanTab() {
+    const s = ctx.subscription!;
+    const [seatsUsed, credits, invoices] = await Promise.all([
+      db(ctx, (tx) => tx.membership.count({ where: { active: true } })),
+      creditSummary(ctx.tenant.id),
+      db(ctx, (tx) => tx.platformInvoice.findMany({ orderBy: { paidAt: 'desc' }, take: 24 })),
+    ]);
+    const currency = ctx.tenant.country === 'IN' ? 'INR' : 'USD';
+    const sub = {
+      plan: s.plan as PlanId,
+      interval: s.interval as Interval,
+      status: s.status as SubStatus,
+      seats: s.seats,
+      seatsUsed,
+      trialDaysLeft: s.trialEndsAt ? Math.max(0, Math.ceil((s.trialEndsAt.getTime() - Date.now()) / 86400_000)) : null,
+      renews: s.currentPeriodEnd ? fmtDate(s.currentPeriodEnd, ctx.tenant.timezone) : null,
+      cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+      provider: s.provider,
+      discountPct: s.discountPct,
+      currency: currency as 'INR' | 'USD',
+    };
+    return (
+      <div className="flex flex-col gap-5">
+        <CurrentPlan slug={slug} sub={sub} paid={sp.paid === '1'} />
+        <PlanPicker slug={slug} sub={sub} />
+        <CreditsCard slug={slug} credits={credits} currency={sub.currency} sandboxAi={!platformStatus().llm} />
+        <Card>
+          <CardHeader title="Invoices from Kicko" sub="GST tax invoices for your subscription and credits" />
+          <ul className="divide-y divide-line">
+            {invoices.length === 0 && <li className="px-5 py-5 text-sm text-muted">No invoices yet.</li>}
+            {invoices.map((i) => (
+              <li key={i.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+                <span className="font-mono text-xs">{i.number}</span>
+                <span className="min-w-0 flex-1 text-ink-2">{i.description}</span>
+                <span className="text-xs text-muted">{fmtDate(i.paidAt, ctx.tenant.timezone)}</span>
+                <span className="font-bold tabular-nums">{formatMoney(i.total, i.currency)}</span>
+                <a href={`/api/t/${slug}/kicko-invoices/${i.id}`} target="_blank" rel="noreferrer" className="text-[13px] font-semibold underline underline-offset-4">PDF</a>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+    );
+  }
+
   async function VoiceTab() {
+    if (!hasFeature(ctx.subscription!, 'voice_agent')) return <UpgradeCard slug={slug} feature="voice_agent" canManage={can(ctx.role, 'settings.manage')} />;
     const scope = scopeOf(ctx);
     const cfg = voiceSettings(ctx.tenant.settings);
     const [conn, status, { prompt }, queued] = await Promise.all([
@@ -199,6 +254,7 @@ export default async function SettingsPage({
   }
 
   async function AssistantTab() {
+    if (!hasFeature(ctx.subscription!, 'wa_assistant')) return <UpgradeCard slug={slug} feature="wa_assistant" canManage={can(ctx.role, 'settings.manage')} />;
     const [wa, items] = await Promise.all([
       connectionSummary(ctx.tenant.id, 'messaging'),
       db(ctx, (tx) => tx.knowledgeItem.findMany({ orderBy: { createdAt: 'asc' } })),
@@ -216,6 +272,7 @@ export default async function SettingsPage({
   }
 
   async function CallingTab() {
+    if (!hasFeature(ctx.subscription!, 'calling')) return <UpgradeCard slug={slug} feature="calling" canManage={can(ctx.role, 'settings.manage')} />;
     const [conn, team] = await Promise.all([connectionSummary(ctx.tenant.id, 'telephony'), getTeam(ctx)]);
     const me = team.find((m) => m.userId === ctx.user.id);
     const ai = platformStatus();

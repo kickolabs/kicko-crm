@@ -87,6 +87,25 @@ Settings → AI assistant. Choose **Off**, **Always on** or **Outside office hou
 - It never gives immigration advice or guarantees. Complaints, requests for a person, and anything it's unsure about are handed to a human: the chat is flagged in the inbox and a priority task goes to the owner. Staff can **Take over** or **Resume AI** per chat, and any staff reply pauses it for 12 hours. Replying STOP opts the customer out. At most 30 AI replies per contact per day.
 - Without `ANTHROPIC_API_KEY` it runs in sandbox: keyword rules plus knowledge-base matching, English only.
 
+## Plans & billing (Kicko charging agencies)
+
+Settings → **Plan & billing**. Plans are defined in `apps/web/src/lib/plans.ts` (prices per user per month, before GST):
+
+| | Starter | Growth | Pro |
+|---|---|---|---|
+| Yearly / monthly (INR) | ₹999 / ₹1,199 | ₹1,999 / ₹2,399 | ₹3,499 / ₹4,199 |
+| Adds | core CRM, WhatsApp | calling + AI notes, WhatsApp AI, payment links, eligibility, form sheets | voice agent, sub-agents, AI document checks, custom fields, API |
+| AI credits / user / month | 100 | 300 | 1,000 |
+
+- **Trial:** new workspaces get 14 days of everything, with 200 AI credits. Existing workspaces were set to a complimentary Pro plan.
+- **Seats:** limit active members plus pending invites.
+- **AI credits:** charged per AI action (call notes 4, voice notes 2, WhatsApp AI reply 1, document check 1), only when a real model runs. The monthly allowance resets on the 1st. Purchased credits (1,000 for ₹1,499 + GST) never expire. When credits run out, AI steps pause; the CRM never does.
+- **Plan gating:** enforced on the server for each feature; screens show an upgrade card.
+- **Lifecycle** (daily job): trial ends or the period lapses → payment due (7 days) → **read-only** (30 days) → **suspended**, with emails at each step.
+  - Read-only is enforced by Postgres: staff transactions run `SET TRANSACTION READ ONLY`. Viewing and export work, edits are refused, and incoming WhatsApp, payments and webhooks keep working.
+  - Suspended shows a renew screen. Data is kept for 90 days.
+- **Payments:** Razorpay Subscriptions on Kicko's own account (see `.env.example`), with a sandbox checkout until then. Each payment creates a **GST tax invoice** from Kicko (`KCK/26-27/0001`): CGST + SGST, or IGST when the agency's GSTIN is in another state.
+
 ## Government form answer sheets
 
 Client → **Forms** tab. These are copy-ready answer sheets for the forms consultants fill most:

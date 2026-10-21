@@ -9,6 +9,7 @@ import { getTenantBySlug } from '@/lib/tenant';
 import { emailEnabled, sendEmail } from './email';
 import { rateLimit } from './public';
 import { systemScope, UserError, type Scope } from './scope';
+import { featureOn, requireFeature } from './plan';
 
 // Partner (sub-agent) portal authentication: one-time links → session cookie scoped
 // to /partner/{workspace}. Same model as the client portal, separate tables, so a
@@ -28,6 +29,7 @@ export type PartnerCtx = {
 
 /** Staff: create a sign-in link for a sub-agent. */
 export async function createPartnerLink(scope: Scope, slug: string, subAgentId: string, ttlHours = 7 * 24) {
+  await requireFeature(scope.tenantId, 'sub_agents');
   const token = randomBytes(32).toString('base64url');
   await withTenant(scope.tenantId, async (tx) => {
     const agent = await tx.subAgent.findUnique({ where: { id: subAgentId } });
@@ -98,6 +100,7 @@ export const getPartner = cache(async (slug: string): Promise<PartnerCtx | null>
     return a;
   });
   if (!agent) return null;
+  if (!(await featureOn(tenant.id, 'sub_agents'))) return null; // plan no longer includes the partner portal
   const { id, ref, name, company, email, commissionType, commissionValue } = agent;
   return { scope: systemScope(tenant), slug, tenantName: tenant.name, agent: { id, ref, name, company, email, commissionType, commissionValue } };
 });

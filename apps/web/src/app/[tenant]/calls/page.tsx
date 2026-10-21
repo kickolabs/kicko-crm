@@ -9,6 +9,9 @@ import { getCtx, getTeam } from '@/lib/tenant';
 import { listCalls, type CallFilter } from '@/server/calls/queries';
 import { fmtDuration, telephony } from '@/server/calls/service';
 
+import { UpgradeCard } from '@/components/upgrade';
+import { hasFeature } from '@/lib/plans';
+
 export const metadata = { title: 'Calls' };
 
 const FILTERS: [CallFilter, string][] = [
@@ -24,6 +27,7 @@ export default async function CallsPage({ params, searchParams }: { params: Prom
   const { tenant: slug } = await params;
   const sp = await searchParams;
   const ctx = await getCtx(slug);
+  if (!hasFeature(ctx.subscription!, 'calling')) return <UpgradeCard slug={slug} feature="calling" canManage={can(ctx.role, 'settings.manage')} />;
   if (!can(ctx.role, 'lead.write') && !can(ctx.role, 'client.write')) notFound();
   const filter = FILTERS.find(([k]) => k === sp.f)?.[0] ?? 'all';
   const [calls, team, t] = await Promise.all([listCalls(ctx, filter), getTeam(ctx), telephony({ tenantId: ctx.tenant.id, slug })]);

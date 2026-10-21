@@ -13,7 +13,12 @@
 | 5d | Eligibility (CRS, AU points: deterministic, AI explains) and AI document checks (type, expiry, name mismatch) | Done (sandbox; real document reading needs ANTHROPIC_API_KEY) |
 | 6a | Sub-agent network: partner portal (refer clients, track progress, commission), automatic commission (% of payments ex-GST or fixed fee), payouts | Done |
 | 6b | Government form auto-fill: copy-ready answer sheets for official forms from the client profile, missing answers requested from the client | Done |
-| **7** | **Ready to sell (SaaS commercialisation)** | **Planned (after core features)** |
+| 7a | Plans & billing: Starter / Growth / Pro, 14-day trial, seats, AI credits, Razorpay Subscriptions (sandbox until Kicko's account), GST invoices, lapse → read-only → suspended | Done |
+| 7b | Super-admin console | Planned |
+| 7c | CSV / Excel import | Planned |
+| 7d | Custom fields & reports | Planned |
+| 7e | Trust: 2FA, audit log, data export, backups, legal pages | Planned |
+| 7f | Website, pricing page, onboarding | Planned |
 
 ## Phase 4.5: Integration foundation
 

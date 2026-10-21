@@ -15,6 +15,7 @@ import { callNotes, type CallNotes } from '../ai/call-notes';
 import { findOrCreateByPhone, type Contact } from '../contacts';
 import { inTenant, logActivity, UserError, type Scope } from '../scope';
 import { newKey, putObject } from '../storage';
+import { consumeCredits, featureOn, NO_CREDITS, requireFeature } from '../plan';
 
 // Calls on top of the telephony port: click-to-call bridges, inbound routing,
 // recordings, and AI call notes (recording → transcript → summary, tasks, fields).
@@ -63,6 +64,7 @@ export async function setMyPhone(scope: Scope, raw: string) {
 // ── Outbound ────────────────────────────────────────────────────────────────
 
 export async function startCall(scope: Scope, contact: Contact, opts: { scriptId?: string } = {}) {
+  await requireFeature(scope.tenantId, 'calling');
   const t = await telephony(scope);
   if (!t) throw new UserError('Connect a calling provider in Settings → Calling first');
   const cfg = callingSettings(scope.settings);
@@ -230,6 +232,8 @@ export async function runCallPipeline(scope: Scope, callId: string) {
       await inTenant(scope, (tx) => tx.call.update({ where: { id: callId }, data: { recordingKey: key, recordingMime: mime } }));
     }
     if (!callingSettings(scope.settings).aiNotes) return await fail('skipped', 'AI call notes are turned off in Settings → Calling');
+    if (!(await featureOn(scope.tenantId, 'call_notes'))) return await fail('skipped', 'AI call notes are part of the Growth plan. The recording is saved.');
+    if (!(await consumeCredits(scope.tenantId, 'call_notes', { callId }))) return await fail('skipped', NO_CREDITS);
 
     const { getObject } = await import('../storage');
     const speech = stt();
@@ -347,6 +351,7 @@ async function playSandboxCall(scope: Scope, t: Telephony, callId: string | unde
 
 /** Simulate a client calling the agency's number (sandbox only). */
 export async function simulateInboundCall(scope: Scope, input: { from: string; scriptId: string }) {
+  await requireFeature(scope.tenantId, 'calling');
   const t = await telephony(scope);
   if (!t?.sandbox) throw new UserError('The call simulator only works with the calling sandbox');
   const from = normalizePhone(input.from, scope.country);

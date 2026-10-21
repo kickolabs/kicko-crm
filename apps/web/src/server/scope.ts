@@ -11,6 +11,8 @@ export type Scope = {
   timezone: string;
   settings: TenantSettings;
   actorId: string | null;
+  /** Staff on a lapsed subscription: every write is refused by Postgres. */
+  readOnly?: boolean;
 };
 
 export function scopeOf(ctx: Ctx): Scope {
@@ -21,6 +23,7 @@ export function scopeOf(ctx: Ctx): Scope {
     timezone: ctx.tenant.timezone,
     settings: ctx.tenant.settings,
     actorId: ctx.user.id,
+    readOnly: ctx.access !== 'full',
   };
 }
 
@@ -30,7 +33,7 @@ export function systemScope(t: { id: string; slug: string; country: string; time
 }
 
 export function inTenant<T>(scope: Scope, fn: (tx: Tx) => Promise<T>) {
-  return withTenant(scope.tenantId, fn);
+  return withTenant(scope.tenantId, fn, { readOnly: scope.readOnly });
 }
 
 export async function logActivity(

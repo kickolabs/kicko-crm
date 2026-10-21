@@ -17,6 +17,8 @@ import { callingFor } from '@/server/calls/view';
 import { prefill } from '@/server/eligibility';
 import { db } from '@/lib/tenant';
 import { fmtDateTime } from '@/lib/format';
+import { UpgradeCard } from '@/components/upgrade';
+import { hasFeature } from '@/lib/plans';
 import { EligibilityPanel } from './eligibility-panel';
 import { FormSheetView } from './form-sheet';
 import { clientSheet, formsOverview } from '@/server/forms';
@@ -197,6 +199,7 @@ export default async function ClientPage({
   );
 
   async function FormsTab() {
+    if (!hasFeature(ctx.subscription!, 'forms')) return <UpgradeCard slug={slug} feature="forms" canManage={can(ctx.role, 'settings.manage')} />;
     const scope = scopeOf(ctx);
     const form = formParam ? formById(formParam) : null;
     if (!form) {
@@ -244,6 +247,7 @@ export default async function ClientPage({
   }
 
   async function EligibilityTab() {
+    if (!hasFeature(ctx.subscription!, 'eligibility')) return <UpgradeCard slug={slug} feature="eligibility" canManage={can(ctx.role, 'settings.manage')} />;
     const checks = await db(ctx, (tx) => tx.eligibilityCheck.findMany({ where: { clientId: client!.id }, orderBy: { createdAt: 'desc' }, take: 10 }));
     return (
       <EligibilityPanel

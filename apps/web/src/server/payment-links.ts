@@ -8,6 +8,7 @@ import { fullName } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { notifyPaymentById, recordPaymentTx } from './billing';
 import { inTenant, UserError, type Scope } from './scope';
+import { requireFeature } from './plan';
 
 // Online payment links on top of the payments port. The gateway (Razorpay,
 // sandbox…) is the agency's ProviderConnection for "payments".
@@ -22,6 +23,7 @@ const ledgerMethod = (provider: string): PaymentMethod => (provider === 'razorpa
 
 /** Create a payment link for the next unpaid installment (or the whole balance). */
 export async function createLinkForInvoice(scope: Scope, invoiceId: string, appUrl: string) {
+  await requireFeature(scope.tenantId, 'payment_links');
   const p = await payments(scope);
   if (!p) throw new UserError('Connect a payment gateway in Settings → Billing first');
 

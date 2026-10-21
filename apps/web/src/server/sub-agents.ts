@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { formatMoney, parseMoney } from '@/lib/money';
 import { normalizeEmail, normalizePhone } from '@/lib/phone';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
+import { requireFeature } from './plan';
 
 // Sub-agents: partner agents who refer clients for a commission.
 // Commission accrues automatically: a % of every payment the referred client
@@ -34,6 +35,7 @@ export const commissionLabel = (a: { commissionType: string; commissionValue: nu
   a.commissionType === 'PERCENT' ? `${a.commissionValue / 100}% of payments` : `${formatMoney(a.commissionValue)} per client`;
 
 export async function saveSubAgent(scope: Scope, id: string | null, raw: unknown) {
+  await requireFeature(scope.tenantId, 'sub_agents');
   const input = subAgentInput.parse(raw);
   const email = normalizeEmail(input.email)!;
   const phone = input.phone ? normalizePhone(input.phone, scope.country) : null;

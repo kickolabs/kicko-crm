@@ -372,3 +372,43 @@ export async function renderFormSheetPdf(input: {
   pages.forEach((p, i) => new Writer(p, fonts).text(`${i + 1} / ${pages.length}`, width - left, 30, { size: 7.5, color: MUTED, align: 'right' }));
   return Buffer.from(await doc.save());
 }
+
+// ── Kicko's own tax invoice to an agency ────────────────────────────────────
+
+export async function renderPlatformInvoicePdf(input: {
+  seller: { legalName: string; address: string; gstin: string };
+  buyer: { name: string; address?: string; gstin?: string };
+  invoice: { number: string; date: string; description: string; sac: string; subtotal: number; cgst: number; sgst: number; igst: number; total: number; currency: string };
+}) {
+  const { doc, fonts } = await setup();
+  const page = doc.addPage([595.28, 841.89]);
+  const w = new Writer(page, fonts);
+  const { width } = page.getSize();
+  const i = input.invoice;
+  let y = header(w, page, { name: 'Kicko', legalName: input.seller.legalName, address: input.seller.address, gstin: input.seller.gstin }, 'TAX INVOICE', i.number);
+  partyBlock(w, 48, y, 'Billed to', { name: input.buyer.name, ref: input.buyer.gstin ? `GSTIN ${input.buyer.gstin}` : 'Unregistered', address: input.buyer.address });
+  meta(w, width - 48, y, [['Invoice date', i.date], ['Status', 'Paid']]);
+  y -= 110;
+  page.drawRectangle({ x: 48, y: y - 6, width: width - 96, height: 22, color: PAPER });
+  w.text('DESCRIPTION', 56, y, { size: 7.5, bold: true, color: MUTED });
+  w.text('SAC', 380, y, { size: 7.5, bold: true, color: MUTED });
+  w.text('AMOUNT', width - 56, y, { size: 7.5, bold: true, color: MUTED, align: 'right' });
+  y -= 26;
+  w.para(i.description, 56, y, 300, { size: 10 });
+  w.text(i.sac, 380, y, { size: 10 });
+  w.text(formatMoney(i.subtotal, i.currency), width - 56, y, { size: 10, align: 'right' });
+  y -= 40;
+  const rows: [string, number][] = [['Taxable value', i.subtotal]];
+  if (i.cgst) rows.push(['CGST @ 9%', i.cgst], ['SGST @ 9%', i.sgst]);
+  if (i.igst) rows.push(['IGST @ 18%', i.igst]);
+  for (const [k, v] of rows) {
+    w.text(k, width - 220, y, { size: 9.5, color: MUTED });
+    w.text(formatMoney(v, i.currency), width - 56, y, { size: 9.5, align: 'right' });
+    y -= 16;
+  }
+  page.drawRectangle({ x: width - 236, y: y - 8, width: 188, height: 26, color: INK });
+  w.text('Total paid', width - 226, y, { size: 10, bold: true, color: PAPER });
+  w.text(formatMoney(i.total, i.currency), width - 56, y, { size: 11, bold: true, color: LIME, align: 'right' });
+  footer(w, page, { name: input.seller.legalName });
+  return Buffer.from(await doc.save());
+}

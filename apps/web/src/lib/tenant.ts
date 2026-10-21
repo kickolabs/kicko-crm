@@ -1,7 +1,8 @@
 import 'server-only';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
-import { prisma, withTenant, type Membership, type Role, type Tenant, type Tx } from '@kicko/db';
+import { prisma, withTenant, type Membership, type Role, type Subscription, type Tenant, type Tx } from '@kicko/db';
+import { access } from './plans';
 import type { TenantSettings } from '@kicko/db/provision';
 import { getSession } from './auth';
 import { can, type Permission } from './permissions';
@@ -11,6 +12,9 @@ export type Ctx = {
   user: { id: string; name: string; email: string };
   membership: Membership;
   role: Role;
+  subscription: Subscription | null;
+  /** full · read_only (lapsed: staff can view and export, not edit) · suspended */
+  access: 'full' | 'read_only' | 'suspended';
 };
 
 export const getTenantBySlug = cache(async (slug: string) => {
@@ -27,8 +31,11 @@ export const getCtx = cache(async (slug: string): Promise<Ctx> => {
   if (!session) redirect(`/login?next=/${encodeURIComponent(slug)}`);
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
-  const membership = await withTenant(tenant.id, (tx) =>
-    tx.membership.findUnique({ where: { tenantId_userId: { tenantId: tenant.id, userId: session.user.id } } }),
+  const [membership, subscription] = await withTenant(tenant.id, (tx) =>
+    Promise.all([
+      tx.membership.findUnique({ where: { tenantId_userId: { tenantId: tenant.id, userId: session.user.id } } }),
+      tx.subscription.findUnique({ where: { tenantId: tenant.id } }),
+    ]),
   );
   // Same response as an unknown slug, so workspace names can't be probed.
   if (!membership || !membership.active) notFound();
@@ -37,6 +44,8 @@ export const getCtx = cache(async (slug: string): Promise<Ctx> => {
     user: { id: session.user.id, name: session.user.name, email: session.user.email },
     membership,
     role: membership.role,
+    subscription,
+    access: subscription ? access(subscription.status) : 'full',
   };
 });
 
@@ -52,7 +61,7 @@ export function assertCan(ctx: Ctx, permission: Permission) {
 
 /** Tenant-bound transaction for the current context. */
 export function db<T>(ctx: Ctx, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return withTenant(ctx.tenant.id, fn);
+  return withTenant(ctx.tenant.id, fn, { readOnly: ctx.access !== 'full' });
 }
 
 /** Active team members with names, for owner pickers and assignment. */

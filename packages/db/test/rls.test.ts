@@ -184,6 +184,23 @@ describe('row-level security', () => {
     expect(await withTenant(b.id, async (tx) => [await tx.formRequest.count(), await tx.client.count({ where: { ref: `C-F-${run}` } })])).toEqual([0, 0]);
   });
 
+  it('new workspaces start a 14-day trial; billing data is isolated (Phase 7a)', async () => {
+    const sub = await withTenant(a.id, (tx) => tx.subscription.findUnique({ where: { tenantId: a.id } }));
+    expect(sub).toMatchObject({ status: 'trialing', plan: 'pro' });
+    expect(Math.round((sub!.trialEndsAt!.getTime() - Date.now()) / 86400_000)).toBe(14);
+    await withTenant(a.id, async (tx) => {
+      await tx.creditEntry.create({ data: { tenantId: a.id, kind: 'usage', action: 'call_notes', credits: 4 } });
+      await tx.platformInvoice.create({ data: { tenantId: a.id, number: `KCK/T/${run}`, description: 'x', subtotal: 100, total: 118 } });
+    });
+    expect(await withTenant(b.id, async (tx) => [await tx.subscription.count({ where: { tenantId: a.id } }), await tx.creditEntry.count(), await tx.platformInvoice.count()])).toEqual([0, 0, 0]);
+  });
+
+  it('a read-only workspace can read but Postgres refuses every write', async () => {
+    const leads = await withTenant(a.id, (tx) => tx.lead.count(), { readOnly: true });
+    expect(leads).toBeGreaterThan(0);
+    await expect(withTenant(a.id, (tx) => tx.lead.create({ data: { tenantId: a.id, ref: `L-RO-${run}`, firstName: 'Nope' } }), { readOnly: true })).rejects.toThrow(/read-only transaction/);
+  });
+
   it('users only list their own workspaces', async () => {
     const forA = await tenantsForUser(userA);
     expect(forA.map((t) => t.id)).toEqual([a.id]);

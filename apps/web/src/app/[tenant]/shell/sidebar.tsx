@@ -121,7 +121,7 @@ export function Sidebar({
         })}
         <div className="mt-auto hidden rounded-[14px] bg-card p-3.5 text-xs leading-relaxed text-muted shadow-[var(--shadow-card)] lg:block">
           <span className="eyebrow mb-1 block">Coming next</span>
-          Plans & subscriptions, admin console, CSV import.
+          Admin console, CSV import, custom fields.
         </div>
       </nav>
     </>

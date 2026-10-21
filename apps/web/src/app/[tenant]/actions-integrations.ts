@@ -8,6 +8,7 @@ import { formObject, run, type ActionResult } from '@/lib/action';
 import { assertCan, getCtx } from '@/lib/tenant';
 import { scopeOf, UserError } from '@/server/scope';
 import { connectMessaging } from '@/server/whatsapp/service';
+import { requireFeature } from '@/server/plan';
 
 // Generic provider connections (Settings → Integrations, WhatsApp, Billing).
 
@@ -24,6 +25,8 @@ export async function saveConnectionAction(slug: string, capability: string, pro
   const res = await run(async () => {
     assertCan(ctx, 'settings.manage');
     const cap = capabilityOf(capability);
+    if (cap === 'telephony') await requireFeature(ctx.tenant.id, 'calling');
+    if (cap === 'voice_agent') await requireFeature(ctx.tenant.id, 'voice_agent');
     const input = formObject(fd);
     // Messaging also seeds sandbox templates on connect.
     if (cap === 'messaging') await connectMessaging(scopeOf(ctx), provider, input);

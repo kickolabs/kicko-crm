@@ -11,6 +11,7 @@ import { stagesOf } from '../cases';
 import type { Contact } from '../contacts';
 import { inTenant, logActivity, UserError, type Scope } from '../scope';
 import { sendText } from './service';
+import { consumeCredits, featureOn } from '../plan';
 
 // WhatsApp AI assistant: answers inbound messages from the agency's knowledge base
 // and the customer's own record, books consultations, saves what they tell us, and
@@ -112,6 +113,8 @@ export async function assistOnInbound(scope: Scope, contact: Contact, messageId:
     );
     if (latest?.id !== messageId) return; // a newer message will be answered
     if ((await assistantState(scope, contact)).status !== 'active') return; // staff may have stepped in meanwhile
+    if (!(await featureOn(scope.tenantId, 'wa_assistant'))) return;
+    if (!(await consumeCredits(scope.tenantId, 'wa_reply'))) return; // out of AI credits: staff answer as usual
     await reply(scope, contact, cfg);
   } catch (err) {
     console.error('assistant', err);
