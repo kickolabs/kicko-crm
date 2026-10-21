@@ -1,0 +1,64 @@
+name: Nightly database backup
+
+# 02:00 IST every night, plus a manual "Run workflow" button. Does nothing until
+# the production secrets are added (Settings → Secrets and variables → Actions):
+#   PROD_DIRECT_URL        owner connection string (Neon, not the pooled app URL)
+#   BACKUP_BUCKET          off-site bucket for dumps (separate from documents)
+#   S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
+# Optional repository variable PG_MAJOR (default 17) = the server's Postgres version.
+# See docs/operations/backups.md.
+on:
+  schedule:
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+      BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      BACKUP_KEEP: '1'
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$DIRECT_URL" ] || [ -z "$BACKUP_BUCKET" ]; then
+            echo "Production backup secrets are not set yet; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.skip != 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.skip != 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install pg_dump (same major version as the server)
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-${{ vars.PG_MAJOR || '17' }}
+          echo "PG_DUMP=/usr/lib/postgresql/${{ vars.PG_MAJOR || '17' }}/bin/pg_dump" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        if: steps.cfg.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Back up and upload
+        if: steps.cfg.outputs.skip != 'true'
+        run: node scripts/backup-db.mjs

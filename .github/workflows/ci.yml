@@ -1,0 +1,102 @@
+name: CI
+
+# Every push to main and every pull request: typecheck, unit + RLS tests, then a
+# production build and the full end-to-end suite against a real Postgres.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kicko
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Throwaway values for CI only: no real keys, everything runs in sandbox mode.
+      - name: Write .env
+        run: |
+          cat > .env <<EOF
+          DATABASE_URL="postgresql://kicko_app:kicko_app@localhost:5433/kicko"
+          DIRECT_URL="postgresql://postgres:postgres@localhost:5433/kicko"
+          BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+          BETTER_AUTH_URL="http://localhost:3000"
+          NEXT_PUBLIC_APP_URL="http://localhost:3000"
+          ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          STORAGE_DRIVER="local"
+          CRON_SECRET="$(openssl rand -hex 16)"
+          SUPER_ADMIN_EMAILS="ops-e2e@kicko.test"
+          EOF
+
+      - run: npm ci
+
+      - name: Prepare database
+        run: |
+          node scripts/ci-db-setup.mjs
+          npm run deploy --workspace @kicko/db
+          npm run generate --workspace @kicko/db
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and RLS tests
+        run: npm test
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      # Start the production build on :3100 ourselves so the demo agency can be
+      # seeded through it; Playwright then reuses this server.
+      - name: Build and start the app
+        run: |
+          npm run e2e:serve --workspace @kicko/web > e2e-server.log 2>&1 &
+          for i in $(seq 1 180); do
+            curl -sf http://localhost:3100/login > /dev/null && exit 0
+            sleep 2
+          done
+          echo "Server did not start"; tail -50 e2e-server.log; exit 1
+
+      - name: Seed the demo agency
+        run: npm run db:seed:demo
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3100
+
+      - name: End-to-end tests
+        run: npx playwright test
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+            e2e-server.log
+          retention-days: 14

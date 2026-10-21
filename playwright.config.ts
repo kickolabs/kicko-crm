@@ -15,7 +15,8 @@ export default defineConfig({
   // Locally every failure counts. On CI (shared, noisier machines) one retry is
   // allowed; Playwright still reports those tests as "flaky", so they stay visible.
   retries: process.env.CI ? 1 : 0,
-  reporter: [['list']],
+  // CI also writes an HTML report (uploaded when a run fails).
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: external ?? 'http://localhost:3100',
     trace: 'retain-on-failure',
