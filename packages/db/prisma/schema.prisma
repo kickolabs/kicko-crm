@@ -1001,6 +1001,19 @@ model PlatformInvoice {
   @@index([tenantId, paidAt])
 }
 
+// Super-admin actions (Kicko staff), e.g. trial extensions, plan changes. Global, no RLS.
+model AdminAction {
+  id         String   @id @default(cuid())
+  actorEmail String
+  tenantId   String?
+  action     String // extend_trial | set_plan | set_discount | add_credits | suspend | reactivate | note
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([createdAt])
+}
+
 // Global counters (platform invoice numbers). No tenant column, no RLS.
 model PlatformCounter {
   key   String @id

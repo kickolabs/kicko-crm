@@ -14,7 +14,7 @@
 | 6a | Sub-agent network: partner portal (refer clients, track progress, commission), automatic commission (% of payments ex-GST or fixed fee), payouts | Done |
 | 6b | Government form auto-fill: copy-ready answer sheets for official forms from the client profile, missing answers requested from the client | Done |
 | 7a | Plans & billing: Starter / Growth / Pro, 14-day trial, seats, AI credits, Razorpay Subscriptions (sandbox until Kicko's account), GST invoices, lapse → read-only → suspended | Done |
-| 7b | Super-admin console | Planned |
+| 7b | Super-admin console at /admin: all agencies with plan, trial, seats, usage, MRR, last activity; extend trial, founding discount (20 slots), manual plan, AI credits, suspend / reactivate, notes; every change logged | Done |
 | 7c | CSV / Excel import | Planned |
 | 7d | Custom fields & reports | Planned |
 | 7e | Trust: 2FA, audit log, data export, backups, legal pages | Planned |
@@ -52,8 +52,9 @@ Everything needed before other consultancies can be charged for Kicko.
 
 ### 7.2 Super-admin console (for the Kicko team)
 - All workspaces: plan, seats, usage, MRR, last activity, health
-- Impersonate-with-consent for support, suspend / unsuspend, extend trial
-- Announcements, feature flags per workspace
+- Suspend / unsuspend, extend trial, discounts, manual plans, credits, admin log (done in 7b)
+- Access: SUPER_ADMIN_EMAILS + one-time `npm run admin:grant -- <email>`; anyone else gets a 404
+- Later: support access with the agency's consent (with 7e audit log & 2FA), announcements, feature flags per workspace
 
 ### 7.3 Data import (switching from Excel / Zoho / other CRMs)
 - CSV/XLSX import for leads, clients, cases, payments with column mapping & preview

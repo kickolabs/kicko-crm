@@ -18,7 +18,8 @@
     "reset": "dotenv -e ../../.env -- prisma migrate reset --force",
     "seed:demo": "dotenv -e ../../.env -- tsx prisma/seed-demo.ts",
     "test": "dotenv -e ../../.env -- vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "admin:grant": "dotenv -e ../../.env -- tsx scripts/grant-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3"
