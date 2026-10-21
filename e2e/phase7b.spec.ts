@@ -62,6 +62,9 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     expect((await admin.goto('/admin'))!.status()).toBe(404); // allowlisted, not yet granted
     await q(`UPDATE "user" SET "emailVerified" = true WHERE email = $1`, [ADMIN.email]); // what `npm run admin:grant` does
     expect((await admin.goto('/admin'))!.status()).toBe(200);
+    // A staff account has no workspace: home takes it to the console.
+    await admin.goto('/');
+    await admin.waitForURL('**/admin');
   });
 
   test('lists every agency with plan, trial and usage', async () => {

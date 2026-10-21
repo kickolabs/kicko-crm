@@ -4,6 +4,7 @@ import { tenantsForUser } from '@kicko/db/provision';
 import { Logo } from '@/components/logo';
 import { buttonCls, LinkButton } from '@/components/ui';
 import { getSession } from '@/lib/auth';
+import { getAdmin } from '@/server/admin';
 
 export default async function Home() {
   const session = await getSession();
@@ -32,7 +33,8 @@ export default async function Home() {
         </div>
       );
     }
-    redirect('/signup');
+    // Kicko staff accounts have no workspace: they land in the console.
+    redirect((await getAdmin()) ? '/admin' : '/signup');
   }
 
   return (
