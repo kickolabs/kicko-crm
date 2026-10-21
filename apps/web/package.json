@@ -35,7 +35,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@next/env": "15.5.28",
+    "@next/env": "16.4.2",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^22.15.0",
     "@types/papaparse": "^5.5.2",
