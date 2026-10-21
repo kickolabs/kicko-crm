@@ -13,7 +13,7 @@ export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
   LOST: 'Lost',
 };
 
-export const LEAD_SOURCES: LeadSource[] = ['WEB_FORM', 'WHATSAPP', 'CALL', 'WALK_IN', 'REFERRAL', 'ADS', 'OTHER'];
+export const LEAD_SOURCES: LeadSource[] = ['WEB_FORM', 'WHATSAPP', 'CALL', 'WALK_IN', 'REFERRAL', 'SUB_AGENT', 'ADS', 'OTHER'];
 
 export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
   WEB_FORM: 'Web form',
@@ -21,6 +21,7 @@ export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
   CALL: 'Phone call',
   WALK_IN: 'Walk-in',
   REFERRAL: 'Referral',
+  SUB_AGENT: 'Sub-agent',
   ADS: 'Ads',
   OTHER: 'Other',
 };

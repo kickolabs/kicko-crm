@@ -1,4 +1,5 @@
 import 'server-only';
+import { accrueOnConversion } from './sub-agents';
 import { nextRef, type LeadSource, type LeadStatus, type Tx, type VisaCategory } from '@kicko/db';
 import { z } from 'zod';
 import { fullName } from '@/lib/format';
@@ -31,7 +32,7 @@ export const leadInput = z
     productId: optional,
     ownerId: optional,
     message: z.string().trim().max(4000).optional(),
-    source: z.enum(['WEB_FORM', 'WHATSAPP', 'CALL', 'WALK_IN', 'REFERRAL', 'ADS', 'OTHER']).default('OTHER'),
+    source: z.enum(['WEB_FORM', 'WHATSAPP', 'CALL', 'WALK_IN', 'REFERRAL', 'SUB_AGENT', 'ADS', 'OTHER']).default('OTHER'),
     waOptIn: z.boolean().optional(),
   })
   .refine((v) => v.email || v.phone, { message: 'Add a phone number or email', path: ['phone'] });
@@ -253,8 +254,12 @@ export async function convertLead(scope: Scope, leadId: string, opts: { productI
           phone: lead.phone,
           phoneNormalized: lead.phoneNormalized,
           ownerId: lead.ownerId ?? scope.actorId,
+          subAgentId: lead.subAgentId,
         },
       }));
+    // Referral credit follows the client (an existing client keeps its first referrer).
+    if (existing && lead.subAgentId && !existing.subAgentId) await tx.client.update({ where: { id: client.id }, data: { subAgentId: lead.subAgentId } });
+    await accrueOnConversion(tx, scope, client.id, existing?.subAgentId ?? lead.subAgentId);
 
     await tx.lead.update({ where: { id: lead.id }, data: { clientId: client.id, status: 'WON' } });
     // Carry the lead's open work and WhatsApp conversation over to the client.

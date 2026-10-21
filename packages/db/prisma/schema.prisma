@@ -182,6 +182,7 @@ enum LeadSource {
   REFERRAL
   ADS
   OTHER
+  SUB_AGENT
 }
 
 enum LeadStatus {
@@ -226,6 +227,8 @@ model Lead {
   waOptInAt        DateTime?
   waLastInbound    DateTime? // opens the 24-hour customer-service window
   calls            Call[]
+  subAgentId       String?
+  subAgent         SubAgent?     @relation(fields: [subAgentId], references: [id], onDelete: SetNull)
   aiHandoffAt      DateTime? // WhatsApp assistant handed this conversation to a human
   aiHandoffReason  String?
   aiResumedAt      DateTime? // staff resumed the assistant; earlier staff replies don't pause it
@@ -279,6 +282,8 @@ model Client {
   waLastInbound   DateTime?
   calls           Call[]
   eligibility     EligibilityCheck[]
+  subAgentId      String?
+  subAgent        SubAgent?      @relation(fields: [subAgentId], references: [id], onDelete: SetNull)
   aiHandoffAt     DateTime?
   aiHandoffReason String?
   aiResumedAt     DateTime?
@@ -934,6 +939,78 @@ model Call {
   @@index([tenantId, leadId])
   @@index([tenantId, clientId])
   @@index([tenantId, agentId, startedAt])
+}
+
+// ─── Phase 6a: sub-agent network ────────────────────────────────────────────
+
+// A partner agent who refers clients for a commission.
+model SubAgent {
+  id              String               @id @default(cuid())
+  tenantId        String
+  ref             String
+  name            String // contact person
+  company         String?
+  email           String
+  phone           String?
+  city            String?
+  commissionType  String               @default("PERCENT") // PERCENT of each client payment (ex-tax) | FIXED per converted client
+  commissionValue Int                  @default(1000) // PERCENT: basis points (1000 = 10%) · FIXED: minor units
+  active          Boolean              @default(true)
+  notes           String?
+  portalLastSeen  DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  leads           Lead[]
+  clients         Client[]
+  commissions     SubAgentCommission[]
+
+  @@unique([tenantId, ref])
+  @@unique([tenantId, email])
+}
+
+model SubAgentCommission {
+  id         String    @id @default(cuid())
+  tenantId   String
+  subAgentId String
+  subAgent   SubAgent  @relation(fields: [subAgentId], references: [id], onDelete: Cascade)
+  clientId   String
+  paymentId  String?   @unique // PAYMENT_SHARE: one per client payment
+  kind       String // PAYMENT_SHARE | REFERRAL_FEE
+  basis      Int // amount the commission was calculated on (minor units)
+  amount     Int
+  currency   String    @default("INR")
+  status     String    @default("DUE") // DUE | PAID | VOID
+  paidAt     DateTime?
+  paidRef    String?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId, subAgentId, status])
+}
+
+model SubAgentToken {
+  id         String    @id @default(cuid())
+  tenantId   String
+  subAgentId String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId, subAgentId])
+}
+
+model SubAgentSession {
+  id         String   @id @default(cuid())
+  tenantId   String
+  subAgentId String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  userAgent  String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, subAgentId])
 }
 
 // Saved points calculations (Canada CRS, Australia points test) for a client.

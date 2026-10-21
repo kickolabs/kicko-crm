@@ -1,4 +1,5 @@
 import 'server-only';
+import { accrueOnPayment } from './sub-agents';
 import type { InvoiceStatus, PaymentMethod, Tx } from '@kicko/db';
 import { z } from 'zod';
 import { parseLocal } from '@/lib/format';
@@ -267,6 +268,8 @@ export async function recordPaymentTx(
       gatewayId: p.gatewayId ?? null,
     },
   });
+  // Referred clients: credit the sub-agent's share of this payment.
+  await accrueOnPayment(tx, scope, { id: payment.id, amount: p.amount, clientId: inv.clientId }, inv);
   await logActivity(tx, scope, {
     type: 'PAYMENT',
     summary: `Payment received · ${formatMoney(p.amount, inv.currency)} via ${p.method.replace('_', ' ').toLowerCase()} · ${receiptRef}`,

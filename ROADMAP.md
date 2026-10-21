@@ -11,7 +11,8 @@
 | 5b | AI WhatsApp assistant: answers FAQs from a per-agency knowledge base, looks up the lead or case, captures details, books appointments, hands off to a human | Done (sandbox; real AI needs ANTHROPIC_API_KEY) |
 | 5c | AI voice agent (Bolna for India, Retell overseas, sandbox): outbound qualification calls, inbound receptionist, CRM tool calls | Done (sandbox; live provider test pending) |
 | 5d | Eligibility (CRS, AU points: deterministic, AI explains) and AI document checks (type, expiry, name mismatch) | Done (sandbox; real document reading needs ANTHROPIC_API_KEY) |
-| 6 | Sub-agent network, government form auto-fill | Planned |
+| 6a | Sub-agent network: partner portal (refer clients, track progress, commission), automatic commission (% of payments ex-GST or fixed fee), payouts | Done |
+| 6b | Government form auto-fill: copy-ready answer sheets for official forms from the client profile, missing answers requested from the client | Planned |
 | **7** | **Ready to sell (SaaS commercialisation)** | **Planned (after core features)** |
 
 ## Phase 4.5: Integration foundation

@@ -87,6 +87,15 @@ Settings → AI assistant. Choose **Off**, **Always on** or **Outside office hou
 - It never gives immigration advice or guarantees. Complaints, requests for a person, and anything it's unsure about are handed to a human: the chat is flagged in the inbox and a priority task goes to the owner. Staff can **Take over** or **Resume AI** per chat, and any staff reply pauses it for 12 hours. Replying STOP opts the customer out. At most 30 AI replies per contact per day.
 - Without `ANTHROPIC_API_KEY` it runs in sandbox: keyword rules plus knowledge-base matching, English only.
 
+## Sub-agent network
+
+Partners → **Sub-agents**. Add the agents and freelance counsellors who refer clients, with their commission rule: a **% of every payment** the referred client makes (excluding GST, pro rata for part payments), or a **fixed fee** per client who signs up.
+
+- **Partner portal** at `/partner/{workspace}`, with one-time sign-in links (staff create one, or partners request it by email). Partners refer clients (with a consent tick) and see only their own referrals' progress (status and case stage, no notes, documents or messages) and their commission statement.
+- **First come, first served:** a referral for someone already in the system isn't reassigned. The partner is told, and staff see the attempt on that lead's timeline.
+- **Commission accrues automatically** when payments are recorded (manual, payment link or portal), or on conversion for fixed fees. Mark payouts paid with a reference (UTR). Deactivating an agent ends their portal access immediately.
+- Staff can also set "Referred by" on any lead.
+
 ## Eligibility calculators
 
 Client → **Eligibility** tab: **Canada Express Entry CRS** (out of 1,200) and the **Australia points test** (pass mark 65).

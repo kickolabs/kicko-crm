@@ -33,6 +33,7 @@ const LABEL: Record<string, string> = {
   FAMILY_ADDED: 'Family',
   CALL: 'Call',
   ELIGIBILITY: 'Eligibility',
+  SUB_AGENT: 'Sub-agent',
   DOC_AI_CHECK: 'AI check',
 };
 

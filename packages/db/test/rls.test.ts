@@ -161,6 +161,21 @@ describe('row-level security', () => {
     expect(await withTenant(b.id, (tx) => tx.eligibilityCheck.count())).toBe(0);
   });
 
+  it('isolates sub-agents, their commission and portal sessions (Phase 6a)', async () => {
+    await withTenant(a.id, async (tx) => {
+      const agent = await tx.subAgent.create({ data: { tenantId: a.id, ref: `SA-${run}`, name: 'Agent A', email: `agent-${run}@a.test` } });
+      await tx.subAgentCommission.create({ data: { tenantId: a.id, subAgentId: agent.id, clientId: 'x', kind: 'REFERRAL_FEE', basis: 0, amount: 500000 } });
+      await tx.subAgentSession.create({ data: { tenantId: a.id, subAgentId: agent.id, tokenHash: `s-sa-${run}`, expiresAt: new Date(Date.now() + 86400000) } });
+    });
+    const seenByB = await withTenant(b.id, async (tx) => [
+      await tx.subAgent.count(),
+      await tx.subAgentCommission.count(),
+      // A stolen partner session token must not resolve under another tenant.
+      await tx.subAgentSession.count({ where: { tokenHash: `s-sa-${run}` } }),
+    ]);
+    expect(seenByB).toEqual([0, 0, 0]);
+  });
+
   it('users only list their own workspaces', async () => {
     const forA = await tenantsForUser(userA);
     expect(forA.map((t) => t.id)).toEqual([a.id]);

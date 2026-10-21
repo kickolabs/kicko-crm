@@ -36,6 +36,7 @@ export default async function PartnersPage({ params }: { params: Promise<{ tenan
         sub="Institutions you represent, their courses and commission agreements"
         actions={
           <>
+            <LinkButton href={`/${slug}/partners/agents`}>Sub-agents</LinkButton>
             <LinkButton href={`/${slug}/partners/commissions`}>Commission claims</LinkButton>
             {can(ctx.role, 'partners.manage') && <LinkButton href={`/${slug}/partners/new`} variant="primary">+ Institution</LinkButton>}
           </>

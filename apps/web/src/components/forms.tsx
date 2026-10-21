@@ -7,6 +7,7 @@ import {
   useActionState,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -77,6 +78,15 @@ export function ActionForm({
   const ref = useRef<HTMLFormElement>(null);
   const [state, formAction] = useActionState(action, null);
   const handled = useRef<ActionResult | null>(null);
+  const submitted = useRef<FormData | null>(null);
+
+  // React 19 clears a form after every action, even one that returned a validation
+  // error. Put back what the user typed, unless the form should clear on success.
+  useLayoutEffect(() => {
+    if (!state || !submitted.current || !ref.current) return;
+    if (!state.ok || !resetOnSuccess) restoreForm(ref.current, submitted.current);
+    submitted.current = null;
+  }, [state, resetOnSuccess]);
 
   useEffect(() => {
     if (!state || handled.current === state) return;
@@ -90,12 +100,26 @@ export function ActionForm({
 
   return (
     <ErrorsCtx.Provider value={state && !state.ok ? (state.fieldErrors ?? {}) : {}}>
-      <form ref={ref} action={formAction} className={className} noValidate>
+      <form ref={ref} action={formAction} onSubmit={(e) => (submitted.current = new FormData(e.currentTarget))} className={className} noValidate>
         {state && !state.ok && <FormBanner tone="error">{state.error}</FormBanner>}
         {children}
       </form>
     </ErrorsCtx.Provider>
   );
+}
+
+/** Write submitted values back into a form's fields (file inputs can't be restored). */
+export function restoreForm(form: HTMLFormElement, data: FormData) {
+  for (const el of Array.from(form.elements)) {
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) || !el.name) continue;
+    if (el instanceof HTMLInputElement && (el.type === 'file' || el.type === 'hidden' || el.type === 'submit')) continue;
+    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+      el.checked = data.getAll(el.name).includes(el.value);
+      continue;
+    }
+    const v = data.get(el.name);
+    if (typeof v === 'string') el.value = v;
+  }
 }
 
 export function FormBanner({ tone, children }: { tone: 'error' | 'ok' | 'warn'; children: ReactNode }) {

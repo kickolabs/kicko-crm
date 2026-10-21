@@ -13,6 +13,8 @@ import { buildThread } from '@/server/thread-view';
 import { Conversation } from '../../_components/conversation';
 import { AiCallButton, CallButton } from '../../_components/calls';
 import { voiceFor } from '@/server/voice/view';
+import { db } from '@/lib/tenant';
+import { SubAgentPicker } from '../../partners/agents/agent-forms';
 import { CallsPanel } from '../../_components/calls-panel';
 import { callingFor } from '@/server/calls/view';
 
@@ -21,6 +23,8 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
   const ctx = await getCtx(slug);
   const [lead, team, products, calling] = await Promise.all([getLead(ctx, id), getTeam(ctx), listProducts(ctx), callingFor(ctx)]);
   const voice = await voiceFor(ctx);
+  const agents = await db(ctx, (tx) => tx.subAgent.findMany({ where: { OR: [{ active: true }, { id: lead?.subAgentId ?? '' }] }, orderBy: { name: 'asc' } }));
+  const agent = agents.find((a) => a.id === lead?.subAgentId);
   if (!lead) notFound();
   // Converted leads continue the conversation on the client record.
   const thread = lead.clientId ? null : await buildThread(ctx, { kind: 'lead', id: lead.id });
@@ -36,6 +40,16 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
     ['Interested in', [lead.interestCategory && CATEGORY_LABEL[lead.interestCategory], lead.interestCountry && (COUNTRIES[lead.interestCountry] ?? lead.interestCountry)].filter(Boolean).join(' · ') || '—'],
     ['Visa product', lead.product ? `${COUNTRIES[lead.product.country] ?? lead.product.country} · ${lead.product.name}` : '—'],
     ['Source', LEAD_SOURCE_LABEL[lead.source]],
+    [
+      'Referred by',
+      writable && agents.length ? (
+        <SubAgentPicker slug={slug} leadId={lead.id} value={lead.subAgentId} agents={agents.map((a) => ({ id: a.id, label: `${a.name}${a.company ? ` (${a.company})` : ''}` }))} />
+      ) : agent ? (
+        <Link href={`/${slug}/partners/agents/${agent.id}`} className="font-semibold underline decoration-ink/30 underline-offset-4">{agent.name}</Link>
+      ) : (
+        '—'
+      ),
+    ],
     ['Lead score', lead.score != null ? <span className="font-semibold tabular-nums">{lead.score}/100</span> : '—'],
     ['Owner', lead.ownerId ? (names[lead.ownerId] ?? '—') : <span className="font-semibold text-warn">Unassigned</span>],
     ['Created', fmtDateTime(lead.createdAt, tz)],
