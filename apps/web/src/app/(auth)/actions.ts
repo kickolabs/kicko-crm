@@ -8,6 +8,7 @@ import { prisma } from '@kicko/db';
 import { provisionTenant, RESERVED_SLUGS, slugify } from '@kicko/db/provision';
 import { auth, getSession } from '@/lib/auth';
 import { formObject, run, type ActionResult } from '@/lib/action';
+import { sendEmail } from '@/server/email';
 import { UserError } from '@/server/scope';
 
 const agency = {
@@ -68,7 +69,27 @@ export async function signUpAction(_: ActionResult | null, fd: FormData): Promis
         body: { name: input.name, email: input.email.toLowerCase(), password: input.password },
         headers: await headers(),
       });
-      await provisionTenant({ name: input.agencyName, slug: input.slug, ownerUserId: user.id });
+      const tenant = await provisionTenant({ name: input.agencyName, slug: input.slug, ownerUserId: user.id });
+      // Welcome email with the first steps (never blocks sign-up).
+      const app = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+      await sendEmail(
+        {
+          to: user.email,
+          subject: `Welcome to Kicko, ${input.name.split(' ')[0]}`,
+          text: `Your workspace ${input.agencyName} is ready: ${app}/${input.slug}
+
+Your 14-day trial includes every feature. Three good first steps:
+
+1. Bring in your leads from Excel or another CRM: ${app}/${input.slug}/import
+2. Invite your team: ${app}/${input.slug}/settings?tab=team
+3. Connect your WhatsApp number: ${app}/${input.slug}/settings?tab=whatsapp
+
+Questions? Just reply to this email.
+
+The Kicko team`,
+        },
+        tenant.id,
+      ).catch(() => {});
     } catch (err) {
       const msg = authMessage(err);
       if (msg) throw new UserError(msg);

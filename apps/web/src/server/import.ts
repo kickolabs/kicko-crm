@@ -70,7 +70,7 @@ export async function findExisting(scope: Scope, keys: string[]) {
 }
 
 /** Reserve `n` sequential references, e.g. L-1043 … L-1142. */
-async function reserveRefs(tx: Tx, tenantId: string, key: string, prefix: string, n: number) {
+export async function reserveRefs(tx: Tx, tenantId: string, key: string, prefix: string, n: number) {
   if (!n) return [];
   const row = await tx.counter.upsert({
     where: { tenantId_key: { tenantId, key } },

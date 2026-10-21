@@ -7,6 +7,7 @@ import { getCtx, getTeam } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { can } from '@/lib/permissions';
 import { getDashboard } from '@/server/queries';
+import { GetStarted } from './_components/get-started';
 
 export const metadata = { title: 'Command' };
 
@@ -41,6 +42,8 @@ export default async function Dashboard({ params }: { params: Promise<{ tenant: 
           {dateLine} · {ctx.tenant.name}
         </span>
       </div>
+
+      {can(ctx.role, 'settings.manage') && <GetStarted ctx={ctx} />}
 
       <section aria-label="Key numbers" className={`card grid grid-cols-2 divide-line sm:grid-cols-3 ${billing ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} [&>*]:border-line [&>*:not(:last-child)]:border-r`}>
         <Stat label="New leads · 7d" value={d.newLeads} />

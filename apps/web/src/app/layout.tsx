@@ -10,8 +10,10 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'Kicko', template: '%s · Kicko' },
-  description: 'The operating console for visa and immigration consultancies.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
+  title: { default: 'Kicko · CRM for visa & immigration consultancies', template: '%s · Kicko' },
+  description: 'Leads, WhatsApp, cases, documents, GST billing, calls and an AI assistant in one place, built for visa and immigration agencies in India.',
+  openGraph: { type: 'website', siteName: 'Kicko' },
 };
 
 export const viewport: Viewport = { themeColor: '#F4F3EE' };

@@ -10,6 +10,7 @@ import { createField, moveField, setValues, updateField } from '@/server/custom-
 import { PlanError } from '@/server/plan';
 import { deleteSavedReport, saveReport } from '@/server/reports';
 import { setRequire2fa } from '@/server/settings';
+import { addSampleLeads, dismissOnboarding, removeSampleLeads } from '@/server/onboarding';
 import { scopeOf } from '@/server/scope';
 
 // Phase 7d: custom fields and saved reports.
@@ -72,6 +73,33 @@ export async function setRequire2faAction(slug: string, on: boolean) {
   return run(async () => {
     assertCan(ctx, 'settings.manage');
     await setRequire2fa(scopeOf(ctx), on);
+    revalidatePath(`/${slug}`, 'layout');
+  });
+}
+
+export async function addSampleLeadsAction(slug: string) {
+  const ctx = await getCtx(slug);
+  return run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await addSampleLeads(scopeOf(ctx));
+    revalidatePath(`/${slug}`, 'layout');
+  });
+}
+
+export async function removeSampleLeadsAction(slug: string) {
+  const ctx = await getCtx(slug);
+  return run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await removeSampleLeads(scopeOf(ctx));
+    revalidatePath(`/${slug}`, 'layout');
+  });
+}
+
+export async function dismissOnboardingAction(slug: string) {
+  const ctx = await getCtx(slug);
+  return run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await dismissOnboarding(scopeOf(ctx));
     revalidatePath(`/${slug}`, 'layout');
   });
 }
