@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { formObject, run, type ActionResult } from '@/lib/action';
-import { addNote, clearAgencyCache,extendTrial, grantCredits, reactivateAgency, requireAdmin, setDiscount, setManualPlan, suspendAgency } from '@/server/admin';
+import { addNote, extendTrial, grantCredits, reactivateAgency, requireAdmin, setDiscount, setManualPlan, suspendAgency } from '@/server/admin';
 
 const reason = z.string().trim().min(3, 'Say why (at least 3 characters)').max(500);
 const int = (min: number, max: number) => z.coerce.number().int('Whole numbers only').min(min).max(max);
@@ -13,7 +13,6 @@ function act(fn: (admin: { email: string }, input: Record<string, string>) => Pr
     const admin = await requireAdmin();
     return run(async () => {
       await fn(admin, formObject(fd));
-      clearAgencyCache();
       revalidatePath('/admin', 'layout');
     }, message);
   };

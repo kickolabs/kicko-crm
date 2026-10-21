@@ -34,6 +34,22 @@ export function withTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>, opts
   );
 }
 
+/**
+ * Read across every tenant, for Kicko's super-admin console only. The caller must
+ * have checked the user is a Kicko admin. Always READ ONLY: Postgres refuses any
+ * write, and the platform_admin_read policies grant SELECT and nothing else.
+ */
+export function withPlatformRead<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      await tx.$executeRaw`SELECT set_config('app.platform_admin', 'on', true)`;
+      return fn(tx);
+    },
+    { maxWait: 10_000, timeout: 30_000 },
+  );
+}
+
 /** Next sequential human reference for a tenant, e.g. nextRef(tx, t, 'lead', 'L') → "L-1001". */
 export async function nextRef(tx: Tx, tenantId: string, key: string, prefix: string): Promise<string> {
   const row = await tx.counter.upsert({

@@ -1,7 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
-import { prisma, withTenant, type Prisma, type Subscription } from '@kicko/db';
+import { prisma, withPlatformRead, withTenant, type Prisma, type Subscription, type Tx } from '@kicko/db';
 import { getSession } from '@/lib/auth';
 import { DAY, PLANS, quote, type Interval, type PlanId } from '@/lib/plans';
 import { UserError } from './scope';
@@ -9,8 +9,9 @@ import { UserError } from './scope';
 // Kicko's super-admin console: every agency, its plan and usage, and the few
 // account changes Kicko staff make by hand. Every change is written to AdminAction.
 //
-// The app's database role is still bound by row-level security, so cross-agency
-// numbers are gathered by visiting each agency inside its own tenant scope.
+// Cross-agency figures are read through the platform_admin_read policies
+// (SELECT only, READ ONLY transaction, only after the admin check). Every
+// change still goes through the one agency's tenant scope.
 
 export const FOUNDING_SLOTS = 20;
 export const FOUNDING_PCT = 30;
@@ -52,70 +53,71 @@ export function mrrOf(s: Pick<Subscription, 'plan' | 'interval' | 'seats' | 'dis
   return Math.round(s.interval === 'year' ? q.subtotal / 12 : q.subtotal);
 }
 
-export type AgencyRow = Awaited<ReturnType<typeof agencySummary>>;
+type TenantBase = { id: string; name: string; slug: string; country: string; createdAt: Date };
+export type AgencyRow = Awaited<ReturnType<typeof summarize>>[number];
 
-async function agencySummary(t: { id: string; name: string; slug: string; country: string; createdAt: Date }) {
+/**
+ * Every cross-agency read in the console goes through here: it re-checks the
+ * signed-in user is a Kicko admin, then reads in a READ ONLY transaction.
+ */
+async function platformRead<T>(fn: (tx: Tx) => Promise<T>) {
+  await requireAdmin();
+  return withPlatformRead(fn);
+}
+
+/** Plan, usage and revenue for the given agencies, in a fixed number of queries. */
+async function summarize(tenants: TenantBase[]) {
+  const ids = tenants.map((t) => t.id);
   const since = monthStart();
-  const data = await withTenant(t.id, async (tx) => {
-    const [sub, members, leads, clients, cases, lastActivity, credits, revenue, revenueMonth, owner] = await Promise.all([
-      tx.subscription.findUnique({ where: { tenantId: t.id } }),
-      tx.membership.count({ where: { active: true } }),
-      tx.lead.count(),
-      tx.client.count(),
-      tx.case.count(),
-      tx.activity.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
-      tx.creditEntry.aggregate({ where: { kind: 'usage', createdAt: { gte: since } }, _sum: { credits: true } }),
-      tx.platformInvoice.aggregate({ _sum: { total: true, subtotal: true } }),
-      tx.platformInvoice.aggregate({ where: { paidAt: { gte: since } }, _sum: { subtotal: true } }),
-      tx.membership.findFirst({ where: { role: 'OWNER' }, orderBy: { createdAt: 'asc' }, select: { userId: true, phone: true } }),
+  const inT = { tenantId: { in: ids } };
+  const d = await platformRead(async (tx) => {
+    const [subs, members, leads, clients, cases, lastActivity, credits, revenue, revenueMonth, owners] = await Promise.all([
+      tx.subscription.findMany({ where: inT }),
+      tx.membership.groupBy({ by: ['tenantId'], where: { ...inT, active: true }, _count: { _all: true } }),
+      tx.lead.groupBy({ by: ['tenantId'], where: inT, _count: { _all: true } }),
+      tx.client.groupBy({ by: ['tenantId'], where: inT, _count: { _all: true } }),
+      tx.case.groupBy({ by: ['tenantId'], where: inT, _count: { _all: true } }),
+      tx.activity.groupBy({ by: ['tenantId'], where: inT, _max: { createdAt: true } }),
+      tx.creditEntry.groupBy({ by: ['tenantId'], where: { ...inT, kind: 'usage', createdAt: { gte: since } }, _sum: { credits: true } }),
+      tx.platformInvoice.groupBy({ by: ['tenantId'], where: inT, _sum: { subtotal: true } }),
+      tx.platformInvoice.groupBy({ by: ['tenantId'], where: { ...inT, paidAt: { gte: since } }, _sum: { subtotal: true } }),
+      tx.membership.findMany({ where: { ...inT, role: 'OWNER' }, orderBy: { createdAt: 'asc' }, select: { tenantId: true, userId: true, phone: true } }),
     ]);
-    return { sub, members, leads, clients, cases, lastActivity: lastActivity?.createdAt ?? null, creditsMonth: credits._sum.credits ?? 0, revenue: revenue._sum.subtotal ?? 0, revenueMonth: revenueMonth._sum.subtotal ?? 0, owner };
+    return { subs, members, leads, clients, cases, lastActivity, credits, revenue, revenueMonth, owners };
   });
-  const ownerUser = data.owner ? await prisma.user.findUnique({ where: { id: data.owner.userId }, select: { name: true, email: true } }) : null;
-  const currency = (t.country === 'IN' ? 'INR' : 'USD') as 'INR' | 'USD';
-  return {
-    ...t,
-    currency,
-    sub: data.sub,
-    members: data.members,
-    leads: data.leads,
-    clients: data.clients,
-    cases: data.cases,
-    lastActivity: data.lastActivity,
-    creditsMonth: data.creditsMonth,
-    revenue: data.revenue,
-    revenueMonth: data.revenueMonth,
-    mrr: data.sub ? mrrOf(data.sub, currency) : 0,
-    owner: ownerUser ? { ...ownerUser, phone: data.owner?.phone ?? null } : null,
-  };
+  const users = await prisma.user.findMany({ where: { id: { in: [...new Set(d.owners.map((o) => o.userId))] } }, select: { id: true, name: true, email: true } });
+  const by = <R extends { tenantId: string }>(rows: R[]) => new Map(rows.map((r) => [r.tenantId, r]));
+  const subs = by(d.subs), members = by(d.members), leads = by(d.leads), clients = by(d.clients), cases = by(d.cases);
+  const last = by(d.lastActivity), credits = by(d.credits), revenue = by(d.revenue), revenueMonth = by(d.revenueMonth);
+  const owners = new Map<string, (typeof d.owners)[number]>();
+  for (const o of d.owners) if (!owners.has(o.tenantId)) owners.set(o.tenantId, o); // earliest owner
+  return tenants.map((t) => {
+    const currency = (t.country === 'IN' ? 'INR' : 'USD') as 'INR' | 'USD';
+    const sub = subs.get(t.id) ?? null;
+    const o = owners.get(t.id);
+    const u = o && users.find((x) => x.id === o.userId);
+    return {
+      ...t,
+      currency,
+      sub,
+      members: members.get(t.id)?._count._all ?? 0,
+      leads: leads.get(t.id)?._count._all ?? 0,
+      clients: clients.get(t.id)?._count._all ?? 0,
+      cases: cases.get(t.id)?._count._all ?? 0,
+      lastActivity: last.get(t.id)?._max.createdAt ?? null,
+      creditsMonth: credits.get(t.id)?._sum.credits ?? 0,
+      revenue: revenue.get(t.id)?._sum.subtotal ?? 0,
+      revenueMonth: revenueMonth.get(t.id)?._sum.subtotal ?? 0,
+      mrr: sub ? mrrOf(sub, currency) : 0,
+      owner: u ? { name: u.name, email: u.email, phone: o?.phone ?? null } : null,
+    };
+  });
 }
 
-/** Visit agencies a few at a time so the connection pool isn't exhausted. */
-async function inBatches<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>) {
-  const out: R[] = [];
-  for (let i = 0; i < items.length; i += size) out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
-  return out;
-}
+const TENANT_FIELDS = { id: true, name: true, slug: true, country: true, createdAt: true } as const;
 
-// Visiting every agency is slow with many agencies, so the list is kept for a
-// minute. Admin changes clear it; the console also has a Refresh link.
-const LIST_TTL = 60_000;
-let listCache: { at: number; rows: Promise<AgencyRow[]> } | null = null;
-
-export function clearAgencyCache() {
-  listCache = null;
-}
-
-export async function listAgencies({ fresh = false } = {}) {
-  if (fresh || !listCache || Date.now() - listCache.at > LIST_TTL) {
-    const rows = prisma.tenant
-      .findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, name: true, slug: true, country: true, createdAt: true } })
-      .then((tenants) => inBatches(tenants, 8, agencySummary));
-    listCache = { at: Date.now(), rows };
-    rows.catch(() => (listCache = null));
-  }
-  const { at, rows } = listCache;
-  return { rows: await rows, at: new Date(at) };
+export async function listAgencies() {
+  return summarize(await prisma.tenant.findMany({ orderBy: { createdAt: 'desc' }, select: TENANT_FIELDS }));
 }
 
 export function overview(rows: AgencyRow[], now = new Date()) {
@@ -138,16 +140,16 @@ export function overview(rows: AgencyRow[], now = new Date()) {
 }
 
 /** Founding-customer discounts in use (other than `exceptId`). */
-export async function foundingTaken(exceptId?: string) {
-  const tenants = await prisma.tenant.findMany({ where: exceptId ? { id: { not: exceptId } } : {}, select: { id: true } });
-  const pcts = await inBatches(tenants, 10, (t) => withTenant(t.id, (tx) => tx.subscription.findUnique({ where: { tenantId: t.id }, select: { discountPct: true } })));
-  return pcts.filter((p) => (p?.discountPct ?? 0) >= FOUNDING_PCT).length;
+export function foundingTaken(exceptId?: string) {
+  return platformRead((tx) =>
+    tx.subscription.count({ where: { discountPct: { gte: FOUNDING_PCT }, ...(exceptId ? { tenantId: { not: exceptId } } : {}) } }),
+  );
 }
 
 export async function agencyDetail(tenantId: string) {
-  const t = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true, name: true, slug: true, country: true, createdAt: true, timezone: true } });
+  const t = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { ...TENANT_FIELDS, timezone: true } });
   if (!t) return null;
-  const summary = await agencySummary(t);
+  const [summary] = await summarize([t]);
   const since = monthStart();
   const extra = await withTenant(t.id, async (tx) => {
     const [team, invoices, creditsByAction, usage] = await Promise.all([

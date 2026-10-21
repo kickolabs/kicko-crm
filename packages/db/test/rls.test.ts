@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { prisma, withTenant } from '../src/index';
+import { prisma, withPlatformRead, withTenant } from '../src/index';
 import { provisionTenant, tenantsForUser } from '../src/provision';
 
 // Runs against the local database as the non-owner app role (DATABASE_URL),
@@ -232,5 +232,37 @@ describe('deleting a workspace', () => {
     );
     expect(left).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     await prisma.user.delete({ where: { id: owner } });
+  });
+});
+
+describe('super-admin read access', () => {
+  it('reads across agencies only with the platform flag', async () => {
+    const all = await withPlatformRead((tx) => tx.lead.findMany({ where: { tenantId: { in: [a.id, b.id] } } }));
+    expect(all.map((l) => l.firstName)).toEqual(['Only-In-A']);
+    const without = await prisma.$transaction((tx) => tx.lead.findMany({ where: { tenantId: a.id } }));
+    expect(without).toEqual([]);
+  });
+
+  it('can never write: the transaction is read-only', async () => {
+    await expect(
+      withPlatformRead((tx) => tx.lead.updateMany({ where: { tenantId: a.id }, data: { firstName: 'hacked' } })),
+    ).rejects.toThrow(/read-only/i);
+  });
+
+  it('even with the flag set by hand, the policy grants SELECT only', async () => {
+    const res = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.platform_admin', 'on', true)`;
+      return tx.lead.updateMany({ where: { tenantId: a.id }, data: { firstName: 'hacked' } });
+    });
+    expect(res.count).toBe(0);
+    expect(await withTenant(a.id, (tx) => tx.lead.findMany({ select: { firstName: true } }))).toEqual([{ firstName: 'Only-In-A' }]);
+  });
+
+  it('every tenant table has the read policy (new tables must add it too)', async () => {
+    const rows = await prisma.$queryRaw<{ tablename: string; policies: string[] }[]>`
+      SELECT tablename, array_agg(policyname::text) AS policies FROM pg_policies
+      WHERE schemaname = 'public' GROUP BY tablename`;
+    const missing = rows.filter((r) => r.policies.includes('tenant_isolation') && !r.policies.includes('platform_admin_read')).map((r) => r.tablename);
+    expect(missing).toEqual([]);
   });
 });

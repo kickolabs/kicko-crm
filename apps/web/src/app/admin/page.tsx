@@ -47,20 +47,16 @@ function toRow(r: AgencyRow, now: Date): Row {
   };
 }
 
-export default async function AdminHome({ searchParams }: { searchParams: Promise<{ f?: string; q?: string; fresh?: string }> }) {
+export default async function AdminHome({ searchParams }: { searchParams: Promise<{ f?: string; q?: string }> }) {
   const sp = await searchParams;
   const now = new Date();
-  const [{ rows, at }, log] = await Promise.all([listAgencies({ fresh: sp.fresh === '1' }), recentAdminActions()]);
+  const [rows, log] = await Promise.all([listAgencies(), recentAdminActions()]);
   const o = overview(rows, now);
   const names = new Map(rows.map((r) => [r.id, r.name]));
 
   return (
     <>
-      <PageHeader
-        eyebrow="Super-admin"
-        title="Agencies"
-        sub={<>Every workspace on Kicko: plan, trial, usage and revenue. Figures as of {relative(at, now)} · <Link href="/admin?fresh=1" className="font-semibold text-ink hover:underline">Refresh</Link></>}
-      />
+      <PageHeader eyebrow="Super-admin" title="Agencies" sub="Every workspace on Kicko: plan, trial, usage and revenue." />
 
       <Card className="grid grid-cols-2 divide-line md:grid-cols-5 md:divide-x">
         <Stat label="MRR" value={formatMoney(o.mrrInr, 'INR', { compact: true })} sub={o.mrrUsd ? `+ ${formatMoney(o.mrrUsd, 'USD')} USD` : 'before GST'} />
