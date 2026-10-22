@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { testMobile, verifyMobile } from './helpers';
 
 // Password fields: show/hide toggle, and sign-up asks for the password twice.
 
@@ -16,6 +17,7 @@ test('sign-up refuses mismatched passwords; the eye shows and hides what was typ
   await page.getByRole('button', { name: 'Hide password' }).first().click();
   await expect(pw).toHaveAttribute('type', 'password');
 
+  await page.getByLabel('Mobile number').fill(testMobile());
   await page.getByLabel('Confirm password').fill('kicko-pass-124');
   await page.getByLabel('Agency name').fill(`Pw Agency ${run}`);
   await page.getByLabel('Workspace address').fill(`pw-${run}`);
@@ -25,6 +27,7 @@ test('sign-up refuses mismatched passwords; the eye shows and hides what was typ
 
   await page.getByLabel('Confirm password').fill('kicko-pass-123');
   await page.getByRole('button', { name: 'Create account & workspace' }).click();
+  await verifyMobile(page);
   await page.waitForURL(`**/pw-${run}`);
 });
 

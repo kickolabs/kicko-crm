@@ -3,6 +3,7 @@ import { nextRef, type CaseOutcome, type CaseStatus, type Tx } from '@kicko/db';
 import type { Stage } from '@kicko/db/visa-catalog';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 import { syncChecklistTx } from './documents';
+import { defaultBranch } from './branches';
 
 export function stagesOf(product: { stages: unknown }): Stage[] {
   return Array.isArray(product.stages) ? (product.stages as Stage[]) : [];
@@ -21,14 +22,16 @@ export async function openCaseTx(
   if (!client) throw new UserError('Client not found');
 
   const ref = await nextRef(tx, scope.tenantId, `case_${product.country}`, `KCK-${product.country}`);
+  const ownerId = input.ownerId ?? client.ownerId ?? scope.actorId;
   const c = await tx.case.create({
     data: {
       tenantId: scope.tenantId,
       ref,
+      branchId: await defaultBranch(tx, scope, ownerId),
       clientId: client.id,
       productId: product.id,
       stageKey: first.key,
-      ownerId: input.ownerId ?? client.ownerId ?? scope.actorId,
+      ownerId,
     },
   });
   await tx.stageHistory.create({

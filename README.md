@@ -106,6 +106,19 @@ Settings → **Plan & billing**. Plans are defined in `apps/web/src/lib/plans.ts
   - Suspended shows a renew screen. Data is kept for 90 days.
 - **Payments:** Razorpay Subscriptions on Kicko's own account (see `.env.example`), with a sandbox checkout until then. Each payment creates a **GST tax invoice** from Kicko (`KCK/26-27/0001`): CGST + SGST, or IGST when the agency's GSTIN is in another state.
 
+### Free trials (one per person, number and device)
+
+A new workspace starts **pending** (view-only, "Choose a plan"). The owner verifies their mobile with a 6-digit code (`server/phone-otp.ts`; MSG91 in production, code shown on screen in the OTP sandbox), which starts the 14-day trial (`server/trial.ts` `startTrial`). A trial is refused when:
+- the person already had one (`User.trialUsedAt`; backfilled for existing owners), so a second workspace must choose a plan;
+- the verified number already claimed one (`TrialClaim.phone`, kept even if the account changes number);
+- the same browser (`kicko_did` cookie) or the same fingerprint on the same public IP claimed one in the last year. Then the workspace stays pending and a **Trial review** appears in `/admin` with Grant / Dismiss. A fingerprint alone, or a shared IP alone, never blocks (offices and same-model laptops are common); 3+ trials from one network in 30 days is only flagged.
+
+Throwaway email domains are refused at sign-up (`lib/disposable-emails.ts`, extend with `BLOCKED_EMAIL_DOMAINS`). Production needs `MSG91_AUTH_KEY` and `MSG91_OTP_TEMPLATE_ID`; without them sign-up refuses to send codes (only `next dev` and `OTP_SANDBOX=1` show codes on screen).
+
+### Branches
+
+One workspace is one agency; branches are its offices: Starter 1, Growth 3, Pro unlimited (Settings → Branches). Team members, leads and cases can belong to a branch; new leads and cases take their owner's branch (else the creator's), and the Leads and Cases lists filter by branch. Branch controls only appear once there's more than one branch. After a downgrade, existing branches stay; only adding is blocked.
+
 ## Government form answer sheets
 
 Client → **Forms** tab. These are copy-ready answer sheets for the forms consultants fill most:

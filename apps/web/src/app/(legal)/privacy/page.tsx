@@ -26,9 +26,10 @@ export default function Privacy() {
 
       <h2>What we collect about agency staff</h2>
       <ul>
-        <li>Account details: name, work email, phone (optional), role, password (stored only as a secure hash) and two-step sign-in settings.</li>
+        <li>Account details: name, work email, mobile number (verified by a one-time code when an agency signs up), role, password (stored only as a secure hash) and two-step sign-in settings.</li>
         <li>Billing details for the agency: legal name, address, GSTIN, and payment records from our payment provider (we never see full card numbers).</li>
         <li>Security and usage records: sign-ins, IP address, browser and device, and actions recorded in the agency’s audit log.</li>
+        <li>Free-trial checks: a device identifier (a cookie), a one-way hash of browser settings and of the IP address, kept with the verified mobile number so each person, number and device gets one free trial.</li>
         <li>Messages you send to our support.</li>
       </ul>
 

@@ -6,7 +6,7 @@ import { fmtDateTime, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
-import { getLead, listProducts } from '@/server/queries';
+import { getLead, listProducts, listBranches } from '@/server/queries';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
 import { Timeline } from '../../_components/timeline';
 import { LeadToolbar, StatusStepper } from './lead-actions';
@@ -18,11 +18,13 @@ import { db } from '@/lib/tenant';
 import { SubAgentPicker } from '../../partners/agents/agent-forms';
 import { CallsPanel } from '../../_components/calls-panel';
 import { callingFor } from '@/server/calls/view';
+import { BranchSelect } from '../../_components/branch-select';
+import { setRecordBranchAction } from '../../actions-branches';
 
 export default async function LeadPage({ params }: { params: Promise<{ tenant: string; id: string }> }) {
   const { tenant: slug, id } = await params;
   const ctx = await getCtx(slug);
-  const [lead, team, products, calling] = await Promise.all([getLead(ctx, id), getTeam(ctx), listProducts(ctx), callingFor(ctx)]);
+  const [lead, team, products, calling, branches] = await Promise.all([getLead(ctx, id), getTeam(ctx), listProducts(ctx), callingFor(ctx), listBranches(ctx)]);
   const voice = await voiceFor(ctx);
   const agents = await db(ctx, (tx) => tx.subAgent.findMany({ where: { OR: [{ active: true }, { id: lead?.subAgentId ?? '' }] }, orderBy: { name: 'asc' } }));
   const agent = agents.find((a) => a.id === lead?.subAgentId);
@@ -53,6 +55,16 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
     ],
     ['Lead score', lead.score != null ? <span className="font-semibold tabular-nums">{lead.score}/100</span> : '—'],
     ['Owner', lead.ownerId ? (names[lead.ownerId] ?? '—') : <span className="font-semibold text-warn">Unassigned</span>],
+    ...(branches.length > 1
+      ? [[
+          'Branch',
+          writable ? (
+            <BranchSelect key="branch" id="lead-branch" value={lead.branchId} branches={branches} save={setRecordBranchAction.bind(null, slug, 'lead', lead.id)} className="h-8 w-40" />
+          ) : (
+            (branches.find((b) => b.id === lead.branchId)?.name ?? '—')
+          ),
+        ] as [string, React.ReactNode]]
+      : []),
     ['Created', fmtDateTime(lead.createdAt, tz)],
   ];
 

@@ -5,7 +5,7 @@ import { CATEGORY_LABEL, CATEGORIES, COUNTRIES } from '@/lib/constants';
 import { fullName, relative } from '@/lib/format';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { stagesOf } from '@/server/cases';
-import { listCases, listProducts, type CaseFilters } from '@/server/queries';
+import { listCases, listProducts, type CaseFilters, listBranches } from '@/server/queries';
 
 export const metadata = { title: 'Cases' };
 
@@ -19,7 +19,7 @@ export default async function CasesPage({
   const { tenant: slug } = await params;
   const sp = await searchParams;
   const ctx = await getCtx(slug);
-  const [cases, team, products] = await Promise.all([listCases(ctx, sp), getTeam(ctx), listProducts(ctx)]);
+  const [cases, team, products, branches] = await Promise.all([listCases(ctx, sp), getTeam(ctx), listProducts(ctx), listBranches(ctx)]);
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
 
   return (
@@ -47,6 +47,13 @@ export default async function CasesPage({
           <option value="">Anyone</option>
           <option value="me">Mine</option>
         </Select>
+        {branches.length > 1 && (
+          <Select name="branch" defaultValue={sp.branch ?? ''} aria-label="Branch" className="w-40">
+            <option value="">All branches</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            <option value="none">No branch</option>
+          </Select>
+        )}
         <button className={buttonCls('secondary', 'md')}>Filter</button>
       </form>
 

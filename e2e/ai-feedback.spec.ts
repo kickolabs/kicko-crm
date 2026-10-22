@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
+import { testMobile, verifyMobile } from './helpers';
 
 // "Help improve Kicko Yu": off by default (nothing recorded); on, verifying a
 // document Yu flagged stores one anonymised row; off again deletes them.
@@ -34,9 +35,11 @@ test.describe.serial('Kicko Yu feedback (opt-in)', () => {
     await page.getByLabel('Work email').fill(`yu-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Yu Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
 
     await page.goto(`/${slug}/leads?new=1`);

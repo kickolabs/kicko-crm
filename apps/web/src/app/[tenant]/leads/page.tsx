@@ -5,7 +5,7 @@ import { CATEGORY_LABEL, CATEGORIES, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_SOURCES,
 import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
-import { listLeads, listProducts, type LeadFilters } from '@/server/queries';
+import { listLeads, listProducts, type LeadFilters, listBranches } from '@/server/queries';
 import { LeadBoard } from './board';
 import { NewLeadButton } from './new-lead-button';
 
@@ -22,10 +22,11 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const ctx = await getCtx(slug);
   const view = sp.view === 'table' ? 'table' : 'board';
-  const [leads, team, products] = await Promise.all([
+  const [leads, team, products, branches] = await Promise.all([
     listLeads(ctx, view === 'board' ? { ...sp, status: undefined } : sp),
     getTeam(ctx),
     listProducts(ctx),
+    listBranches(ctx),
   ]);
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const tz = ctx.tenant.timezone;
@@ -88,8 +89,15 @@ export default async function LeadsPage({
           <option value="none">Unassigned</option>
           {team.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
         </Select>
+        {branches.length > 1 && (
+          <Select name="branch" defaultValue={sp.branch ?? ''} aria-label="Branch" className="w-40">
+            <option value="">All branches</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            <option value="none">No branch</option>
+          </Select>
+        )}
         <button className={buttonCls('secondary', 'md')}>Filter</button>
-        {(sp.q || sp.status || sp.source || sp.owner || sp.category) && (
+        {(sp.q || sp.status || sp.source || sp.owner || sp.category || sp.branch) && (
           <Link href={view === 'table' ? '?view=table' : '?'} className="px-2 text-[13px] font-semibold text-muted hover:text-ink">Clear</Link>
         )}
       </form>

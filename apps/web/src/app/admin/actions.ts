@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { formObject, run, type ActionResult } from '@/lib/action';
-import { addNote, extendTrial, grantCredits, reactivateAgency, requireAdmin, setDiscount, setManualPlan, suspendAgency } from '@/server/admin';
+import { addNote, extendTrial, resolveTrialReview, grantCredits, reactivateAgency, requireAdmin, setDiscount, setManualPlan, suspendAgency } from '@/server/admin';
 
 const reason = z.string().trim().min(3, 'Say why (at least 3 characters)').max(500);
 const int = (min: number, max: number) => z.coerce.number().int('Whole numbers only').min(min).max(max);
@@ -23,6 +23,13 @@ export async function extendTrialAction(tenantId: string, prev: ActionResult | n
     const v = z.object({ days: int(1, 90), reason }).parse(i);
     return extendTrial(a, tenantId, v.days, v.reason);
   }, 'Trial extended')(prev, fd);
+}
+
+export async function resolveTrialReviewAction(reviewId: string, grant: boolean) {
+  const admin = await requireAdmin();
+  const res = await run(() => resolveTrialReview(admin, reviewId, grant), grant ? 'Trial started' : 'Dismissed');
+  revalidatePath('/admin', 'layout');
+  return res;
 }
 
 export async function setDiscountAction(tenantId: string, prev: ActionResult | null, fd: FormData) {

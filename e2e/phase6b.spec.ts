@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 6b: government form answer sheets. Profile → DS-160 sheet in its own date
 // format → staff answers → ask the client → client answers in the portal (a "Yes"
@@ -28,9 +29,11 @@ test.describe.serial('Phase 6b · government form auto-fill', () => {
     await staff.getByLabel('Work email').fill(`p6b-${run}@example.test`);
     await staff.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await staff.getByLabel('Confirm password').fill('kicko-pass-123');
+    await staff.getByLabel('Mobile number').fill(testMobile());
     await staff.getByLabel('Agency name').fill(`Forms Agency ${run}`);
     await staff.getByLabel('Workspace address').fill(slug);
     await staff.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(staff);
     await staff.waitForURL(`**/${slug}`);
 
     await staff.goto(`/${slug}/leads?new=1`);

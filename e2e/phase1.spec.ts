@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { testMobile, verifyMobile } from './helpers';
 
 // Full Phase 1 journey: agency signup → lead → duplicate guard → convert → case
 // stages → tasks → public web form → walk-in kiosk → team invite → tenant isolation.
@@ -13,9 +14,11 @@ async function signUp(page: Page, who: typeof owner, ag: typeof agency) {
   await page.getByLabel('Work email').fill(who.email);
   await page.getByLabel('Password', { exact: true }).fill(who.password);
   await page.getByLabel('Confirm password').fill(who.password);
+  await page.getByLabel('Mobile number').fill(testMobile());
   await page.getByLabel('Agency name').fill(ag.name);
   await page.getByLabel('Workspace address').fill(ag.slug);
   await page.getByRole('button', { name: 'Create account & workspace' }).click();
+  await verifyMobile(page);
   await page.waitForURL(`**/${ag.slug}`);
 }
 

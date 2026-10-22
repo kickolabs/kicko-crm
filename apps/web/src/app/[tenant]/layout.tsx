@@ -3,6 +3,8 @@ import { dayBounds } from '@/lib/format';
 import { db, getCtx } from '@/lib/tenant';
 import { can } from '@/lib/permissions';
 import { agentStatus } from '@/server/copilot';
+import { prisma } from '@kicko/db';
+import { trialEligible } from '@/server/trial';
 import { Sidebar } from './shell/sidebar';
 import { CommandBar } from './shell/command-bar';
 import { UserMenu } from './shell/user-menu';
@@ -63,6 +65,15 @@ export default async function TenantLayout({
   }
 
   const agents = await agentStatus(ctx);
+  // A workspace without a plan: the owner may still start the one free trial.
+  const trial =
+    ctx.subscription?.status === 'pending'
+      ? (await prisma.trialReview.findFirst({ where: { tenantId: ctx.tenant.id, status: 'open' } }))
+        ? ('review' as const)
+        : ctx.role === 'OWNER' && (await trialEligible(ctx.user.id))
+          ? ('available' as const)
+          : null
+      : null;
 
   return (
     <div className="dotgrid flex min-h-dvh flex-col lg:flex-row">
@@ -79,7 +90,7 @@ export default async function TenantLayout({
           <CommandBar slug={slug} ai={Boolean(agents)} />
           <UserMenu slug={slug} name={ctx.user.name} email={ctx.user.email} role={ctx.role} />
         </div>
-        <PlanBanner slug={slug} sub={ctx.subscription} tz={ctx.tenant.timezone} canManage={canManage} />
+        <PlanBanner slug={slug} sub={ctx.subscription} tz={ctx.tenant.timezone} canManage={canManage} trial={trial} />
         <main className="flex-1 px-4 pt-6 pb-16 sm:px-7">{children}</main>
       </div>
     </div>

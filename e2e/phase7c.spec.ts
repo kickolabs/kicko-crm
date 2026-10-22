@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
 import { xlsx } from './xlsx';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 7c: import leads from a messy CSV and clients from Excel, with column
 // guessing, a preview (new / duplicates / errors), owner matching, original dates,
@@ -45,9 +46,11 @@ test.describe.serial('Phase 7c · import', () => {
     await page.getByLabel('Work email').fill(`p7c-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Import Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
     // An existing lead the file will collide with.
     await page.goto(`/${slug}/leads?new=1`);

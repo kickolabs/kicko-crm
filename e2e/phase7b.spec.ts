@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
 import { enableTwoStep } from './totp';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 7b: Kicko's super-admin console. Only allowlisted, verified staff get in;
 // they can see every agency and extend a trial, set a discount, add credits, set a
@@ -39,9 +40,11 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     await owner.getByLabel('Work email').fill(`p7b-${run}@example.test`);
     await owner.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await owner.getByLabel('Confirm password').fill('kicko-pass-123');
+    await owner.getByLabel('Mobile number').fill(testMobile());
     await owner.getByLabel('Agency name').fill(agency);
     await owner.getByLabel('Workspace address').fill(slug);
     await owner.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(owner);
     await owner.waitForURL(`**/${slug}`);
 
     // The Kicko staff account (no workspace of its own). Re-runs reuse it.
@@ -167,6 +170,32 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     );
     expect(log.map((l) => l.action)).toEqual(['extend_trial', 'set_discount', 'add_credits', 'set_plan', 'suspend', 'reactivate']);
     expect(new Set(log.map((l) => l.actorEmail))).toEqual(new Set([ADMIN.email]));
+  });
+
+  test('a sign-up from a device that already had a trial waits for review; Grant starts it', async () => {
+    // The owner's browser already claimed a trial: a new account from it gets no automatic trial.
+    const second = `${slug}-dev`;
+    await owner.context().clearCookies({ name: /better-auth/ }); // signed out, same browser
+    await owner.goto('/signup');
+    await owner.getByLabel('Your name').fill('Same Device');
+    await owner.getByLabel('Work email').fill(`p7b-dev-${run}@example.test`);
+    await owner.getByLabel('Mobile number').fill(testMobile());
+    await owner.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await owner.getByLabel('Confirm password').fill('kicko-pass-123');
+    await owner.getByLabel('Agency name').fill(`Device Agency ${run}`);
+    await owner.getByLabel('Workspace address').fill(second);
+    await owner.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(owner);
+    await expect(owner.getByText('This device already used a free trial').first()).toBeVisible();
+
+    await admin.goto('/admin');
+    const reviews = admin.locator('section', { hasText: 'Trial reviews' });
+    const review = reviews.getByRole('listitem').filter({ hasText: `Device Agency ${run}` });
+    await expect(review).toContainText('Same browser as an earlier trial');
+    await review.getByRole('button', { name: 'Grant trial' }).click();
+    await expect(review).toHaveCount(0);
+    const [row] = await q<{ status: string }>(`SELECT s.status FROM "Subscription" s JOIN "Tenant" t ON t.id = s."tenantId" WHERE t.slug = $1`, [second]);
+    expect(row!.status).toBe('trialing');
   });
 
   test('no browser console errors', async () => {

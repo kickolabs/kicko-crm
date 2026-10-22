@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { unzipSync, strFromU8 } from 'fflate';
 import { Client as Pg } from 'pg';
 import { enableTwoStep, totp } from './totp';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 7e: two-step sign-in (set up, sign in with a code or backup code, agency
 // requirement), the audit log, and the full data export.
@@ -51,9 +52,11 @@ test.describe.serial('Phase 7e · trust & security', () => {
     await page.getByLabel('Work email').fill(OWNER.email);
     await page.getByLabel('Password', { exact: true }).fill(OWNER.password);
     await page.getByLabel('Confirm password').fill(OWNER.password);
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Secure Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
   });
 
@@ -171,9 +174,10 @@ test.describe('Phase 7e · legal pages', () => {
     await page.getByLabel('Work email').fill(`p7e-reserved-${Date.now().toString(36)}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill('Privacy Agency');
     await page.getByLabel('Workspace address').fill('privacy');
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
-    await expect(page.getByText('That address is reserved. Try another.')).toBeVisible();
+    await expect(page.getByText('That address is reserved. Try another.').first()).toBeVisible();
   });
 });

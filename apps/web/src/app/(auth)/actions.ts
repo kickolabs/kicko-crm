@@ -8,8 +8,12 @@ import { prisma } from '@kicko/db';
 import { provisionTenant, RESERVED_SLUGS, slugify } from '@kicko/db/provision';
 import { auth, getSession } from '@/lib/auth';
 import { formObject, run, type ActionResult } from '@/lib/action';
+import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/disposable-emails';
+import { currentDevice } from '@/server/device';
 import { sendEmail } from '@/server/email';
+import { parseMobile, pendingCode, sendCode, verifyCode } from '@/server/phone-otp';
 import { UserError } from '@/server/scope';
+import { startTrial } from '@/server/trial';
 
 const agency = {
   agencyName: z.string().trim().min(2, 'Agency name is too short').max(80),
@@ -25,7 +29,8 @@ const agency = {
 const signUpSchema = z
   .object({
     name: z.string().trim().min(1, 'Your name is required').max(80),
-    email: z.email('Enter a valid email'),
+    email: z.email('Enter a valid email').refine((e) => !isDisposableEmail(e), DISPOSABLE_EMAIL_MESSAGE),
+    mobile: z.string().trim().min(1, 'Your mobile number is required'),
     password: z.string().min(8, 'At least 8 characters').max(128),
     confirmPassword: z.string(),
     ...agency,
@@ -53,26 +58,40 @@ export async function signUpAction(_: ActionResult | null, fd: FormData): Promis
   raw.slug = raw.slug || slugify(raw.agencyName ?? '');
 
   if (session) {
-    // Already signed in: just create another agency workspace.
+    // Already signed in: another agency workspace. It starts without a trial; only
+    // someone who hasn't had one yet can start it (after verifying their mobile).
     const res = await run(async () => {
       const input = z.object(agency).parse(raw);
       await assertSlugFree(input.slug);
-      await provisionTenant({ name: input.agencyName, slug: input.slug, ownerUserId: session.user.id });
-      return input.slug;
+      await provisionTenant({ name: input.agencyName, slug: input.slug, ownerUserId: session.user.id, trial: false });
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id }, select: { trialUsedAt: true, phoneNumberVerified: true } });
+      if (user.trialUsedAt) return `/${input.slug}/settings?tab=plan`;
+      if (user.phoneNumberVerified) {
+        const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: input.slug } });
+        const started = await startTrial(session.user.id, tenant.id, await currentDevice(raw.fp));
+        if (started.ok) return `/${input.slug}`;
+      }
+      return `/verify-mobile?workspace=${input.slug}`;
     });
-    if (res.ok) redirect(`/${res.data}`);
+    if (res.ok) redirect(res.data!);
     return res;
   }
 
   const res = await run(async () => {
     const input = signUpSchema.parse(raw);
+    const mobile = parseMobile(input.mobile);
     await assertSlugFree(input.slug);
+    if (await prisma.user.findFirst({ where: { phoneNumber: mobile }, select: { id: true } })) {
+      throw new UserError('This mobile number is already used by another Kicko account. Sign in instead.');
+    }
+    await currentDevice(raw.fp); // sets the device cookie before the trial is claimed
     try {
       const { user } = await auth.api.signUpEmail({
         body: { name: input.name, email: input.email.toLowerCase(), password: input.password },
         headers: await headers(),
       });
-      const tenant = await provisionTenant({ name: input.agencyName, slug: input.slug, ownerUserId: user.id });
+      const tenant = await provisionTenant({ name: input.agencyName, slug: input.slug, ownerUserId: user.id, trial: false });
+      await sendCode(user.id, mobile);
       // Welcome email with the first steps (never blocks sign-up).
       const app = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
       await sendEmail(
@@ -81,7 +100,9 @@ export async function signUpAction(_: ActionResult | null, fd: FormData): Promis
           subject: `Welcome to Kicko, ${input.name.split(' ')[0]}`,
           text: `Your workspace ${input.agencyName} is ready: ${app}/${input.slug}
 
-Your 14-day trial includes every feature. Three good first steps:
+Verify your mobile to start your 14-day free trial (every feature included): ${app}/verify-mobile?workspace=${input.slug}
+
+Three good first steps:
 
 1. Bring in your leads from Excel or another CRM: ${app}/${input.slug}/import
 2. Invite your team: ${app}/${input.slug}/settings?tab=team
@@ -100,7 +121,7 @@ The Kicko team`,
     }
     return input.slug;
   });
-  if (res.ok) redirect(`/${res.data}`);
+  if (res.ok) redirect(`/verify-mobile?workspace=${res.data}`);
   return res;
 }
 
@@ -163,4 +184,51 @@ export async function verifySecondFactorAction(_: ActionResult | null, fd: FormD
 export async function signOutAction() {
   await auth.api.signOut({ headers: await headers() });
   redirect('/login');
+}
+
+// ── Verify mobile → start the free trial ─────────────────────────────────────
+
+async function ownedPending(slug: string) {
+  const session = await getSession();
+  if (!session) throw new UserError('Please sign in again.');
+  const tenant = await prisma.tenant.findUnique({ where: { slug } });
+  if (!tenant) throw new UserError('Workspace not found.');
+  return { userId: session.user.id, tenantId: tenant.id };
+}
+
+const verifyPage = (slug: string) => `/verify-mobile?workspace=${encodeURIComponent(slug)}`;
+
+/** Send (or re-send) the code, to a new number if one is given. */
+export async function sendMobileCodeAction(slug: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const res = await run(async () => {
+    const { userId } = await ownedPending(slug);
+    const mobile = String(fd.get('mobile') ?? '');
+    const last = mobile ? null : await pendingCode(userId);
+    const phone = mobile || last?.phone;
+    if (!phone) throw new UserError('Enter your mobile number.');
+    await sendCode(userId, phone);
+  });
+  if (res.ok) redirect(verifyPage(slug));
+  return res;
+}
+
+export async function verifyMobileAction(slug: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const res = await run(async () => {
+    const { userId, tenantId } = await ownedPending(slug);
+    await verifyCode(userId, String(fd.get('code') ?? ''));
+    const started = await startTrial(userId, tenantId, await currentDevice(String(fd.get('fp') ?? '')));
+    return started.ok ? `/${slug}` : verifyPage(slug);
+  });
+  if (res.ok) redirect(res.data!);
+  return res;
+}
+
+export async function startTrialAction(slug: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const res = await run(async () => {
+    const { userId, tenantId } = await ownedPending(slug);
+    const started = await startTrial(userId, tenantId, await currentDevice(String(fd.get('fp') ?? '')));
+    return started.ok ? `/${slug}` : verifyPage(slug);
+  });
+  if (res.ok) redirect(res.data!);
+  return res;
 }

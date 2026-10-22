@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 7d: custom fields (define, fill, import into, report on) and reports
 // (ready-made, builder, save, CSV), plus what a lower plan can and can't do.
@@ -34,9 +35,11 @@ test.describe.serial('Phase 7d · custom fields & reports', () => {
     await page.getByLabel('Work email').fill(`p7d-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Reports Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
   });
 

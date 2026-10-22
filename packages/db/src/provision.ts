@@ -84,8 +84,13 @@ export type TenantSettings = {
   // ProviderConnection table, not here. See apps/web/src/integrations.
 };
 
-/** Create an agency: tenant row, owner membership, HQ branch, default visa catalog. */
-export async function provisionTenant(input: { name: string; slug: string; ownerUserId: string }) {
+export const TRIAL_DAYS = 14;
+
+/**
+ * Create an agency: tenant row, owner membership, HQ branch, default visa catalog.
+ * `trial: false` starts it as "pending" (choose a plan, or verify a mobile to start the one free trial).
+ */
+export async function provisionTenant(input: { name: string; slug: string; ownerUserId: string; trial?: boolean }) {
   const settings: TenantSettings = {
     leadAssignment: 'round_robin',
     formKey: randomBytes(12).toString('base64url'),
@@ -101,7 +106,10 @@ export async function provisionTenant(input: { name: string; slug: string; owner
       await tx.branch.create({ data: { tenantId: tenant.id, name: 'Head office' } });
       // 14-day trial with every feature, so agencies see the whole product before choosing a plan.
       await tx.subscription.create({
-        data: { tenantId: tenant.id, plan: 'pro', status: 'trialing', seats: 10, trialEndsAt: new Date(Date.now() + 14 * 86400_000) },
+        data:
+          input.trial === false
+            ? { tenantId: tenant.id, plan: 'starter', status: 'pending', seats: 1, trialEndsAt: null } // nothing included until a plan or trial starts
+            : { tenantId: tenant.id, plan: 'pro', status: 'trialing', seats: 10, trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400_000) },
       });
       await tx.visaProduct.createMany({
         data: VISA_CATALOG.map((p) => ({

@@ -15,10 +15,12 @@ import { AI_SHORT } from '@/lib/brand';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { stagesOf } from '@/server/cases';
-import { getCase } from '@/server/queries';
+import { getCase, listBranches } from '@/server/queries';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
 import { Timeline } from '../../_components/timeline';
 import { DetailsForm, Journey, StatusControls } from './case-controls';
+import { BranchSelect } from '../../_components/branch-select';
+import { setRecordBranchAction } from '../../actions-branches';
 
 // Key dates tracked on every case; product-specific milestones live on the journey.
 const DATE_FIELDS = [
@@ -33,7 +35,7 @@ const DATE_FIELDS = [
 export default async function CasePage({ params }: { params: Promise<{ tenant: string; id: string }> }) {
   const { tenant: slug, id } = await params;
   const ctx = await getCtx(slug);
-  const [c, team] = await Promise.all([getCase(ctx, id), getTeam(ctx)]);
+  const [c, team, branches] = await Promise.all([getCase(ctx, id), getTeam(ctx), listBranches(ctx)]);
   if (!c) notFound();
   const isStudy = c.product.category === 'STUDY';
   const [docs, apps, institutions, invoices] = await Promise.all([
@@ -85,6 +87,16 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
               <span>{COUNTRIES[c.product.country] ?? c.product.country} · {c.product.name}</span>
               <span>·</span><span>{CATEGORY_LABEL[c.product.category]}</span>
               <span>·</span><span>Owner {c.ownerId ? names[c.ownerId] : 'unassigned'}</span>
+              {branches.length > 1 && (
+                <>
+                  <span>·</span>
+                  {can(ctx.role, 'case.write') ? (
+                    <BranchSelect id="case-branch" value={c.branchId} branches={branches} save={setRecordBranchAction.bind(null, slug, 'case', c.id)} className="h-7 w-36 text-xs" />
+                  ) : (
+                    <span>{branches.find((b) => b.id === c.branchId)?.name ?? 'No branch'}</span>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 7a: plans and billing (sandbox). Trial → choose Growth → checkout →
 // active + GST invoice → plan gating → seats → credit top-up → lapse to
@@ -37,9 +38,11 @@ test.describe.serial('Phase 7a · plans & billing', () => {
     await page.getByLabel('Work email').fill(`p7a-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Billing Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
   });
 

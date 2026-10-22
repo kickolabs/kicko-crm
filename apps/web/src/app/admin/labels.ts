@@ -2,11 +2,12 @@ import type { Prisma } from '@kicko/db';
 import { PLANS, type PlanId, type SubStatus } from '@/lib/plans';
 
 export const STATUS_TONE: Record<SubStatus, 'ok' | 'info' | 'warn' | 'danger' | 'neutral'> = {
-  trialing: 'info', active: 'ok', past_due: 'warn', read_only: 'danger', suspended: 'danger', canceled: 'neutral',
+  pending: 'warn', trialing: 'info', active: 'ok', past_due: 'warn', read_only: 'danger', suspended: 'danger', canceled: 'neutral',
 };
 
 export const ACTION_LABEL: Record<string, string> = {
   extend_trial: 'Trial extended',
+  dismiss_trial_review: 'Trial review dismissed',
   set_plan: 'Plan set by hand',
   set_discount: 'Discount set',
   add_credits: 'Credits added',

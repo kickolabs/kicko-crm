@@ -90,6 +90,28 @@ export default async function AgencyPage({ params }: { params: Promise<{ id: str
           </Card>
 
           <Card>
+            <CardHeader title="Free trial" />
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-5 py-4 text-sm">
+              <dt className="text-muted">Owner mobile</dt>
+              <dd className="font-semibold">{a.trial.mobile ?? '—'} {a.trial.mobile && (a.trial.verified ? <Badge tone="ok">verified</Badge> : <Badge tone="warn">not verified</Badge>)}</dd>
+              <dt className="text-muted">Trial used</dt>
+              <dd className="font-semibold">{a.trial.usedAt ? fmtDate(a.trial.usedAt, a.timezone) : 'Not yet'}{a.trial.usedAt && !a.trial.claimedHere ? ' (in another workspace)' : ''}</dd>
+              {a.trial.sameNetwork >= 3 && (
+                <>
+                  <dt className="text-muted">Network</dt>
+                  <dd><Badge tone="warn">{a.trial.sameNetwork} trials from this network in 30 days</Badge></dd>
+                </>
+              )}
+              {a.trial.reviews.map((r) => (
+                <div key={r.id} className="contents">
+                  <dt className="text-muted">Review</dt>
+                  <dd>{r.reason} · <Badge tone={r.status === 'open' ? 'warn' : r.status === 'granted' ? 'ok' : 'neutral'}>{r.status}</Badge></dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+
+          <Card>
             <CardHeader title="Workspace" />
             <dl className="grid grid-cols-3 gap-3 px-5 py-4 text-center">
               {([['Leads', a.leads], ['Clients', a.clients], ['Cases', a.cases]] as const).map(([k, v]) => (

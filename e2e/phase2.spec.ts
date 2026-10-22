@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 2 journey: documents (upload → reject → re-upload → verify), partner
 // institution + course, study application → enrolled → commission claim,
@@ -23,9 +24,11 @@ test.describe.serial('Phase 2', () => {
     await page.getByLabel('Work email').fill(`p2-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Phase Two ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
 
     // A study case to work on.

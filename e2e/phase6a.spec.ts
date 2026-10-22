@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 6a: sub-agent network. Agency adds a sub-agent → partner signs in with a
 // one-time link → refers a client (duplicates protected) → staff converts and
@@ -28,9 +29,11 @@ test.describe.serial('Phase 6a · sub-agent network', () => {
     await staff.getByLabel('Work email').fill(`p6a-${run}@example.test`);
     await staff.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await staff.getByLabel('Confirm password').fill('kicko-pass-123');
+    await staff.getByLabel('Mobile number').fill(testMobile());
     await staff.getByLabel('Agency name').fill(`Network Agency ${run}`);
     await staff.getByLabel('Workspace address').fill(slug);
     await staff.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(staff);
     await staff.waitForURL(`**/${slug}`);
   });
 

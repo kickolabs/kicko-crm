@@ -35,6 +35,10 @@ model User {
   email         String       @unique
   emailVerified Boolean      @default(false)
   twoFactorEnabled Boolean?  @default(false)
+  // Mobile verified by OTP at sign-up (E.164). One free trial per verified number.
+  phoneNumber         String?   @unique
+  phoneNumberVerified Boolean   @default(false)
+  trialUsedAt         DateTime?
   image         String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -151,6 +155,8 @@ model Branch {
   name      String
   city      String?
   createdAt DateTime @default(now())
+  leads     Lead[]
+  cases     Case[]
 
   @@index([tenantId])
 }
@@ -228,6 +234,8 @@ model Lead {
   productId        String?
   product          VisaProduct?  @relation(fields: [productId], references: [id])
   ownerId          String?
+  branchId         String?
+  branch           Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
   score            Int?
   message          String?
   utm              Json?
@@ -356,6 +364,8 @@ model Case {
   status       CaseStatus     @default(OPEN)
   outcome      CaseOutcome?
   ownerId      String?
+  branchId     String?
+  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
   lodgedAt     DateTime?
   decisionAt   DateTime?
   // free-form key dates: { biometrics, medical, intake, ... }
@@ -1128,6 +1138,39 @@ model AdminAction {
 model PlatformCounter {
   key   String @id
   value Int
+}
+
+// ─── Free trials: one per person, number and device ─────────────────────────
+// Platform tables (not tenant data): read and written by Kicko itself.
+
+model TrialClaim {
+  id          String   @id @default(cuid())
+  phone       String   @unique // E.164
+  userId      String
+  tenantId    String
+  deviceId    String? // first-party cookie kicko_did
+  fingerprint String? // hash of stable browser signals
+  ipHash      String?
+  createdAt   DateTime @default(now())
+
+  @@index([deviceId])
+  @@index([fingerprint])
+  @@index([ipHash, createdAt])
+}
+
+// A trial that didn't start automatically (same device as an earlier trial), for Kicko to review.
+model TrialReview {
+  id            String    @id @default(cuid())
+  tenantId      String
+  userId        String
+  reason        String
+  matchTenantId String? // the workspace that already used a trial from this device
+  status        String    @default("open") // open | granted | dismissed
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, createdAt])
 }
 
 // ─── Phase 6b: government form auto-fill ────────────────────────────────────

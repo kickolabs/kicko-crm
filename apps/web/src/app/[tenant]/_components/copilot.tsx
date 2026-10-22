@@ -1,13 +1,18 @@
+'use client';
+
 import Link from 'next/link';
 import clsx from 'clsx';
+import { useEffect, useState } from 'react';
 import { Lock, Sparkles } from 'lucide-react';
 import { AI_BRAND, AI_SHORT } from '@/lib/brand';
 import { PLANS, planFor } from '@/lib/plans';
-import type { Ctx } from '@/lib/tenant';
-import { getBrief } from '@/server/copilot';
+import type { Brief } from '@/server/ai/brief';
 
 // Kicko Yu's daily brief on the dashboard. Growth and Pro (and trials) get it;
 // on Starter, admins see what it would do and where to get it, staff see nothing.
+// The brief loads with a plain request after the page renders: it can take a few
+// seconds when the AI writes it, and a streamed server component would race any
+// action clicked on the dashboard meanwhile.
 
 function Shell({ children, label = 'Daily brief' }: { children: React.ReactNode; label?: string }) {
   return (
@@ -34,8 +39,17 @@ function Headline({ text }: { text: string }) {
   );
 }
 
-export async function CopilotBrief({ ctx }: { ctx: Ctx }) {
-  const brief = await getBrief(ctx);
+export function CopilotBrief({ slug }: { slug: string }) {
+  const [brief, setBrief] = useState<Brief | null | 'loading'>('loading');
+  useEffect(() => {
+    const ctl = new AbortController();
+    fetch(`/api/t/${slug}/brief`, { signal: ctl.signal })
+      .then((r) => (r.status === 200 ? (r.json() as Promise<Brief>) : null))
+      .then(setBrief)
+      .catch(() => {});
+    return () => ctl.abort();
+  }, [slug]);
+  if (brief === 'loading') return <CopilotSkeleton />;
   if (!brief) return null;
   return (
     <Shell>

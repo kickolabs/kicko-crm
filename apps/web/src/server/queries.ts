@@ -88,7 +88,7 @@ export function getDashboard(ctx: Ctx) {
   });
 }
 
-export type LeadFilters = { q?: string; status?: string; source?: string; owner?: string; category?: string };
+export type LeadFilters = { q?: string; status?: string; source?: string; owner?: string; category?: string; branch?: string };
 
 export function listLeads(ctx: Ctx, f: LeadFilters) {
   const where: Prisma.LeadWhereInput = {};
@@ -98,6 +98,7 @@ export function listLeads(ctx: Ctx, f: LeadFilters) {
   if (f.owner === 'me') where.ownerId = ctx.user.id;
   else if (f.owner === 'none') where.ownerId = null;
   else if (f.owner) where.ownerId = f.owner;
+  if (f.branch) where.branchId = f.branch === 'none' ? null : f.branch;
   if (f.q) {
     const q = f.q.trim();
     where.OR = [
@@ -169,7 +170,7 @@ export function getClient(ctx: Ctx, id: string) {
   );
 }
 
-export type CaseFilters = { q?: string; status?: string; category?: string; product?: string; owner?: string };
+export type CaseFilters = { q?: string; status?: string; category?: string; product?: string; owner?: string; branch?: string };
 
 export function listCases(ctx: Ctx, f: CaseFilters) {
   const where: Prisma.CaseWhereInput = { status: (f.status as CaseStatus) || { not: 'CLOSED' } };
@@ -177,6 +178,7 @@ export function listCases(ctx: Ctx, f: CaseFilters) {
   if (f.category) where.product = { category: f.category as VisaCategory };
   if (f.product) where.productId = f.product;
   if (f.owner === 'me') where.ownerId = ctx.user.id;
+  if (f.branch) where.branchId = f.branch === 'none' ? null : f.branch;
   if (f.q) {
     const q = f.q.trim();
     where.OR = [
@@ -276,4 +278,9 @@ export function search(ctx: Ctx, q: string) {
       ...leads.map((l) => ({ kind: 'Lead' as const, id: l.id, title: [l.firstName, l.lastName].filter(Boolean).join(' '), sub: `${l.ref}${l.phone ? ` · ${l.phone}` : ''}`, href: `/${ctx.tenant.slug}/leads/${l.id}` })),
     ];
   });
+}
+
+/** Branches, for filters and pickers (shown only when there's more than one). */
+export function listBranches(ctx: Ctx) {
+  return db(ctx, (tx) => tx.branch.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, name: true } }));
 }

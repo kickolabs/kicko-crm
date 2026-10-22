@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
+import { testMobile, verifyMobile } from './helpers';
 
 // Kicko Yu follows the plan: the daily brief, the sidebar's agent status and
 // the case page's Yu flags. Trial and Pro get everything, Growth part of it,
@@ -32,9 +33,11 @@ test.describe.serial('AI surfaces by plan', () => {
     await page.getByLabel('Work email').fill(`ai-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`AI Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
   });
 

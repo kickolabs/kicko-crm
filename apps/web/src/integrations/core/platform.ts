@@ -2,6 +2,9 @@ import 'server-only';
 import { claude } from '../llm/claude';
 import { openaiCompatible } from '../llm/openai-compatible';
 import type { LlmAdapter } from '../llm/port';
+import { msg91 } from '../otp/msg91';
+import type { OtpAdapter } from '../otp/port';
+import { sandboxOtp } from '../otp/sandbox';
 import { sandboxLlm } from '../llm/sandbox';
 import { deepgram } from '../stt/deepgram';
 import type { SttAdapter } from '../stt/port';
@@ -35,6 +38,12 @@ export function llmFor(task: AiTask): LlmAdapter {
 export function stt(): SttAdapter {
   const key = process.env.DEEPGRAM_API_KEY;
   return key ? deepgram(key) : sandboxStt;
+}
+
+/** Sign-up verification codes by SMS (MSG91). Sandbox shows the code on screen. */
+export function otp(): OtpAdapter {
+  const { MSG91_AUTH_KEY: key, MSG91_OTP_TEMPLATE_ID: template } = process.env;
+  return key && template ? msg91(key, template) : sandboxOtp;
 }
 
 export const platformStatus = () => ({

@@ -7,6 +7,7 @@ import { normalizeEmail, normalizePhone } from '@/lib/phone';
 import { LEAD_STATUS_LABEL } from '@/lib/constants';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 import { openCaseTx } from './cases';
+import { defaultBranch } from './branches';
 
 const optional = z
   .string()
@@ -130,10 +131,12 @@ export async function createLead(
     }
 
     const ref = await nextRef(tx, scope.tenantId, 'lead', 'L');
+    const branchId = await defaultBranch(tx, scope, ownerId);
     const lead = await tx.lead.create({
       data: {
         tenantId: scope.tenantId,
         ref,
+        branchId,
         firstName: input.firstName,
         lastName: input.lastName ?? null,
         email,

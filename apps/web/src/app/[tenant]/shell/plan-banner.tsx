@@ -4,7 +4,20 @@ import { LogoMark } from '@/components/logo';
 import { fmtDate } from '@/lib/format';
 
 /** One line under the top bar: trial days left, payment due, or read-only. */
-export function PlanBanner({ slug, sub, tz, canManage }: { slug: string; sub: Subscription | null; tz: string; canManage: boolean }) {
+export function PlanBanner({
+  slug,
+  sub,
+  tz,
+  canManage,
+  trial,
+}: {
+  slug: string;
+  sub: Subscription | null;
+  tz: string;
+  canManage: boolean;
+  /** Pending workspaces: can this owner still start the free trial, or is Kicko reviewing it? */
+  trial?: 'available' | 'review' | null;
+}) {
   if (!sub) return null;
   const href = `/${slug}/settings?tab=plan`;
   const cta = canManage ? <Link href={href} className="font-bold underline underline-offset-4">Choose a plan</Link> : <span>Ask an admin to renew.</span>;
@@ -16,6 +29,15 @@ export function PlanBanner({ slug, sub, tz, canManage }: { slug: string; sub: Su
         {canManage && <Link href={href} className="font-bold text-lime underline underline-offset-4">Choose a plan</Link>}
       </div>
     );
+  }
+  if (sub.status === 'pending') {
+    const text =
+      trial === 'available'
+        ? <>Verify your mobile to start your 14-day free trial. <Link href={`/verify-mobile?workspace=${slug}`} className="font-bold text-lime underline underline-offset-4">Verify now</Link></>
+        : trial === 'review'
+          ? <>Kicko is checking this free trial (the device used one before). Meanwhile you can choose a plan. {canManage && <Link href={href} className="font-bold text-lime underline underline-offset-4">See plans</Link>}</>
+          : <>{canManage ? 'You’ve used your free trial. Choose a plan to start using this workspace.' : 'This workspace has no plan yet. Ask the owner to choose one.'} {canManage && <Link href={href} className="font-bold text-lime underline underline-offset-4">Choose a plan</Link>}</>;
+    return <div role="status" className="flex flex-wrap items-center justify-center gap-2 bg-ink px-4 py-2 text-sm text-paper">{text}</div>;
   }
   if (sub.status === 'past_due') {
     return <div role="alert" className="flex flex-wrap items-center justify-center gap-2 bg-warn-bg px-4 py-2 text-sm font-medium text-warn-ink">Your subscription payment failed. Renew within 7 days to keep editing. {cta}</div>;

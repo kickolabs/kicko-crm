@@ -33,6 +33,9 @@ for (const id of tenantIds) {
   await prisma.tenant.deleteMany({ where: { id } });
   removed++;
 }
+// Trial claims and reviews outlive accounts in real use; for test accounts, clear them too.
+await prisma.trialClaim.deleteMany({ where: { userId: { in: users.map((u) => u.id) } } });
+await prisma.trialReview.deleteMany({ where: { userId: { in: users.map((u) => u.id) } } });
 const gone = await prisma.user.deleteMany({ where: { email: { endsWith: '@example.test' } } });
 console.log(`Removed ${removed} test agencies and ${gone.count} test accounts${kept ? ` (kept ${kept} with real members)` : ''}.`);
 await prisma.$disconnect();

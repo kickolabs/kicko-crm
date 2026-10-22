@@ -49,8 +49,29 @@ async function main() {
   await seedPhase2(T);
   const portalLink = await seedPhase3(T);
   await seedPhase4(T);
+  await seedBranches(T);
   console.log(`Demo workspace ready → ${APP}/${SLUG}\nSign in as demo@kicko.app / ${PASSWORD}`);
   console.log(`Priya's client portal (one-time link, 7 days) → ${portalLink}`);
+}
+
+// ── Branches: Head office (Chennai) and Coimbatore, with a counsellor there ──
+
+async function seedBranches(T: string) {
+  await withTenant(T, async (tx) => {
+    if (await tx.branch.count() > 1) return;
+    const hq = await tx.branch.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (hq) await tx.branch.update({ where: { id: hq.id }, data: { name: 'Chennai (head office)', city: 'Chennai' } });
+    const cbe = await tx.branch.create({ data: { tenantId: T, name: 'Coimbatore', city: 'Coimbatore' } });
+    const rahul = await prisma.user.findUnique({ where: { email: 'rahul@kicko.app' } });
+    await tx.membership.updateMany({ where: { branchId: null }, data: { branchId: hq?.id ?? null } });
+    if (rahul) {
+      await tx.membership.updateMany({ where: { userId: rahul.id }, data: { branchId: cbe.id } });
+      await tx.lead.updateMany({ where: { ownerId: rahul.id }, data: { branchId: cbe.id } });
+      await tx.case.updateMany({ where: { ownerId: rahul.id }, data: { branchId: cbe.id } });
+    }
+    await tx.lead.updateMany({ where: { branchId: null }, data: { branchId: hq?.id ?? null } });
+    await tx.case.updateMany({ where: { branchId: null }, data: { branchId: hq?.id ?? null } });
+  });
 }
 
 // ── Phase 4: WhatsApp sandbox, templates, automations, conversations ────────

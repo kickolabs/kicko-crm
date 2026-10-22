@@ -1,6 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/disposable-emails';
 import { redirect } from 'next/navigation';
 import { APIError } from 'better-auth/api';
 import { z } from 'zod';
@@ -37,6 +38,7 @@ export async function inviteSignUpAction(slug: string, token: string, _: ActionR
     const tenant = await getTenantBySlug(slug);
     const invite = tenant ? await getInvite(tenant.id, token) : null;
     if (!tenant || !invite) throw new UserError('This invite has expired');
+    if (isDisposableEmail(invite.email)) throw new UserError(DISPOSABLE_EMAIL_MESSAGE);
     try {
       const { user } = await auth.api.signUpEmail({
         body: { name: input.name, email: invite.email, password: input.password },

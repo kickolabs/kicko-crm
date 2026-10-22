@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 5b: WhatsApp AI assistant (sandbox: keyword rules + the agency's knowledge base).
 // Customers write via real signed webhooks; we check replies, bookings, captured
@@ -78,9 +79,11 @@ test.describe.serial('Phase 5b · WhatsApp AI assistant (sandbox)', () => {
     await page.getByLabel('Work email').fill(`p5b-${run}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await page.getByLabel('Confirm password').fill('kicko-pass-123');
+    await page.getByLabel('Mobile number').fill(testMobile());
     await page.getByLabel('Agency name').fill(`Bot Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(page);
     await page.waitForURL(`**/${slug}`);
     await page.goto(`/${slug}/settings?tab=whatsapp`);
     await page.getByRole('button', { name: 'Try it in sandbox' }).click();

@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { testMobile, verifyMobile } from './helpers';
 
 // Phase 3: client portal. Staff invites → client signs in with a one-time link →
 // uploads, messages, books → staff sees it all; plus link reuse & isolation checks.
@@ -21,9 +22,11 @@ test.describe.serial('Phase 3 · client portal', () => {
     await staff.getByLabel('Work email').fill(`p3-${run}@example.test`);
     await staff.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
     await staff.getByLabel('Confirm password').fill('kicko-pass-123');
+    await staff.getByLabel('Mobile number').fill(testMobile());
     await staff.getByLabel('Agency name').fill(`Portal Agency ${run}`);
     await staff.getByLabel('Workspace address').fill(slug);
     await staff.getByRole('button', { name: 'Create account & workspace' }).click();
+    await verifyMobile(staff);
     await staff.waitForURL(`**/${slug}`);
 
     await staff.goto(`/${slug}/leads?new=1`);

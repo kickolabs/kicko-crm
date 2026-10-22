@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Suspense } from 'react';
 import { ArrowRight, CalendarClock, DoorOpen, MessageCircle, Phone } from 'lucide-react';
 import { Badge, Card, CardHeader, LinkButton, Stat } from '@/components/ui';
 import { CATEGORY_LABEL, LEAD_STATUS_LABEL, LEAD_STATUSES } from '@/lib/constants';
@@ -10,7 +9,7 @@ import { can } from '@/lib/permissions';
 import { hasFeature } from '@/lib/plans';
 import { liveNow } from '@/server/copilot';
 import { getDashboard } from '@/server/queries';
-import { CopilotBrief, CopilotSkeleton, CopilotUpsell } from './_components/copilot';
+import { CopilotBrief, CopilotUpsell } from './_components/copilot';
 import { GetStarted } from './_components/get-started';
 
 export const metadata = { title: 'Command' };
@@ -35,9 +34,7 @@ export default async function Dashboard({ params }: { params: Promise<{ tenant: 
   // Copilot: on plans that include it; on Starter only people who can upgrade see the offer.
   const copilot = Boolean(ctx.subscription && hasFeature(ctx.subscription, 'copilot'));
   const rail = copilot ? (
-    <Suspense fallback={<CopilotSkeleton />}>
-      <CopilotBrief ctx={ctx} />
-    </Suspense>
+    <CopilotBrief slug={slug} />
   ) : can(ctx.role, 'settings.manage') ? (
     <CopilotUpsell slug={slug} />
   ) : null;

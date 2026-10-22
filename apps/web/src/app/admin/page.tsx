@@ -3,7 +3,9 @@ import { Card, CardHeader, EmptyState, PageHeader, Stat } from '@/components/ui'
 import { fmtDate, relative } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { DAY, PLANS, STATUS_LABEL, type PlanId, type SubStatus } from '@/lib/plans';
-import { FINE_TUNE_READY, FOUNDING_SLOTS, listAgencies, overview, recentAdminActions, yuTrainingData, type AgencyRow } from '@/server/admin';
+import { FINE_TUNE_READY, FOUNDING_SLOTS, listAgencies, openTrialReviews, overview, recentAdminActions, yuTrainingData, type AgencyRow } from '@/server/admin';
+import { ActionButton } from '@/components/forms';
+import { resolveTrialReviewAction } from './actions';
 import { AI_BRAND } from '@/lib/brand';
 import { AgencyTable, type Row } from './agency-table';
 import { ACTION_LABEL, STATUS_TONE, describeAction } from './labels';
@@ -16,6 +18,7 @@ const TASK_LABEL: Record<string, string> = { document_check: 'Document checks', 
 function planText(r: AgencyRow, now: Date) {
   const s = r.sub;
   if (!s) return '—';
+  if (s.status === 'pending') return 'No plan yet';
   if (s.status === 'trialing' && s.trialEndsAt) {
     const days = Math.ceil((s.trialEndsAt.getTime() - now.getTime()) / DAY);
     return days > 0 ? `Trial · ${days} day${days === 1 ? '' : 's'} left` : 'Trial · ended';
@@ -52,7 +55,7 @@ function toRow(r: AgencyRow, now: Date): Row {
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ f?: string; q?: string }> }) {
   const sp = await searchParams;
   const now = new Date();
-  const [rows, log, yu] = await Promise.all([listAgencies(), recentAdminActions(), yuTrainingData()]);
+  const [rows, log, yu, reviews] = await Promise.all([listAgencies(), recentAdminActions(), yuTrainingData(), openTrialReviews()]);
   const o = overview(rows, now);
   const names = new Map(rows.map((r) => [r.id, r.name]));
 
@@ -67,6 +70,27 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <Stat label="At risk" value={o.atRisk} sub={`${o.suspended} suspended`} subTone={o.atRisk ? 'warn' : undefined} />
         <Stat label="Collected this month" value={formatMoney(o.revenueMonthInr, 'INR', { compact: true })} sub={`Founding discounts: ${o.foundingUsed} of ${FOUNDING_SLOTS}`} />
       </Card>
+
+      {reviews.length > 0 && (
+        <Card>
+          <CardHeader title="Trial reviews" sub="Sign-ups from a browser or device that already used a free trial. Grant if it's a genuine new agency." />
+          <ul className="divide-y divide-line">
+            {reviews.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  {r.tenant ? <Link href={`/admin/agencies/${r.tenant.id}`} className="font-bold hover:underline">{r.tenant.name}</Link> : <span className="font-bold">Deleted workspace</span>}
+                  <div className="text-xs text-muted">
+                    {r.user?.email}{r.user?.phoneNumber ? ` · ${r.user.phoneNumber}` : ''} · {r.reason}
+                    {r.earlier && <> · earlier trial: <Link href={`/admin/agencies/${r.earlier.id}`} className="font-semibold underline">{r.earlier.name}</Link></>} · {relative(r.createdAt, now)}
+                  </div>
+                </div>
+                <ActionButton action={resolveTrialReviewAction.bind(null, r.id, true)} variant="primary">Grant trial</ActionButton>
+                <ActionButton action={resolveTrialReviewAction.bind(null, r.id, false)} confirm="Dismiss? They'll need to choose a plan.">Dismiss</ActionButton>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className="overflow-hidden">
         <AgencyTable rows={rows.map((r) => toRow(r, now))} initialFilter={sp.f ?? 'all'} initialQuery={sp.q ?? ''} />

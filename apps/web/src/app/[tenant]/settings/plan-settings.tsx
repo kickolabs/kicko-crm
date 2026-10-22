@@ -24,7 +24,7 @@ type Sub = {
 };
 
 const TONE: Record<SubStatus, 'ok' | 'info' | 'warn' | 'danger' | 'neutral'> = {
-  trialing: 'info', active: 'ok', past_due: 'warn', read_only: 'danger', suspended: 'danger', canceled: 'neutral',
+  pending: 'warn', trialing: 'info', active: 'ok', past_due: 'warn', read_only: 'danger', suspended: 'danger', canceled: 'neutral',
 };
 
 export function CurrentPlan({ slug, sub, paid }: { slug: string; sub: Sub; paid: boolean }) {
@@ -34,12 +34,13 @@ export function CurrentPlan({ slug, sub, paid }: { slug: string; sub: Sub; paid:
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[11px] font-bold tracking-wide text-paper/60 uppercase">Your plan</div>
-          <div className="text-3xl font-extrabold tracking-tight">{sub.status === 'trialing' ? 'Free trial · everything included' : PLANS[sub.plan].name}</div>
+          <div className="text-3xl font-extrabold tracking-tight">{sub.status === 'trialing' ? 'Free trial · everything included' : sub.status === 'pending' ? 'No plan yet' : PLANS[sub.plan].name}</div>
           <div className="text-sm text-paper/70">
             {sub.status === 'trialing' && sub.trialDaysLeft != null ? `${sub.trialDaysLeft} day${sub.trialDaysLeft === 1 ? '' : 's'} left. Choose a plan below to keep going.` : null}
             {sub.status === 'active' && sub.renews ? `${sub.interval === 'year' ? 'Yearly' : 'Monthly'} · ${sub.cancelAtPeriodEnd ? 'ends' : 'renews'} ${sub.renews}${sub.provider === 'manual' ? ' (complimentary)' : ''}` : null}
             {sub.status === 'past_due' && 'The last payment failed. Update payment within 7 days to keep editing.'}
             {sub.status === 'read_only' && 'Read-only: your team can view and export, but not make changes. Choose a plan to continue.'}
+            {sub.status === 'pending' && 'Choose a plan below to start using this workspace.'}
             {sub.status === 'suspended' && 'Suspended. Choose a plan to restore access. Data is kept for 90 days.'}
           </div>
         </div>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { ActionForm, FormField, PasswordInput, SubmitButton } from '@/components/forms';
+import { DeviceFingerprint } from '@/components/device-fingerprint';
 import { Input } from '@/components/ui';
 import { signInAction, signUpAction, verifySecondFactorAction } from './actions';
 
@@ -67,6 +68,7 @@ export function SignUpForm({ signedInAs }: { signedInAs?: string }) {
 
   return (
     <ActionForm action={signUpAction} className="flex flex-col gap-4">
+      <DeviceFingerprint />
       {!signedInAs && (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -77,6 +79,9 @@ export function SignUpForm({ signedInAs }: { signedInAs?: string }) {
               <Input name="email" type="email" autoComplete="email" required />
             </FormField>
           </div>
+          <FormField label="Mobile number" name="mobile" hint="We'll send a code to start your free trial. One trial per number.">
+            <Input name="mobile" type="tel" inputMode="tel" autoComplete="tel" placeholder="98400 11223" required />
+          </FormField>
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField label="Password" name="password" hint="At least 8 characters">
               <PasswordInput name="password" autoComplete="new-password" required minLength={8} />

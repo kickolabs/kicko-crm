@@ -1,5 +1,5 @@
 import 'server-only';
-import type { TenantSettings } from '@kicko/db/provision';
+import { TRIAL_DAYS, type TenantSettings } from '@kicko/db/provision';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { prisma, withPlatformRead, withTenant, type Prisma, type Subscription, type Tx } from '@kicko/db';
@@ -187,6 +187,13 @@ export async function agencyDetail(tenantId: string) {
   });
   const users = await prisma.user.findMany({ where: { id: { in: extra.team.map((m) => m.userId) } }, select: { id: true, name: true, email: true } });
   const log = await prisma.adminAction.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' }, take: 50 });
+  const ownerId = extra.team.find((m) => m.role === 'OWNER')?.userId;
+  const [ownerUser, claim, reviews] = await Promise.all([
+    ownerId ? prisma.user.findUnique({ where: { id: ownerId }, select: { phoneNumber: true, phoneNumberVerified: true, trialUsedAt: true } }) : null,
+    prisma.trialClaim.findFirst({ where: { tenantId } }),
+    prisma.trialReview.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+  ]);
+  const sameNetwork = claim?.ipHash ? await prisma.trialClaim.count({ where: { ipHash: claim.ipHash, createdAt: { gt: new Date(Date.now() - 30 * DAY) } } }) : 0;
   return {
     ...summary,
     timezone: t.timezone,
@@ -195,6 +202,14 @@ export async function agencyDetail(tenantId: string) {
     creditsByAction: extra.creditsByAction.map((c) => ({ action: c.action ?? 'other', credits: c._sum.credits ?? 0 })),
     usage: extra.usage.map((u) => ({ capability: u.capability, unit: u.unit, quantity: u._sum.quantity ?? 0 })),
     log,
+    trial: {
+      mobile: ownerUser?.phoneNumber ?? null,
+      verified: Boolean(ownerUser?.phoneNumberVerified),
+      usedAt: ownerUser?.trialUsedAt ?? null,
+      claimedHere: Boolean(claim),
+      sameNetwork,
+      reviews: reviews.map((r) => ({ id: r.id, reason: r.reason, status: r.status, createdAt: r.createdAt, matchTenantId: r.matchTenantId })),
+    },
   };
 }
 
@@ -230,6 +245,33 @@ export async function extendTrial(admin: Admin, tenantId: string, days: number, 
     const from = s.status === 'trialing' && s.trialEndsAt && s.trialEndsAt > now ? s.trialEndsAt : now;
     return { status: 'trialing', statusSince: s.status === 'trialing' ? s.statusSince : now, trialEndsAt: new Date(from.getTime() + days * DAY) };
   });
+}
+
+// ── Trial reviews (same device as an earlier trial) ─────────────────────────
+
+export async function openTrialReviews() {
+  await requireAdmin();
+  const rows = await prisma.trialReview.findMany({ where: { status: 'open' }, orderBy: { createdAt: 'asc' }, take: 50 });
+  const ids = [...new Set(rows.flatMap((r) => [r.tenantId, r.matchTenantId].filter((x): x is string => Boolean(x))))];
+  const [tenants, users] = await Promise.all([
+    prisma.tenant.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, slug: true } }),
+    prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, email: true, phoneNumber: true } }),
+  ]);
+  const t = new Map(tenants.map((x) => [x.id, x]));
+  const u = new Map(users.map((x) => [x.id, x]));
+  return rows.map((r) => ({ id: r.id, reason: r.reason, createdAt: r.createdAt, tenant: t.get(r.tenantId) ?? null, earlier: r.matchTenantId ? (t.get(r.matchTenantId) ?? null) : null, user: u.get(r.userId) ?? null }));
+}
+
+/** Grant: a genuine new agency; the trial starts now. Dismiss: they choose a plan as usual. */
+export async function resolveTrialReview(admin: Admin, reviewId: string, grant: boolean) {
+  const r = await prisma.trialReview.findUnique({ where: { id: reviewId } });
+  if (!r || r.status !== 'open') throw new UserError('This review is already closed');
+  if (grant) {
+    await extendTrial(admin, r.tenantId, TRIAL_DAYS, 'Trial review: genuine new agency');
+    await prisma.user.update({ where: { id: r.userId }, data: { trialUsedAt: new Date() } });
+  }
+  await prisma.trialReview.update({ where: { id: reviewId }, data: { status: grant ? 'granted' : 'dismissed', resolvedBy: admin.email, resolvedAt: new Date() } });
+  if (!grant) await prisma.adminAction.create({ data: { actorEmail: admin.email, tenantId: r.tenantId, action: 'dismiss_trial_review', details: { reason: r.reason } } });
 }
 
 /** Discount for the next checkout or renewal (founding customers get 30%). */

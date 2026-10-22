@@ -41,12 +41,16 @@ import { emailEnabled } from '@/server/email';
 import { DEFAULT_PORTAL } from '@/server/portal';
 import { listPackages } from '@/server/queries2';
 import type { PlanStep } from '@/lib/money';
+import { BranchSelect } from '../_components/branch-select';
+import { setMemberBranchAction } from '../actions-branches';
+import { BranchesTab } from './branches-tab';
 
 export const metadata = { title: 'Settings' };
 const TABS = [
   ['general', 'General'],
   ['plan', 'Plan & billing'],
   ['team', 'Team'],
+  ['branches', 'Branches'],
   ['billing', 'Billing'],
   ['portal', 'Client portal'],
   ['whatsapp', 'WhatsApp'],
@@ -94,6 +98,8 @@ export default async function SettingsPage({
       )}
 
       {tab === 'team' && <TeamTab slug={slug} ctxRole={ctx.role} me={ctx.user.id} />}
+
+      {tab === 'branches' && <BranchesTab ctx={ctx} slug={slug} canManagePlan={can(ctx.role, 'settings.manage')} />}
 
       {tab === 'plan' && <PlanTab />}
 
@@ -363,7 +369,13 @@ export default async function SettingsPage({
   }
 
   async function TeamTab({ slug, ctxRole, me }: { slug: string; ctxRole: typeof ctx.role; me: string }) {
-    const [team, invites] = await Promise.all([getTeam(ctx), listInvites(ctx)]);
+    const [team, invites, branches, homes] = await Promise.all([
+      getTeam(ctx),
+      listInvites(ctx),
+      db(ctx, (tx) => tx.branch.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, name: true } })),
+      db(ctx, (tx) => tx.membership.findMany({ where: { active: true }, select: { userId: true, branchId: true } })),
+    ]);
+    const home = (userId: string) => homes.find((h) => h.userId === userId)?.branchId ?? null;
     return (
       <div className="flex flex-col gap-5">
         <Card>
@@ -375,6 +387,9 @@ export default async function SettingsPage({
                   <div className="font-semibold">{m.name} {m.userId === me && <span className="text-xs text-muted">(you)</span>}</div>
                   <div className="text-xs text-muted">{m.email}</div>
                 </div>
+                {branches.length > 1 && (
+                  <BranchSelect id={`branch-${m.userId}`} value={home(m.userId)} branches={branches} save={setMemberBranchAction.bind(null, slug, m.userId)} label={`Branch for ${m.name}`} />
+                )}
                 <MemberControls slug={slug} userId={m.userId} role={m.role} isMe={m.userId === me} canMakeOwner={ctxRole === 'OWNER'} />
               </li>
             ))}

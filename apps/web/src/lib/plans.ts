@@ -3,7 +3,8 @@
 
 export type PlanId = 'starter' | 'growth' | 'pro';
 export type Interval = 'month' | 'year';
-export type SubStatus = 'trialing' | 'active' | 'past_due' | 'read_only' | 'suspended' | 'canceled';
+// pending: created without a trial (the owner already used theirs, or hasn't verified a mobile yet).
+export type SubStatus = 'pending' | 'trialing' | 'active' | 'past_due' | 'read_only' | 'suspended' | 'canceled';
 
 export type Feature =
   | 'payment_links'
@@ -28,6 +29,8 @@ export const PLANS: Record<PlanId, {
   price: { INR: { month: number; year: number }; USD: { month: number; year: number } };
   creditsPerUser: number;
   storageGb: number;
+  /** Branches (offices) inside the workspace. */
+  branches: number;
   features: Feature[];
   highlights: string[];
 }> = {
@@ -37,8 +40,9 @@ export const PLANS: Record<PlanId, {
     price: { INR: { month: 119_900, year: 99_900 }, USD: { month: 1_800, year: 1_500 } },
     creditsPerUser: 0, // no AI features on Starter, so no credits to spend
     storageGb: 10,
+    branches: 1,
     features: [],
-    highlights: ['Leads, clients, cases & documents', 'GST invoices & receipts', 'Client portal, web form & walk-in kiosk', 'WhatsApp inbox, templates & automations', 'Reports & spreadsheet import'],
+    highlights: ['1 branch', 'Leads, clients, cases & documents', 'GST invoices & receipts', 'Client portal, web form & walk-in kiosk', 'WhatsApp inbox, templates & automations', 'Reports & spreadsheet import'],
   },
   growth: {
     name: 'Growth',
@@ -46,8 +50,9 @@ export const PLANS: Record<PlanId, {
     price: { INR: { month: 239_900, year: 199_900 }, USD: { month: 3_500, year: 2_900 } },
     creditsPerUser: 300,
     storageGb: 50,
+    branches: 3,
     features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'copilot'],
-    highlights: ['Everything in Starter', 'Calling with AI call notes', 'WhatsApp AI assistant', 'Kicko Yu daily brief', 'Payment links, eligibility calculators, form sheets'],
+    highlights: ['Everything in Starter', 'Up to 3 branches', 'Calling with AI call notes', 'WhatsApp AI assistant', 'Kicko Yu daily brief', 'Payment links, eligibility calculators, form sheets'],
   },
   pro: {
     name: 'Pro',
@@ -55,8 +60,9 @@ export const PLANS: Record<PlanId, {
     price: { INR: { month: 419_900, year: 349_900 }, USD: { month: 5_900, year: 4_900 } },
     creditsPerUser: 1000,
     storageGb: 200,
+    branches: Infinity,
     features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'copilot', 'voice_agent', 'sub_agents', 'doc_checks', 'custom_fields', 'api'],
-    highlights: ['Everything in Growth', 'AI voice agent', 'Sub-agent network', 'AI document checks & API', 'Custom fields & report builder'],
+    highlights: ['Everything in Growth', 'Unlimited branches', 'AI voice agent', 'Sub-agent network', 'AI document checks & API', 'Custom fields & report builder'],
   },
 };
 
@@ -78,6 +84,9 @@ export const FEATURE_LABEL: Record<Feature, string> = {
 /** Credits per AI action (1 credit ≈ ₹1 of AI cost). Only charged when a real model runs. */
 export const CREDIT_COST = { call_notes: 4, voice_notes: 2, wa_reply: 1, doc_check: 1, brief: 2 } as const;
 export type CreditAction = keyof typeof CREDIT_COST;
+
+/** Branches a subscription allows (trials: the trial plan's). */
+export const branchLimit = (sub: { plan: string }) => PLANS[sub.plan as PlanId]?.branches ?? 1;
 
 /** Trials get every feature, with a small AI allowance. */
 export const TRIAL_CREDITS = 200;
@@ -144,12 +153,13 @@ export function nextStatus(
 
 /** What staff can do in each state. Clients' portal and incoming webhooks keep working throughout. */
 export function access(status: string): 'full' | 'read_only' | 'suspended' {
-  if (status === 'read_only' || status === 'canceled') return 'read_only';
+  if (status === 'read_only' || status === 'canceled' || status === 'pending') return 'read_only';
   if (status === 'suspended') return 'suspended';
   return 'full';
 }
 
 export const STATUS_LABEL: Record<SubStatus, string> = {
+  pending: 'Choose a plan',
   trialing: 'Free trial',
   active: 'Active',
   past_due: 'Payment due',
