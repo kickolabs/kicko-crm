@@ -25,7 +25,7 @@ async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = [
 async function signIn(page: Page, who: { email: string; password: string }) {
   await page.goto('/login');
   await page.getByLabel('Work email').fill(who.email);
-  await page.getByLabel('Password').fill(who.password);
+  await page.getByLabel('Password', { exact: true }).fill(who.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
@@ -49,7 +49,8 @@ test.describe.serial('Phase 7e · trust & security', () => {
     await page.goto('/signup');
     await page.getByLabel('Your name').fill('Owner Secure');
     await page.getByLabel('Work email').fill(OWNER.email);
-    await page.getByLabel('Password').fill(OWNER.password);
+    await page.getByLabel('Password', { exact: true }).fill(OWNER.password);
+    await page.getByLabel('Confirm password').fill(OWNER.password);
     await page.getByLabel('Agency name').fill(`Secure Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();
@@ -168,7 +169,8 @@ test.describe('Phase 7e · legal pages', () => {
     await expect(page.getByText('By creating a workspace you agree to the')).toBeVisible();
     await page.getByLabel('Your name').fill('Reserved Test');
     await page.getByLabel('Work email').fill(`p7e-reserved-${Date.now().toString(36)}@example.test`);
-    await page.getByLabel('Password').fill('kicko-pass-123');
+    await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await page.getByLabel('Confirm password').fill('kicko-pass-123');
     await page.getByLabel('Agency name').fill('Privacy Agency');
     await page.getByLabel('Workspace address').fill('privacy');
     await page.getByRole('button', { name: 'Create account & workspace' }).click();

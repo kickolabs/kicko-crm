@@ -46,7 +46,7 @@ test('no console errors on any demo screen', async ({ page }, info) => {
 
   await page.goto('/login');
   await page.getByLabel('Email').fill('demo@kicko.app');
-  await page.getByLabel('Password').fill('demo-pass-123');
+  await page.getByLabel('Password', { exact: true }).fill('demo-pass-123');
   await page.getByRole('button', { name: /sign in/i }).click();
   await page.waitForURL('**/demo', { timeout: 30_000 }).catch(() => test.skip(true, 'Demo workspace not seeded'));
 

@@ -26,7 +26,8 @@ test.describe.serial('Phase 6b · government form auto-fill', () => {
     await staff.goto('/signup');
     await staff.getByLabel('Your name').fill('Owner Forms');
     await staff.getByLabel('Work email').fill(`p6b-${run}@example.test`);
-    await staff.getByLabel('Password').fill('kicko-pass-123');
+    await staff.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await staff.getByLabel('Confirm password').fill('kicko-pass-123');
     await staff.getByLabel('Agency name').fill(`Forms Agency ${run}`);
     await staff.getByLabel('Workspace address').fill(slug);
     await staff.getByRole('button', { name: 'Create account & workspace' }).click();

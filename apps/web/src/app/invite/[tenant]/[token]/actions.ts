@@ -22,10 +22,13 @@ export async function acceptInviteAction(slug: string, token: string): Promise<A
   return res;
 }
 
-const schema = z.object({
-  name: z.string().trim().min(1, 'Your name is required').max(80),
-  password: z.string().min(8, 'At least 8 characters').max(128),
-});
+const schema = z
+  .object({
+    name: z.string().trim().min(1, 'Your name is required').max(80),
+    password: z.string().min(8, 'At least 8 characters').max(128),
+    confirmPassword: z.string(),
+  })
+  .refine((x) => x.password === x.confirmPassword, { message: 'The passwords don’t match', path: ['confirmPassword'] });
 
 /** New teammate: create their account with the invited email, then join. */
 export async function inviteSignUpAction(slug: string, token: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {

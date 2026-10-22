@@ -7,7 +7,7 @@ test('capture demo screens', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/login');
   await page.getByLabel('Work email').fill('demo@kicko.app');
-  await page.getByLabel('Password').fill('demo-pass-123');
+  await page.getByLabel('Password', { exact: true }).fill('demo-pass-123');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL('**/demo');
 

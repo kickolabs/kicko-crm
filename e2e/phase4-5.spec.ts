@@ -17,7 +17,8 @@ test.describe.serial('Phase 4.5 · integrations', () => {
     await staff.goto('/signup');
     await staff.getByLabel('Your name').fill('Owner Fourfive');
     await staff.getByLabel('Work email').fill(`p45-${run}@example.test`);
-    await staff.getByLabel('Password').fill('kicko-pass-123');
+    await staff.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await staff.getByLabel('Confirm password').fill('kicko-pass-123');
     await staff.getByLabel('Agency name').fill(`Integrations Agency ${run}`);
     await staff.getByLabel('Workspace address').fill(slug);
     await staff.getByRole('button', { name: 'Create account & workspace' }).click();

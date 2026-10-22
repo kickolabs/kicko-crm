@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ActionButton, ActionForm, FormField, SubmitButton } from '@/components/forms';
+import { ActionButton, ActionForm, FormField, PasswordInput, SubmitButton } from '@/components/forms';
 import { Input, buttonCls } from '@/components/ui';
 import { signOutAction } from '../../../(auth)/actions';
 import { acceptInviteAction, inviteSignUpAction } from './actions';
@@ -32,7 +32,10 @@ export function InviteSignUp({ slug, token, email }: { slug: string; token: stri
       <FormField label="Email" name="email"><Input name="email" value={email} readOnly disabled /></FormField>
       <FormField label="Your name" name="name"><Input name="name" autoComplete="name" required autoFocus /></FormField>
       <FormField label="Choose a password" name="password" hint="At least 8 characters">
-        <Input name="password" type="password" autoComplete="new-password" required />
+        <PasswordInput name="password" autoComplete="new-password" required />
+      </FormField>
+      <FormField label="Confirm password" name="confirmPassword">
+        <PasswordInput name="confirmPassword" autoComplete="new-password" required />
       </FormField>
       <SubmitButton size="lg" className="w-full">Join the team</SubmitButton>
       <p className="text-center text-sm text-muted">

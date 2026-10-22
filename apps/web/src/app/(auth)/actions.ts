@@ -22,12 +22,15 @@ const agency = {
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers and dashes only'),
 };
 
-const signUpSchema = z.object({
-  name: z.string().trim().min(1, 'Your name is required').max(80),
-  email: z.email('Enter a valid email'),
-  password: z.string().min(8, 'At least 8 characters').max(128),
-  ...agency,
-});
+const signUpSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Your name is required').max(80),
+    email: z.email('Enter a valid email'),
+    password: z.string().min(8, 'At least 8 characters').max(128),
+    confirmPassword: z.string(),
+    ...agency,
+  })
+  .refine((x) => x.password === x.confirmPassword, { message: 'The passwords don’t match', path: ['confirmPassword'] });
 
 async function assertSlugFree(slug: string) {
   if (RESERVED_SLUGS.has(slug)) throw new UserError('That address is reserved. Try another.');

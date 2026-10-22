@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ActionForm, FormField, SubmitButton } from '@/components/forms';
+import { ActionForm, FormField, PasswordInput, SubmitButton } from '@/components/forms';
 import { Input } from '@/components/ui';
 import { signInAction, signUpAction, verifySecondFactorAction } from './actions';
 
@@ -17,7 +17,7 @@ export function SignInForm({ next }: { next?: string }) {
         <Input name="email" type="email" autoComplete="email" required autoFocus />
       </FormField>
       <FormField label="Password" name="password">
-        <Input name="password" type="password" autoComplete="current-password" required />
+        <PasswordInput name="password" autoComplete="current-password" required />
       </FormField>
       <SubmitButton size="lg" className="mt-2 w-full">
         Sign in
@@ -77,9 +77,14 @@ export function SignUpForm({ signedInAs }: { signedInAs?: string }) {
               <Input name="email" type="email" autoComplete="email" required />
             </FormField>
           </div>
-          <FormField label="Password" name="password" hint="At least 8 characters">
-            <Input name="password" type="password" autoComplete="new-password" required minLength={8} />
-          </FormField>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Password" name="password" hint="At least 8 characters">
+              <PasswordInput name="password" autoComplete="new-password" required minLength={8} />
+            </FormField>
+            <FormField label="Confirm password" name="confirmPassword">
+              <PasswordInput name="confirmPassword" autoComplete="new-password" required minLength={8} />
+            </FormField>
+          </div>
           <div className="my-1 h-px bg-line" />
         </>
       )}

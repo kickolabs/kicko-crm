@@ -11,11 +11,33 @@ import {
   useRef,
   useState,
   useTransition,
+  type ComponentProps,
   type ReactNode,
 } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { twMerge } from 'tailwind-merge';
 import { useFormStatus } from 'react-dom';
 import type { ActionResult } from '@/lib/action';
-import { buttonCls } from './ui';
+import { buttonCls, inputCls } from './ui';
+
+/** Password field with a show/hide toggle. `className` sizes the field (e.g. w-56). */
+export function PasswordInput({ className, ...props }: Omit<ComponentProps<'input'>, 'type'>) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className={twMerge('relative block w-full', className)}>
+      <input id={props.id ?? props.name} type={shown ? 'text' : 'password'} className={twMerge(inputCls, 'pr-11')} {...props} />
+      <button
+        type="button"
+        onClick={() => setShown((v) => !v)}
+        aria-label={shown ? 'Hide password' : 'Show password'}
+        aria-pressed={shown}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-[11px] text-muted hover:text-ink"
+      >
+        {shown ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+      </button>
+    </span>
+  );
+}
 
 const ErrorsCtx = createContext<Record<string, string>>({});
 

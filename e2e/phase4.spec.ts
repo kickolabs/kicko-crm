@@ -46,7 +46,8 @@ test.describe.serial('Phase 4 · WhatsApp (sandbox)', () => {
     await page.goto('/signup');
     await page.getByLabel('Your name').fill('Owner Four');
     await page.getByLabel('Work email').fill(`p4-${run}@example.test`);
-    await page.getByLabel('Password').fill('kicko-pass-123');
+    await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await page.getByLabel('Confirm password').fill('kicko-pass-123');
     await page.getByLabel('Agency name').fill(`WA Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();

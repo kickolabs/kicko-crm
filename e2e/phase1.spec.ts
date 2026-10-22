@@ -11,7 +11,8 @@ async function signUp(page: Page, who: typeof owner, ag: typeof agency) {
   await page.goto('/signup');
   await page.getByLabel('Your name').fill(who.name);
   await page.getByLabel('Work email').fill(who.email);
-  await page.getByLabel('Password').fill(who.password);
+  await page.getByLabel('Password', { exact: true }).fill(who.password);
+  await page.getByLabel('Confirm password').fill(who.password);
   await page.getByLabel('Agency name').fill(ag.name);
   await page.getByLabel('Workspace address').fill(ag.slug);
   await page.getByRole('button', { name: 'Create account & workspace' }).click();
@@ -161,6 +162,7 @@ test.describe.serial('Phase 1', () => {
     await expect(p2.getByRole('heading', { name: `Join ${agency.name} on Kicko` })).toBeVisible();
     await p2.getByLabel('Your name').fill('Divya Counsellor');
     await p2.getByLabel('Choose a password').fill('kicko-pass-456');
+    await p2.getByLabel('Confirm password').fill('kicko-pass-456');
     await p2.getByRole('button', { name: 'Join the team' }).click();
     await p2.waitForURL(`**/${agency.slug}`);
     // Counsellors don't get settings.

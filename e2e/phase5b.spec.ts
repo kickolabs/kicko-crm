@@ -76,7 +76,8 @@ test.describe.serial('Phase 5b · WhatsApp AI assistant (sandbox)', () => {
     await page.goto('/signup');
     await page.getByLabel('Your name').fill('Meera Owner');
     await page.getByLabel('Work email').fill(`p5b-${run}@example.test`);
-    await page.getByLabel('Password').fill('kicko-pass-123');
+    await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await page.getByLabel('Confirm password').fill('kicko-pass-123');
     await page.getByLabel('Agency name').fill(`Bot Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();

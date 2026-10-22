@@ -25,7 +25,8 @@ test.describe.serial('Phase 5d · eligibility & document checks', () => {
     await page.goto('/signup');
     await page.getByLabel('Your name').fill('Owner Fived');
     await page.getByLabel('Work email').fill(`p5d-${run}@example.test`);
-    await page.getByLabel('Password').fill('kicko-pass-123');
+    await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await page.getByLabel('Confirm password').fill('kicko-pass-123');
     await page.getByLabel('Agency name').fill(`Points Agency ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();

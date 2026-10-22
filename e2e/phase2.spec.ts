@@ -21,7 +21,8 @@ test.describe.serial('Phase 2', () => {
     await page.goto('/signup');
     await page.getByLabel('Your name').fill('Owner Two');
     await page.getByLabel('Work email').fill(`p2-${run}@example.test`);
-    await page.getByLabel('Password').fill('kicko-pass-123');
+    await page.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await page.getByLabel('Confirm password').fill('kicko-pass-123');
     await page.getByLabel('Agency name').fill(`Phase Two ${run}`);
     await page.getByLabel('Workspace address').fill(slug);
     await page.getByRole('button', { name: 'Create account & workspace' }).click();

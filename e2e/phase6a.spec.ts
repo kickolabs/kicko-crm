@@ -26,7 +26,8 @@ test.describe.serial('Phase 6a · sub-agent network', () => {
     await staff.goto('/signup');
     await staff.getByLabel('Your name').fill('Owner Six');
     await staff.getByLabel('Work email').fill(`p6a-${run}@example.test`);
-    await staff.getByLabel('Password').fill('kicko-pass-123');
+    await staff.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await staff.getByLabel('Confirm password').fill('kicko-pass-123');
     await staff.getByLabel('Agency name').fill(`Network Agency ${run}`);
     await staff.getByLabel('Workspace address').fill(slug);
     await staff.getByRole('button', { name: 'Create account & workspace' }).click();

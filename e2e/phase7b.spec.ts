@@ -37,7 +37,8 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     await owner.goto('/signup');
     await owner.getByLabel('Your name').fill('Owner Console');
     await owner.getByLabel('Work email').fill(`p7b-${run}@example.test`);
-    await owner.getByLabel('Password').fill('kicko-pass-123');
+    await owner.getByLabel('Password', { exact: true }).fill('kicko-pass-123');
+    await owner.getByLabel('Confirm password').fill('kicko-pass-123');
     await owner.getByLabel('Agency name').fill(agency);
     await owner.getByLabel('Workspace address').fill(slug);
     await owner.getByRole('button', { name: 'Create account & workspace' }).click();
@@ -54,7 +55,7 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     });
     await admin.goto('/login');
     await admin.getByLabel('Email').fill(ADMIN.email);
-    await admin.getByLabel('Password').fill(ADMIN.password);
+    await admin.getByLabel('Password', { exact: true }).fill(ADMIN.password);
     await admin.getByRole('button', { name: /sign in/i }).click();
     await admin.waitForURL((u) => !u.pathname.startsWith('/login'));
   });

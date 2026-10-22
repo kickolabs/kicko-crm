@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { ActionButton, ActionForm, FormBanner, FormField, SubmitButton } from '@/components/forms';
+import { ActionButton, ActionForm, FormBanner, FormField, PasswordInput, SubmitButton } from '@/components/forms';
 import { Badge, Button, Input } from '@/components/ui';
 import { changePasswordAction, confirmTwoFactorAction, disableTwoFactorAction, newBackupCodesAction, revokeOtherSessionsAction, startTwoFactorAction } from './actions';
 
@@ -39,7 +39,7 @@ export function TwoFactorCard({ enabled, required }: { enabled: boolean; require
             {codes && !codes.ok && <FormBanner tone="error">{codes.error}</FormBanner>}
             <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
               Password
-              <Input name="password" type="password" autoComplete="current-password" aria-label="Password for new backup codes" className="w-56" />
+              <PasswordInput name="password" autoComplete="current-password" aria-label="Password for new backup codes" className="w-56" />
             </label>
             <SubmitButton variant="secondary">New backup codes</SubmitButton>
           </form>
@@ -50,7 +50,7 @@ export function TwoFactorCard({ enabled, required }: { enabled: boolean; require
           <ActionForm action={disableTwoFactorAction} className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
               Password
-              <Input name="password" type="password" autoComplete="current-password" aria-label="Password to turn off" className="w-56" />
+              <PasswordInput name="password" autoComplete="current-password" aria-label="Password to turn off" className="w-56" />
             </label>
             <SubmitButton variant="danger">Turn off</SubmitButton>
             <Button variant="ghost" onClick={() => setDisabling(false)}>Cancel</Button>
@@ -105,7 +105,7 @@ export function TwoFactorCard({ enabled, required }: { enabled: boolean; require
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
           Confirm your password
-          <Input name="password" type="password" autoComplete="current-password" aria-label="Password to set up two-step sign-in" className="w-56" />
+          <PasswordInput name="password" autoComplete="current-password" aria-label="Password to set up two-step sign-in" className="w-56" />
         </label>
         <SubmitButton>Set up two-step sign-in</SubmitButton>
       </div>
@@ -118,9 +118,9 @@ export function PasswordForm() {
   return (
     <ActionForm action={changePasswordAction} resetOnSuccess onSuccess={() => setDone(true)} className="grid gap-3 sm:grid-cols-3">
       {done && <div className="sm:col-span-3"><FormBanner tone="ok">Password changed. Other devices were signed out.</FormBanner></div>}
-      <FormField label="Current password" name="current"><Input id="current" name="current" type="password" autoComplete="current-password" /></FormField>
-      <FormField label="New password" name="next"><Input id="next" name="next" type="password" autoComplete="new-password" /></FormField>
-      <FormField label="Repeat new password" name="confirm"><Input id="confirm" name="confirm" type="password" autoComplete="new-password" /></FormField>
+      <FormField label="Current password" name="current"><PasswordInput id="current" name="current" autoComplete="current-password" /></FormField>
+      <FormField label="New password" name="next"><PasswordInput id="next" name="next" autoComplete="new-password" /></FormField>
+      <FormField label="Repeat new password" name="confirm"><PasswordInput id="confirm" name="confirm" autoComplete="new-password" /></FormField>
       <SubmitButton variant="secondary" className="self-start sm:col-span-3">Change password</SubmitButton>
     </ActionForm>
   );
