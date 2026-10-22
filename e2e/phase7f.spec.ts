@@ -55,12 +55,16 @@ test.describe('Phase 7f · website', () => {
   });
 
   test('works on a phone without sideways scrolling', async ({ browser }) => {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    for (const path of ['/', '/pricing']) {
-      await page.goto(path);
-      expect(await noSideScroll(page), path).toBe(true);
+    // 360px as well as 390px: text renders slightly wider on Linux than Windows,
+    // so a page that only just fits at 390 here can overflow on CI or a real phone.
+    for (const width of [390, 360]) {
+      const page = await browser.newPage({ viewport: { width, height: 844 } });
+      for (const path of ['/', '/pricing']) {
+        await page.goto(path);
+        expect(await noSideScroll(page), `${path} at ${width}px`).toBe(true);
+      }
+      await page.close();
     }
-    await page.close();
   });
 
   test('search engines see the website, not workspaces', async ({ request }) => {

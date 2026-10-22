@@ -62,9 +62,9 @@ export function ChatShot() {
 
 export function CallShot() {
   return (
-    <div className="flex items-center gap-3 rounded-full bg-ink py-2 pr-4 pl-2 text-paper shadow-[var(--shadow-pop)]">
+    <div className="flex max-w-full min-w-0 items-center gap-3 rounded-full bg-ink py-2 pr-4 pl-2 text-paper shadow-[var(--shadow-pop)]">
       <span className="grid size-9 place-items-center rounded-full bg-lime text-ink"><Phone size={16} /></span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-xs font-bold">Ravi Kumar · 04:12</div>
         <div className="truncate text-[11px] text-paper/60">“…my wife will come as a dependant…”</div>
       </div>

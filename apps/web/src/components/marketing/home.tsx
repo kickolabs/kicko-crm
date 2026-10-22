@@ -50,7 +50,7 @@ export function MarketingHome() {
             </div>
             <p className="mt-4 text-sm text-muted">No card needed · Set up in minutes · Import from Excel or Zoho</p>
           </div>
-          <div className="relative flex flex-col gap-4" aria-label="Kicko screens">
+          <div className="relative flex min-w-0 flex-col gap-4" aria-label="Kicko screens">
             <JourneyShot />
             {/* The WhatsApp chat has its own section below; here it would be too narrow. */}
             <div className="grid gap-4 sm:grid-cols-2 sm:items-center">
@@ -227,7 +227,7 @@ export function MarketingHome() {
 function Feature({ eyebrow, title, points, shot, flip }: { eyebrow: string; title: string; points: string[]; shot: React.ReactNode; flip?: boolean }) {
   return (
     <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-14 lg:grid-cols-2">
-      <div className={flip ? 'lg:order-2' : ''}>
+      <div className={`min-w-0 ${flip ? 'lg:order-2' : ''}`}>
         <span className="eyebrow">{eyebrow}</span>
         <h2 className="mt-2 text-[30px] leading-tight font-extrabold tracking-[-0.035em] sm:text-[36px]">{title}</h2>
         <ul className="mt-5 flex flex-col gap-3">
@@ -239,7 +239,7 @@ function Feature({ eyebrow, title, points, shot, flip }: { eyebrow: string; titl
           ))}
         </ul>
       </div>
-      <div className={`rounded-[28px] bg-paper-2 p-6 sm:p-10 ${flip ? 'lg:order-1' : ''}`}>{shot}</div>
+      <div className={`min-w-0 rounded-[28px] bg-paper-2 p-6 sm:p-10 ${flip ? 'lg:order-1' : ''}`}>{shot}</div>
     </section>
   );
 }
