@@ -1,4 +1,4 @@
-# Weekly library updates, grouped so they arrive as a few PRs (CI tests each one).
+# Weekly minor/patch library updates, grouped so they arrive as a few PRs (CI tests each one).
 version: 2
 updates:
   - package-ecosystem: npm
@@ -8,6 +8,11 @@ updates:
       day: monday
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
+    # Major versions (e.g. Prisma 7, Next 16, TypeScript 7) change behaviour and are
+    # upgraded deliberately, not by bot.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       minor-and-patch:
         update-types: [minor, patch]

@@ -17,13 +17,21 @@ const PASSWORD = 'demo-pass-123';
 async function account(name: string, email: string) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return existing.id;
-  const res = await fetch(`${APP}/api/auth/sign-up/email`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: APP },
-    body: JSON.stringify({ name, email, password: PASSWORD }),
-  });
-  if (!res.ok) throw new Error(`Sign-up failed for ${email}: ${res.status} ${await res.text()}`);
-  return ((await res.json()) as { user: { id: string } }).user.id;
+  // A production build allows 3 sign-ups per 10 seconds; wait and retry when told to.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${APP}/api/auth/sign-up/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: APP },
+      body: JSON.stringify({ name, email, password: PASSWORD }),
+    });
+    if (res.status === 429 && attempt < 5) {
+      const wait = Number(res.headers.get('x-retry-after') ?? res.headers.get('retry-after') ?? 10);
+      await new Promise((r) => setTimeout(r, (wait + 1) * 1000));
+      continue;
+    }
+    if (!res.ok) throw new Error(`Sign-up failed for ${email}: ${res.status} ${await res.text()}`);
+    return ((await res.json()) as { user: { id: string } }).user.id;
+  }
 }
 
 const days = (n: number) => new Date(Date.now() + n * 86400_000);
