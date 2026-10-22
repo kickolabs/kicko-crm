@@ -12,15 +12,28 @@ import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { hasFeature } from '@/lib/plans';
 import { AI_SHORT } from '@/lib/brand';
-import { getCtx, getTeam } from '@/lib/tenant';
+import { db, getCtx, getTeam } from '@/lib/tenant';
 import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { stagesOf } from '@/server/cases';
 import { getCase, listBranches } from '@/server/queries';
+import { routeFor } from '@/lib/route';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
 import { Timeline } from '../../_components/timeline';
 import { DetailsForm, Journey, StatusControls } from './case-controls';
 import { BranchSelect } from '../../_components/branch-select';
 import { setRecordBranchAction } from '../../actions-branches';
+
+// Study applications that decide where the client is headed, best first.
+const COLLEGE_RANK = ['ENROLLED', 'ACCEPTED', 'UNCONDITIONAL_OFFER', 'CONDITIONAL_OFFER'];
+
+// Stage → the key date shown under it while it's still ahead.
+const UPCOMING_DATES: [RegExp, string, string][] = [
+  [/biometric/, 'biometrics', ''],
+  [/medical|health|tb_test/, 'medical', ''],
+  [/interview/, 'interview', ''],
+  [/decision/, 'expected_decision', 'est. '],
+  [/pre_departure|travel/, 'travel', 'flight '],
+];
 
 // Key dates tracked on every case; product-specific milestones live on the journey.
 const DATE_FIELDS = [
@@ -63,6 +76,16 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
   const reached: Record<string, string> = {};
   for (const h of c.history) reached[h.toKey] = fmtDate(h.at, tz, { year: undefined });
   const name = fullName(c.client);
+  // The journey's route line and the dates still ahead (appointments, estimated decision).
+  const college = [...apps].sort((a, b) => COLLEGE_RANK.indexOf(a.status) - COLLEGE_RANK.indexOf(b.status)).find((a) => COLLEGE_RANK.includes(a.status) && a.institution.city);
+  const homeBranch = c.branch ?? (await db(ctx, (tx) => tx.branch.findFirst({ orderBy: { createdAt: 'asc' } })));
+  const route = routeFor({ fromCity: homeBranch?.city, toCity: college?.institution.city, toCountry: c.product.country, countryName: COUNTRIES[c.product.country] ?? c.product.country });
+  const ahead: Record<string, string> = {};
+  for (const s of stages) {
+    const hit = UPCOMING_DATES.find(([re]) => re.test(s.key));
+    const v = hit && dates[hit[1]];
+    if (v && /^d{4}-d{2}-d{2}/.test(v)) ahead[s.key] = `${hit[2]}${fmtDate(new Date(`${v.slice(0, 10)}T00:00:00Z`), 'UTC', { year: undefined })}`;
+  }
   const daysOpen = Math.max(0, Math.floor((Date.now() - c.createdAt.getTime()) / 86400_000));
   const dependants = c.client.family.filter((f) => f.included);
 
@@ -114,7 +137,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
         </div>
       </header>
 
-      <Journey slug={slug} caseId={c.id} stages={stages} current={c.stageKey} dates={reached} editable={editable} />
+      <Journey slug={slug} caseId={c.id} stages={stages} current={c.stageKey} dates={reached} ahead={ahead} route={route} editable={editable} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-5">

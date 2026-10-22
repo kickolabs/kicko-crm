@@ -199,6 +199,7 @@ export function getCase(ctx: Ctx, id: string) {
       include: {
         client: { include: { family: true } },
         product: true,
+        branch: true,
         history: { orderBy: { at: 'asc' } },
         tasks: { orderBy: [{ done: 'asc' }, { dueAt: 'asc' }] },
         appointments: { orderBy: { startsAt: 'desc' } },
