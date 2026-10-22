@@ -3,7 +3,6 @@ import type { CaseStatus, LeadStatus, Prisma, VisaCategory } from '@kicko/db';
 import { dayBounds } from '@/lib/format';
 import { db, type Ctx } from '@/lib/tenant';
 import { stagesOf } from './cases';
-import { casePhaseWhere } from './stage-flow';
 
 // Read models for pages. All run inside the tenant's RLS context.
 
@@ -18,13 +17,15 @@ export function getDashboard(ctx: Ctx) {
 
   return db(ctx, async (tx) => {
     const [
-      newLeads, won30, lost30, activeCases, lodgedMonth,
+      leadsByStatus, newLeads, won30, lost30, casesByCategory, activeCases, lodgedMonth,
       overdueTasks, todayTasks, unassigned, waiting, appointments, stuckCases, recent,
       docsToReview, collectedMonth, overdueInst,
     ] = await Promise.all([
+      tx.lead.groupBy({ by: ['status'], _count: { _all: true } }),
       tx.lead.count({ where: { createdAt: { gte: weekAgo } } }),
       tx.lead.count({ where: { status: 'WON', updatedAt: { gte: monthAgo } } }),
       tx.lead.count({ where: { status: 'LOST', updatedAt: { gte: monthAgo } } }),
+      tx.case.findMany({ where: { status: { not: 'CLOSED' } }, select: { product: { select: { category: true } } } }),
       tx.case.count({ where: { status: 'OPEN' } }),
       tx.case.count({ where: { lodgedAt: { gte: monthStart } } }),
       tx.task.findMany({
@@ -62,9 +63,14 @@ export function getDashboard(ctx: Ctx) {
     ]);
     const overduePayments = overdueInst.filter((i) => i.paidAmount < i.amount);
 
+    const byCategory = new Map<VisaCategory, number>();
+    for (const c of casesByCategory) byCategory.set(c.product.category, (byCategory.get(c.product.category) ?? 0) + 1);
+
     return {
+      leadsByStatus: Object.fromEntries(leadsByStatus.map((g) => [g.status, g._count._all])) as Partial<Record<LeadStatus, number>>,
       newLeads,
       conversion: won30 + lost30 ? Math.round((won30 / (won30 + lost30)) * 100) : null,
+      casesByCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
       activeCases,
       lodgedMonth,
       overdueTasks,
@@ -164,16 +170,11 @@ export function getClient(ctx: Ctx, id: string) {
   );
 }
 
-export type CaseFilters = { q?: string; status?: string; category?: string; product?: string; owner?: string; branch?: string; phase?: string };
+export type CaseFilters = { q?: string; status?: string; category?: string; product?: string; owner?: string; branch?: string };
 
 export function listCases(ctx: Ctx, f: CaseFilters) {
   const where: Prisma.CaseWhereInput = { status: (f.status as CaseStatus) || { not: 'CLOSED' } };
   if (f.status === 'ALL') delete where.status;
-  // Dashboard stage flow: a phase sets its own status rules (decided includes closed cases).
-  if (f.phase === 'preparing' || f.phase === 'lodged' || f.phase === 'decided') {
-    delete where.status;
-    Object.assign(where, casePhaseWhere(f.phase));
-  }
   if (f.category) where.product = { category: f.category as VisaCategory };
   if (f.product) where.productId = f.product;
   if (f.owner === 'me') where.ownerId = ctx.user.id;
