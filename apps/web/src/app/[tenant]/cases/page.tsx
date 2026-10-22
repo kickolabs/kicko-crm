@@ -22,10 +22,18 @@ export default async function CasesPage({
   const [cases, team, products, branches] = await Promise.all([listCases(ctx, sp), getTeam(ctx), listProducts(ctx), listBranches(ctx)]);
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
 
+  const phase = ({ preparing: 'Preparing: not yet lodged', lodged: 'Lodged: waiting for a decision', decided: 'Decided in the last 90 days' } as Record<string, string>)[sp.phase ?? ''];
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
       <PageHeader title="Cases" sub={`${cases.length} shown · open a case from a client's profile`} />
+      {phase && (
+        <p className="-mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <Badge tone="info">{phase}</Badge>
+          <Link href={`/${slug}/cases`} className="font-semibold text-muted hover:text-ink">Show all cases</Link>
+        </p>
+      )}
       <form className="flex flex-wrap items-end gap-2.5" role="search">
+        {sp.phase && <input type="hidden" name="phase" value={sp.phase} />}
         <label className="sr-only" htmlFor="q">Search cases</label>
         <Input name="q" defaultValue={sp.q} placeholder="Client name or case ref" className="w-60" />
         <Select name="category" defaultValue={sp.category ?? ''} aria-label="Visa type" className="w-36">

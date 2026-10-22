@@ -65,6 +65,15 @@ export async function moveStage(scope: Scope, caseId: string, toKey: string) {
   return res.updated;
 }
 
+const LODGED = /lodged|submitted|petition_filed/;
+
+/** Is `key` the product's lodged stage or any stage after it? */
+export function lodgedBy(stages: { key: string }[], key: string) {
+  const at = stages.findIndex((s) => LODGED.test(s.key));
+  const idx = stages.findIndex((s) => s.key === key);
+  return at >= 0 && idx >= at;
+}
+
 function moveStageTx(scope: Scope, caseId: string, toKey: string) {
   return inTenant(scope, async (tx) => {
     const c = await tx.case.findUnique({ where: { id: caseId }, include: { product: true, client: true } });
@@ -82,8 +91,8 @@ function moveStageTx(scope: Scope, caseId: string, toKey: string) {
       data: {
         stageKey: to.key,
         stageSince: now,
-        // First time a case reaches a "lodged"/"submitted" stage, stamp the date.
-        lodgedAt: !c.lodgedAt && /lodged|submitted|petition_filed/.test(to.key) ? now : undefined,
+        // First time a case reaches (or skips past) its "lodged"/"submitted" stage, stamp the date.
+        lodgedAt: !c.lodgedAt && lodgedBy(stages, to.key) ? now : undefined,
       },
     });
     await tx.stageHistory.create({

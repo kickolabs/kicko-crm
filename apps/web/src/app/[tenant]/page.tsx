@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, CalendarClock, DoorOpen, MessageCircle, Phone } from 'lucide-react';
 import { Badge, Card, CardHeader, LinkButton, Stat } from '@/components/ui';
-import { CATEGORY_LABEL, LEAD_STATUS_LABEL, LEAD_STATUSES } from '@/lib/constants';
 import { fmtTime, fullName, relative } from '@/lib/format';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
@@ -9,16 +8,26 @@ import { can } from '@/lib/permissions';
 import { hasFeature } from '@/lib/plans';
 import { liveNow } from '@/server/copilot';
 import { getKpiTrends } from '@/server/kpis';
-import { getDashboard } from '@/server/queries';
+import { getStageFlow } from '@/server/stage-flow';
+import { StageFlow } from './_components/stage-flow';
+import { getDashboard, listBranches } from '@/server/queries';
 import { CopilotBrief, CopilotUpsell } from './_components/copilot';
 import { GetStarted } from './_components/get-started';
 
 export const metadata = { title: 'Command' };
 
-export default async function Dashboard({ params }: { params: Promise<{ tenant: string }> }) {
+export default async function Dashboard({ params, searchParams }: { params: Promise<{ tenant: string }>; searchParams: Promise<{ flowType?: string; flowBranch?: string }> }) {
   const { tenant: slug } = await params;
+  const sp = await searchParams;
   const ctx = await getCtx(slug);
-  const [d, team, live, k] = await Promise.all([getDashboard(ctx), getTeam(ctx), liveNow(ctx), getKpiTrends(ctx)]);
+  const [d, team, live, k, flow, branches] = await Promise.all([
+    getDashboard(ctx),
+    getTeam(ctx),
+    liveNow(ctx),
+    getKpiTrends(ctx),
+    getStageFlow(ctx, { category: sp.flowType, branch: sp.flowBranch }),
+    listBranches(ctx),
+  ]);
   const tz = ctx.tenant.timezone;
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const weekday = new Intl.DateTimeFormat('en-IN', { weekday: 'long', timeZone: tz }).format(new Date());
@@ -29,9 +38,6 @@ export default async function Dashboard({ params }: { params: Promise<{ tenant: 
   const payRows = billing ? d.overduePayments : [];
   const needs = d.overdueTasks.length + d.todayTasks.length + d.unassigned.length + d.waiting + d.stuckCases.length + docRows.length + payRows.length;
 
-  const funnel = LEAD_STATUSES.filter((s) => s !== 'LOST').map((s) => ({ s, n: d.leadsByStatus[s] ?? 0 }));
-  const funnelMax = Math.max(1, ...funnel.map((f) => f.n));
-  const caseMax = Math.max(1, ...d.casesByCategory.map(([, n]) => n));
   // Copilot: on plans that include it; on Starter only people who can upgrade see the offer.
   const copilot = Boolean(ctx.subscription && hasFeature(ctx.subscription, 'copilot'));
   const rail = copilot ? (
@@ -98,25 +104,9 @@ export default async function Dashboard({ params }: { params: Promise<{ tenant: 
           </section>
 
           <div className="grid gap-5 lg:grid-cols-5">
-            <Card className="lg:col-span-3">
-              <CardHeader title="Lead pipeline" action={<Link href={`/${slug}/leads`} className="text-xs font-semibold text-muted hover:text-ink">Open board →</Link>} />
-              <div className="grid grid-cols-[120px_1fr_44px] items-center gap-x-4 gap-y-3 px-5 py-5 text-[13px]">
-                {funnel.map(({ s, n }) => (
-                  <Bar key={s} label={LEAD_STATUS_LABEL[s]} n={n} pct={(n / funnelMax) * 100} href={`/${slug}/leads?view=table&status=${s}`} lime={s === 'WON'} />
-                ))}
-              </div>
-              {d.casesByCategory.length > 0 && (
-                <div className="flex flex-wrap gap-2 border-t border-line px-5 py-4">
-                  <span className="eyebrow mr-1 self-center">Active cases</span>
-                  {d.casesByCategory.map(([cat, n]) => (
-                    <Link key={cat} href={`/${slug}/cases?category=${cat}`} className="rounded-full bg-paper px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-paper-2">
-                      {CATEGORY_LABEL[cat]} {n}
-                      <span className="ml-2 inline-block h-1.5 rounded-full bg-ink/70 align-middle" style={{ width: `${Math.max(8, (n / caseMax) * 40)}px` }} />
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Card>
+            <div className="lg:col-span-3">
+              <StageFlow slug={slug} flow={flow} branches={branches} />
+            </div>
 
             <section aria-label="Today" className="flex flex-col gap-3 rounded-[var(--radius-card)] bg-ink p-5 text-paper lg:col-span-2">
               <div className="flex items-center gap-2">
@@ -337,24 +327,3 @@ function tone(points: (number | null)[]): 'ok' | 'warn' | undefined {
   return last > prev ? 'ok' : 'warn';
 }
 
-function Bar({ label, n, pct, href, lime }: { label: string; n: number; pct: number; href: string; lime?: boolean }) {
-  return (
-    <>
-      <Link href={href} className="font-medium text-ink-2 hover:text-ink">
-        {label}
-      </Link>
-      <div className="h-3 rounded-full bg-paper-2">
-        <div
-          className="h-3 rounded-full"
-          style={{
-            width: `${Math.max(n ? 3 : 0, pct)}%`,
-            background: lime ? 'var(--color-lime)' : 'var(--color-ink)',
-            opacity: lime ? 1 : 0.25 + (pct / 100) * 0.6,
-            boxShadow: lime ? 'inset 0 0 0 1px rgb(18 20 23 / 0.25)' : undefined,
-          }}
-        />
-      </div>
-      <span className="text-right font-bold">{n}</span>
-    </>
-  );
-}
