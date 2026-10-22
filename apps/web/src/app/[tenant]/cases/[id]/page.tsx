@@ -94,9 +94,10 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
       </nav>
 
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex items-center gap-4">
+        {/* Shrinks (the subtitle wraps) so the facts and buttons stay beside the name. */}
+        <div className="flex min-w-0 flex-[1_1_360px] items-center gap-4">
           <Avatar name={name} size={60} tone="lime" />
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-0 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-[34px] leading-none font-extrabold tracking-[-0.04em] sm:text-[40px]">
                 <Link href={`/${slug}/clients/${c.client.id}`} className="hover:underline">{name}</Link>
@@ -117,7 +118,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-end gap-6">
+        <div className="flex flex-wrap items-end gap-6 lg:ml-auto lg:shrink-0 lg:justify-end">
           <Fact label="Case" value={c.ref} />
           <Fact label="Days open" value={String(daysOpen)} />
           <Fact label="Lodged" value={c.lodgedAt ? fmtDate(c.lodgedAt, tz) : '—'} />
