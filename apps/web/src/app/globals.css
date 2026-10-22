@@ -101,8 +101,14 @@
 .wave > span:nth-child(5) { animation-delay: -0.2s; }
 .wave.idle > span { animation: none; transform: scaleY(0.25); opacity: 0.5; }
 
+/* Case journey: the leg in progress, dashes moving towards the next step (6+6 dash = 12, two cycles). */
+@keyframes route-dash {
+  to { stroke-dashoffset: -24; }
+}
+.route-dash { animation: route-dash 1.2s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .live-dot, .pop-in, .wave > span { animation: none; }
+  .live-dot, .pop-in, .wave > span, .route-dash { animation: none; }
 }
 
 dialog::backdrop {

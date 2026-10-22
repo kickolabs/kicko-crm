@@ -150,7 +150,7 @@ export function Journey({
           <path d="M0 60 H1200 M0 130 H1200 M0 200 H1200" stroke="rgb(255 255 255 / 0.05)" strokeWidth="1" />
           <polyline points={along(0, 1)} fill="none" stroke="rgb(255 255 255 / 0.18)" strokeWidth="2" strokeDasharray="4 8" />
           {idx > 0 && <polyline points={along(0, t(idx))} fill="none" stroke="url(#journey-done)" strokeWidth="3" strokeLinecap="round" />}
-          {next && <polyline points={along(t(idx), t(idx + 1))} fill="none" stroke="#C8FF3D" strokeOpacity="0.6" strokeWidth="2" strokeDasharray="6 6" />}
+          {next && <polyline className="route-dash" points={along(t(idx), t(idx + 1))} fill="none" stroke="#C8FF3D" strokeOpacity="0.6" strokeWidth="2" strokeDasharray="6 6" />}
         </svg>
         <ol className="absolute inset-0">
           {stages.map((s, i) => {
