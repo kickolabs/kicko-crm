@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { LogoMark } from '@/components/logo';
 import { SubmitButton } from '@/components/forms';
@@ -32,6 +33,11 @@ export default async function SandboxCheckout({ searchParams }: { searchParams: 
         <form action={paySandbox.bind(null, sp)}>
           <SubmitButton variant="lime" size="lg" className="w-full">Simulate successful payment</SubmitButton>
         </form>
+        {/^[a-z0-9-]+$/.test(sp.slug) && (
+          <Link href={`/${sp.slug}/settings?tab=plan`} className="-mt-2 text-center text-sm font-semibold text-muted hover:text-ink">
+            Cancel and go back
+          </Link>
+        )}
         <p className="text-xs leading-relaxed text-muted">No money moves. With Kicko's Razorpay account connected, this is Razorpay's checkout (UPI AutoPay, cards, e-mandate).</p>
       </div>
     </div>

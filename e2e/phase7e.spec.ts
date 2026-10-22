@@ -60,7 +60,7 @@ test.describe.serial('Phase 7e · trust & security', () => {
   test('turn on two-step sign-in from My account', async () => {
     await page.getByRole('button', { name: /^Account:/ }).click();
     await page.getByRole('menuitem', { name: 'My account & security' }).click();
-    await page.waitForURL('**/account');
+    await page.waitForURL(/\/account(\?.*)?$/);
     ({ secret, codes: backup } = await enableTwoStep(page, OWNER.password));
     expect(backup).toHaveLength(10);
     const [u] = await q<{ on: boolean }>(`SELECT "twoFactorEnabled" AS on FROM "user" WHERE email = $1`, [OWNER.email]);

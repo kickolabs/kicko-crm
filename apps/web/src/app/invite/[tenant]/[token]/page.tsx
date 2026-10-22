@@ -17,7 +17,7 @@ export default async function InvitePage({ params }: { params: Promise<{ tenant:
 
   return (
     <div className="dotgrid flex min-h-dvh flex-col">
-      <header className="px-6 py-5"><Logo /></header>
+      <header className="px-6 py-5"><Link href="/" aria-label="Kicko home" className="inline-flex"><Logo /></Link></header>
       <main className="flex flex-1 items-start justify-center px-4 pt-8 pb-16">
         <div className="card pop-in w-full max-w-md p-8">
           {!tenant || !invite ? (

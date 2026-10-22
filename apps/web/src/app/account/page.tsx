@@ -15,7 +15,7 @@ import { PasswordForm, SessionsList, TwoFactorCard } from './account-forms';
 export const metadata = { title: 'My account' };
 export const dynamic = 'force-dynamic';
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ required?: string; admin?: string }> }) {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ required?: string; admin?: string; from?: string }> }) {
   const sp = await searchParams;
   const session = await getSession();
   if (!session) redirect('/login?next=/account');
@@ -34,6 +34,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <form action={signOutAction}><button type="submit" className="rounded-[9px] px-2.5 py-1 text-xs font-semibold text-muted hover:bg-ink/5 hover:text-ink">Sign out</button></form>
       </header>
       <main className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-8">
+        {(() => {
+          const from = tenants.find((t) => t.slug === sp.from) ?? (tenants.length === 1 ? tenants[0] : undefined);
+          const back = from ? { href: `/${from.slug}`, label: `Back to ${from.name}` } : tenants.length ? { href: '/?choose=1', label: 'Back to your workspaces' } : isAdmin ? { href: '/admin', label: 'Back to Kicko admin' } : null;
+          return back && <Link href={back.href} className="-mb-2 self-start text-sm font-semibold text-muted hover:text-ink">← {back.label}</Link>;
+        })()}
         <div>
           <h1 className="text-[34px] leading-tight font-extrabold tracking-[-0.04em]">My account</h1>
           <p className="text-sm text-muted">{user.name} · {user.email}</p>

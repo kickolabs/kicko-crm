@@ -8,7 +8,7 @@ import { Avatar } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/permissions';
 import { signOutAction } from '../../(auth)/actions';
 
-export function UserMenu({ name, email, role }: { slug: string; name: string; email: string; role: Role }) {
+export function UserMenu({ slug, name, email, role }: { slug: string; name: string; email: string; role: Role }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -38,13 +38,13 @@ export function UserMenu({ name, email, role }: { slug: string; name: string; em
             <div className="mt-1.5 inline-block rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-bold">{ROLE_LABEL[role]}</div>
           </div>
           <div className="my-1 h-px bg-line" />
-          <Link role="menuitem" href="/account" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
+          <Link role="menuitem" href={`/account?from=${slug}`} className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
             <UserCog size={15} aria-hidden="true" /> My account & security
           </Link>
-          <Link role="menuitem" href="/?choose=1" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
+          <Link role="menuitem" href={`/?choose=1&from=${slug}`} className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
             <Repeat size={15} aria-hidden="true" /> Switch workspace
           </Link>
-          <Link role="menuitem" href="/signup" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
+          <Link role="menuitem" href={`/signup?from=${slug}`} className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
             <Plus size={15} aria-hidden="true" /> New agency workspace
           </Link>
           <form action={signOutAction}>
