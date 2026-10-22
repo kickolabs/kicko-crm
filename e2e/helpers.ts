@@ -12,6 +12,9 @@ export async function verifyMobile(page: Page) {
   const hint = page.getByText(/Your code is \d{6}/);
   await expect(hint).toBeVisible();
   const code = (await hint.textContent())!.match(/\d{6}/)![0];
+  // Type only once the page is interactive (the fingerprint field fills in after hydration);
+  // a value typed earlier can be lost when React takes over the form.
+  await expect(page.locator('input[name="fp"]')).not.toHaveValue('');
   await page.getByLabel('Code').fill(code);
   await page.getByRole('button', { name: 'Verify & start free trial' }).click();
 }

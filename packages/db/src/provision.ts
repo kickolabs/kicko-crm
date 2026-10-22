@@ -132,10 +132,14 @@ export async function provisionTenant(input: { name: string; slug: string; owner
 
 /** Tenants a user belongs to (uses the member_self_read RLS policy). */
 export async function tenantsForUser(userId: string) {
-  const memberships = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
-    return tx.membership.findMany({ where: { userId, active: true } });
-  });
+  // Same limits as withTenant: the library's 5 s default fails under load (sign-up bursts).
+  const memberships = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
+      return tx.membership.findMany({ where: { userId, active: true } });
+    },
+    { maxWait: 10_000, timeout: 20_000 },
+  );
   if (!memberships.length) return [];
   const tenants = await prisma.tenant.findMany({
     where: { id: { in: memberships.map((m) => m.tenantId) } },

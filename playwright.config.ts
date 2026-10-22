@@ -12,6 +12,9 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
+  // One production server serves every browser. Past ~6 at once on a dev machine it
+  // stalls for seconds at a time (even static files) and tests time out; 6 is as fast.
+  workers: process.env.CI ? undefined : 6,
   // Locally every failure counts. On CI (shared, noisier machines) one retry is
   // allowed; Playwright still reports those tests as "flaky", so they stay visible.
   retries: process.env.CI ? 1 : 0,
