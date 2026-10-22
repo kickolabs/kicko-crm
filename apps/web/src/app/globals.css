@@ -101,6 +101,14 @@
 .wave > span:nth-child(5) { animation-delay: -0.2s; }
 .wave.idle > span { animation: none; transform: scaleY(0.25); opacity: 0.5; }
 
+/* Navigation: the top bar creeps towards the end while the next page loads. */
+@keyframes nav-progress {
+  0% { width: 0; }
+  20% { width: 45%; }
+  100% { width: 92%; }
+}
+.nav-progress { width: 92%; animation: nav-progress 6s cubic-bezier(0.1, 0.7, 0.3, 1) forwards; box-shadow: 0 0 8px var(--color-lime); }
+
 /* Case journey: the leg in progress, dashes moving towards the next step (6+6 dash = 12, two cycles). */
 @keyframes route-dash {
   to { stroke-dashoffset: -24; }
@@ -108,7 +116,7 @@
 .route-dash { animation: route-dash 1.2s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .live-dot, .pop-in, .wave > span, .route-dash { animation: none; }
+  .live-dot, .pop-in, .wave > span, .route-dash, .nav-progress { animation: none; }
 }
 
 dialog::backdrop {
