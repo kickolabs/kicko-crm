@@ -3,13 +3,15 @@ import { Card, CardHeader, EmptyState, PageHeader, Stat } from '@/components/ui'
 import { fmtDate, relative } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { DAY, PLANS, STATUS_LABEL, type PlanId, type SubStatus } from '@/lib/plans';
-import { FOUNDING_SLOTS, listAgencies, overview, recentAdminActions, type AgencyRow } from '@/server/admin';
+import { FINE_TUNE_READY, FOUNDING_SLOTS, listAgencies, overview, recentAdminActions, yuTrainingData, type AgencyRow } from '@/server/admin';
+import { AI_BRAND } from '@/lib/brand';
 import { AgencyTable, type Row } from './agency-table';
 import { ACTION_LABEL, STATUS_TONE, describeAction } from './labels';
 
 export const metadata = { title: 'Agencies' };
 
 const TZ = 'Asia/Kolkata';
+const TASK_LABEL: Record<string, string> = { document_check: 'Document checks', call_notes: 'Call notes', whatsapp_reply: 'WhatsApp replies' };
 
 function planText(r: AgencyRow, now: Date) {
   const s = r.sub;
@@ -50,7 +52,7 @@ function toRow(r: AgencyRow, now: Date): Row {
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ f?: string; q?: string }> }) {
   const sp = await searchParams;
   const now = new Date();
-  const [rows, log] = await Promise.all([listAgencies(), recentAdminActions()]);
+  const [rows, log, yu] = await Promise.all([listAgencies(), recentAdminActions(), yuTrainingData()]);
   const o = overview(rows, now);
   const names = new Map(rows.map((r) => [r.id, r.name]));
 
@@ -68,6 +70,25 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
       <Card className="overflow-hidden">
         <AgencyTable rows={rows.map((r) => toRow(r, now))} initialFilter={sp.f ?? 'all'} initialQuery={sp.q ?? ''} />
+      </Card>
+
+      <Card>
+        <CardHeader
+          title={`${AI_BRAND} training data`}
+          sub={`Anonymised feedback from ${yu.optedIn} agenc${yu.optedIn === 1 ? 'y' : 'ies'} that opted in. Around ${FINE_TUNE_READY.toLocaleString('en-IN')} examples per task is when fine-tuning an own model starts to make sense.`}
+        />
+        <ul className="divide-y divide-line">
+          {yu.tasks.map((t) => (
+            <li key={t.task} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 text-sm">
+              <span className="w-40 font-semibold">{TASK_LABEL[t.task] ?? t.task}</span>
+              <div className="h-2 min-w-32 flex-1 rounded-full bg-paper-2" aria-hidden="true">
+                <div className="h-2 rounded-full bg-lime shadow-[inset_0_0_0_1px_rgb(18_20_23/0.25)]" style={{ width: `${Math.min(100, (t.examples / FINE_TUNE_READY) * 100)}%` }} />
+              </div>
+              <span className="w-32 text-right font-bold">{t.examples.toLocaleString('en-IN')} examples</span>
+              <span className="w-36 text-right text-muted">{t.agreement === null ? '—' : `team agreed ${t.agreement}%`}</span>
+            </li>
+          ))}
+        </ul>
       </Card>
 
       <Card>

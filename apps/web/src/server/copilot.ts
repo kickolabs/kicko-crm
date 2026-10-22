@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { unstable_cache } from 'next/cache';
-import { llm } from '@/integrations/core/platform';
+import { llmFor } from '@/integrations/core/platform';
 import { connectionSummary } from '@/integrations/core/connections';
 import { CREDIT_COST, hasFeature, type Feature } from '@/lib/plans';
 import { can } from '@/lib/permissions';
@@ -218,7 +218,7 @@ export async function getBrief(ctx: Ctx): Promise<Brief | null> {
   const basic = (note?: string): Brief => ({ ...templateBrief(signals), mode: 'basic', note });
   if (!signals.length) return basic();
   if (ctx.access !== 'full') return basic('Your workspace is read-only, so the copilot shows the basic brief.');
-  if (llm().sandbox) return { ...(await writeBrief(ctx.tenant.id, signals, '')), mode: 'sandbox' };
+  if (llmFor('copilot_brief').sandbox) return { ...(await writeBrief(ctx.tenant.id, signals, '')), mode: 'sandbox' };
   if ((await creditSummary(ctx.tenant.id)).remaining < CREDIT_COST.brief) return basic('AI credits are used up for this month, so this is the basic brief.');
 
   const a = briefAudience(ctx);

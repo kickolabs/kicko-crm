@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Sparkles } from 'lucide-react';
+import { AI_SHORT } from '@/lib/brand';
 
 type Result = { kind: string; id: string; title: string; sub?: string; href: string };
 
@@ -178,7 +179,7 @@ export function CommandBar({ slug, ai }: { slug: string; ai: boolean }) {
           {ai && (
             <div className="mt-1 flex items-center gap-2 border-t border-line px-3 pt-2.5 pb-1 text-xs text-muted">
               <Sparkles size={13} aria-hidden="true" />
-              Plain-English commands ("move Priya's case to lodged") are coming to the copilot.
+              Plain-English commands ("move Priya's case to lodged") are coming to {AI_SHORT}.
             </div>
           )}
         </div>

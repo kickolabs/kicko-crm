@@ -10,7 +10,7 @@ const SUBPROCESSORS: [name: string, purpose: string, where: string][] = [
   ['Neon Inc.', 'Database', 'India (Mumbai)'],
   ['Cloudflare, Inc. (R2)', 'Document and file storage', 'Cloudflare network'],
   ['Resend, Inc.', 'Email delivery (invites, portal sign-in links, notices)', 'United States'],
-  ['Anthropic PBC', 'AI features: call notes, WhatsApp assistant, document checks', 'United States'],
+  ['Anthropic PBC', 'Kicko Yu (AI features): call notes, WhatsApp assistant, document checks, daily brief', 'United States'],
   ['Deepgram, Inc.', 'Call recording transcription (when calling is used)', 'United States'],
   ['Bolna / Retell AI', 'AI voice agent calls (only if the agency enables it)', 'India / United States'],
   ['Razorpay Software Pvt. Ltd.', 'Payment of Kicko subscriptions', 'India'],
@@ -67,6 +67,12 @@ export default function Dpa() {
         Services the Customer connects with its own accounts (for example WhatsApp Business, Exotel or Twilio, Razorpay or Stripe for client payments) are the
         Customer’s own providers, not Kicko’s subprocessors. AI providers receive only the data needed for features the Customer turns on, under business terms
         that don’t allow them to train their models on it.
+      </p>
+      <p>
+        <strong>Help improve Kicko Yu (optional).</strong> Only if the Customer switches it on in Settings, Kicko keeps anonymised feedback on Kicko Yu’s
+        suggestions: what it suggested and whether the Customer’s team agreed (for example, a document it flagged that was verified anyway). Names, numbers,
+        dates, contact details and files are removed before anything is stored. Kicko uses this only to evaluate and improve Kicko Yu, never shares it, and
+        deletes it when the Customer switches the setting off or closes the workspace. It is off by default.
       </p>
 
       <h2>6. Helping with data principals’ requests</h2>

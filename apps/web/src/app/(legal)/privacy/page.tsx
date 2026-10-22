@@ -39,7 +39,11 @@ export default function Privacy() {
         <li>To send service messages (security alerts, billing, important changes). We don’t send marketing without consent, and you can opt out any time.</li>
         <li>To improve Kicko using aggregated usage information.</li>
       </ul>
-      <p>We do not sell personal data, and we don’t use agencies’ client data to train AI models.</p>
+      <p>
+        We do not sell personal data, and we don’t use agencies’ client data to train AI models. If an agency opts in to “Help improve Kicko Yu”, we keep
+        anonymised feedback on Kicko Yu’s suggestions (what it suggested and whether the team agreed, with names, numbers, dates and files removed) to
+        improve it. Switching it off deletes that feedback.
+      </p>
 
       <h2>Cookies</h2>
       <p>We use only the cookies needed to sign you in and keep your session secure. There are no advertising or cross-site tracking cookies.</p>

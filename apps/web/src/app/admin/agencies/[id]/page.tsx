@@ -12,7 +12,7 @@ import { ACTION_LABEL, STATUS_TONE, describeAction } from '../../labels';
 export const metadata = { title: 'Agency' };
 
 const TZ = 'Asia/Kolkata';
-const CREDIT_LABEL: Record<string, string> = { call_notes: 'AI call notes', voice_notes: 'Voice agent notes', wa_reply: 'WhatsApp AI replies', doc_check: 'Document checks', brief: 'Copilot briefs', other: 'Other' };
+const CREDIT_LABEL: Record<string, string> = { call_notes: 'AI call notes', voice_notes: 'Voice agent notes', wa_reply: 'WhatsApp AI replies', doc_check: 'Document checks', brief: 'Yu briefs', other: 'Other' };
 
 export default async function AgencyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

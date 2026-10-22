@@ -1,6 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
-import { llm } from '@/integrations/core/platform';
+import { llmFor, type AiTask } from '@/integrations/core/platform';
 import { meter } from '@/integrations/core/usage';
 import type { LlmTier } from '@/integrations/llm/port';
 
@@ -11,7 +11,7 @@ export type AiResult<T> = { data: T; model: string; sandbox: boolean };
 
 export async function runStructured<T>(opts: {
   tenantId: string;
-  task: string;
+  task: AiTask;
   system: string;
   prompt: string;
   schema: z.ZodType<T>;
@@ -20,7 +20,7 @@ export async function runStructured<T>(opts: {
   attachments?: { mime: string; data: string }[];
   fallback: () => T;
 }): Promise<AiResult<T>> {
-  const model = llm();
+  const model = llmFor(opts.task);
   if (model.sandbox) return { data: opts.schema.parse(opts.fallback()), model: 'sandbox', sandbox: true };
 
   const { $schema: _drop, ...schema } = z.toJSONSchema(opts.schema) as Record<string, unknown>;

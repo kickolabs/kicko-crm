@@ -363,9 +363,13 @@ export async function saveAiFeaturesAction(slug: string, _: Prev, fd: FormData) 
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'settings.manage');
-    const settings: TenantSettings = { ...ctx.tenant.settings, ai: { docChecks: fd.get('docChecks') === 'on' } };
+    const improve = fd.get('improve') === 'on';
+    const settings: TenantSettings = { ...ctx.tenant.settings, ai: { docChecks: fd.get('docChecks') === 'on', improve } };
     await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings } });
-    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.ai', 'Changed AI feature settings');
+    // Opting out deletes everything the agency shared.
+    if (!improve) await db(ctx, (tx) => tx.aiFeedback.deleteMany({}));
+    const was = ctx.tenant.settings.ai?.improve === true;
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.ai', improve !== was ? (improve ? 'Turned on "Help improve Kicko Yu"' : 'Turned off "Help improve Kicko Yu" and deleted shared feedback') : 'Changed AI feature settings');
   }, 'Saved');
   refresh(slug);
   return res;

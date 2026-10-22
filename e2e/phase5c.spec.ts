@@ -123,7 +123,7 @@ test.describe.serial('Phase 5c · AI voice agent (sandbox)', () => {
     await page.getByRole('dialog').getByLabel('Sandbox caller').selectOption('pr-australia');
     await page.getByRole('dialog').getByRole('button', { name: 'Start AI call' }).click();
     const hud = page.getByRole('status', { name: 'Call in progress' });
-    await expect(hud.getByText('AI call notes')).toBeVisible({ timeout: 20_000 });
+    await expect(hud.getByText('Call notes by Yu')).toBeVisible({ timeout: 20_000 });
     await expect(hud.getByText(/permanent residency in Australia/)).toBeVisible();
 
     const tasks = await q(`SELECT t.title FROM "Task" t JOIN "Lead" l ON l.id = t."leadId" JOIN "Tenant" w ON w.id = l."tenantId" WHERE w.slug = $1 AND l."phoneNormalized" = '+919840022334'`, [slug]);

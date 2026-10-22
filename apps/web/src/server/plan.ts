@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { Prisma, prisma, withTenant, type Subscription, type Tx } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
-import { llm, platformBilling } from '@/integrations/core/platform';
+import { llmFor, platformBilling, type AiTask } from '@/integrations/core/platform';
 import { ProviderError } from '@/integrations/core/types';
 import type { BillingEvent } from '@/integrations/platform-billing/port';
 import {
@@ -81,8 +81,10 @@ export async function creditSummary(tenantId: string) {
  * credits. Returns false when there aren't enough (callers skip the AI step).
  * Nothing is charged when no real model is configured (sandbox).
  */
+const TASK_OF: Record<CreditAction, AiTask> = { call_notes: 'call_notes', voice_notes: 'call_notes', wa_reply: 'whatsapp_reply', doc_check: 'document_check', brief: 'copilot_brief' };
+
 export async function consumeCredits(tenantId: string, action: CreditAction, meta?: Record<string, string>) {
-  if (llm().sandbox) return true;
+  if (llmFor(TASK_OF[action]).sandbox) return true;
   const cost = CREDIT_COST[action];
   return withTenant(tenantId, async (tx) => {
     const s = await tx.subscription.findUnique({ where: { tenantId } });

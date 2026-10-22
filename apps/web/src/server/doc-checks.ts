@@ -1,7 +1,7 @@
 import 'server-only';
 import type { Prisma } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
-import { llm } from '@/integrations/core/platform';
+import { llmFor } from '@/integrations/core/platform';
 import { fullName } from '@/lib/format';
 import { compareWithProfile, mergeIssues, readDocument, READABLE_TYPES, type DocCheck } from './ai/doc-check';
 import { inTenant, logActivity, type Scope } from './scope';
@@ -25,7 +25,7 @@ export async function checkDocumentFile(scope: Scope, fileId: string) {
       inTenant(scope, (tx) => tx.documentFile.update({ where: { id: fileId }, data: { aiStatus, ...(aiCheck ? { aiCheck } : {}) } }));
     await save('pending');
 
-    const model = llm();
+    const model = llmFor('document_check');
     let bytes: Buffer | null = null;
     if (!model.sandbox) {
       if (!READABLE_TYPES.includes(file.contentType) || file.size > MAX_BYTES) {

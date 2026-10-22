@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { withTenant } from '@kicko/db';
 import { Badge, Card, CardHeader } from '@/components/ui';
 import { connectionSummary, providersFor } from '@/integrations/core/connections';
 import { TENANT_CAPABILITIES } from '@/integrations/core/registry';
@@ -24,10 +25,11 @@ const UNIT_LABEL: Record<string, string> = {
   byte: 'bytes',
 };
 
-export async function IntegrationsTab({ tenantId, slug, docChecks }: { tenantId: string; slug: string; docChecks: boolean }) {
-  const [summaries, usage] = await Promise.all([
+export async function IntegrationsTab({ tenantId, slug, docChecks, improve }: { tenantId: string; slug: string; docChecks: boolean; improve: boolean }) {
+  const [summaries, usage, shared] = await Promise.all([
     Promise.all(TENANT_CAPABILITIES.map(async (c) => [c, await connectionSummary(tenantId, c)] as const)),
     usageSummary(tenantId, 30),
+    withTenant(tenantId, (tx) => tx.aiFeedback.count()),
   ]);
   const platform = [
     { cap: 'storage' as const, value: storageDriver === 's3' ? 'S3-compatible storage' : 'Local disk (development)' },
@@ -78,7 +80,7 @@ export async function IntegrationsTab({ tenantId, slug, docChecks }: { tenantId:
         </ul>
       </Card>
 
-      <AiFeaturesCard slug={slug} docChecks={docChecks} />
+      <AiFeaturesCard slug={slug} docChecks={docChecks} improve={improve} shared={shared} />
 
       <Card>
         <CardHeader title="Usage" sub="Last 30 days, across all providers" />

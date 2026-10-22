@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { AI_SHORT } from '@/lib/brand';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PhoneIncoming, PhoneOutgoing, Sparkles } from 'lucide-react';
@@ -80,10 +81,10 @@ export default async function CallPage({ params }: { params: Promise<{ tenant: s
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-5">
-          <section aria-label="AI call notes" className="flex flex-col gap-4 rounded-[var(--radius-card)] bg-ink p-5 text-paper">
+          <section aria-label={`Call notes by ${AI_SHORT}`} className="flex flex-col gap-4 rounded-[var(--radius-card)] bg-ink p-5 text-paper">
             <div className="flex flex-wrap items-center gap-2">
               <Sparkles size={16} className="text-lime" />
-              <h2 className="text-lg font-extrabold tracking-tight">AI call notes</h2>
+              <h2 className="text-lg font-extrabold tracking-tight">Call notes by {AI_SHORT}</h2>
               {ai && <Badge tone={SENTIMENT[ai.sentiment]!.tone}>{SENTIMENT[ai.sentiment]!.label}</Badge>}
               {ai && <Badge tone="lime">{INTENT[ai.intent]}</Badge>}
             </div>

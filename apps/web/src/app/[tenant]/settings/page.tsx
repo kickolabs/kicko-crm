@@ -107,7 +107,7 @@ export default async function SettingsPage({
 
       {tab === 'voice' && <VoiceTab />}
 
-      {tab === 'integrations' && <IntegrationsTab tenantId={ctx.tenant.id} slug={slug} docChecks={ctx.tenant.settings.ai?.docChecks !== false} />}
+      {tab === 'integrations' && <IntegrationsTab tenantId={ctx.tenant.id} slug={slug} docChecks={ctx.tenant.settings.ai?.docChecks !== false} improve={ctx.tenant.settings.ai?.improve === true} />}
 
       {tab === 'portal' && (
         <PortalSettings

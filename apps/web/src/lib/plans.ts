@@ -47,7 +47,7 @@ export const PLANS: Record<PlanId, {
     creditsPerUser: 300,
     storageGb: 50,
     features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'copilot'],
-    highlights: ['Everything in Starter', 'Calling with AI call notes', 'WhatsApp AI assistant', 'AI copilot with a daily brief', 'Payment links, eligibility calculators, form sheets'],
+    highlights: ['Everything in Starter', 'Calling with AI call notes', 'WhatsApp AI assistant', 'Kicko Yu daily brief', 'Payment links, eligibility calculators, form sheets'],
   },
   pro: {
     name: 'Pro',
@@ -67,7 +67,7 @@ export const FEATURE_LABEL: Record<Feature, string> = {
   calling: 'Calling',
   call_notes: 'AI call notes',
   wa_assistant: 'WhatsApp AI assistant',
-  copilot: 'AI copilot',
+  copilot: 'Kicko Yu daily brief',
   voice_agent: 'AI voice agent',
   sub_agents: 'Sub-agent network',
   doc_checks: 'AI document checks',

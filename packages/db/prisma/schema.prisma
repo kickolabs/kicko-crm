@@ -1056,6 +1056,20 @@ model SavedReport {
 
 // Security-relevant events per agency: sign-ins, team and settings changes, exports,
 // document views. Shown to owners/admins in Settings → Security. Append-only.
+// "Help improve Kicko Yu" (opt-in): what the AI said and what a person then did, anonymised.
+model AiFeedback {
+  id        String   @id @default(cuid())
+  tenantId  String
+  task      String // document_check | call_notes | whatsapp_reply
+  subject   String // one-way digest of the source record id
+  output    Json // what the AI produced (no names, numbers or dates)
+  outcome   Json // what the person did
+  agreed    Boolean? // did the person agree with the AI
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, task, createdAt])
+}
+
 model AuditEvent {
   id         String   @id @default(cuid())
   tenantId   String

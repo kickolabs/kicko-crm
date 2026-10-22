@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { AI_SHORT } from '@/lib/brand';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PhoneIncoming, PhoneMissed, PhoneOutgoing, Sparkles } from 'lucide-react';
@@ -83,7 +84,7 @@ export default async function CallsPage({ params, searchParams }: { params: Prom
                       {c.summary ? (
                         <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-2"><Sparkles size={12} className="mr-1 inline" aria-label="AI" />{c.summary}</p>
                       ) : c.aiStatus === 'pending' ? (
-                        <p className="mt-1 text-[13px] text-muted">Writing AI notes…</p>
+                        <p className="mt-1 text-[13px] text-muted">{AI_SHORT} is writing notes…</p>
                       ) : null}
                     </div>
                     <div className="text-right text-xs text-muted">

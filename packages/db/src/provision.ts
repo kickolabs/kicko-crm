@@ -42,7 +42,7 @@ export type TenantSettings = {
     welcome?: string;
   };
   /** AI features that work on agency data. */
-  ai?: { docChecks: boolean };
+  ai?: { docChecks: boolean; /** "Help improve Kicko Yu": anonymised feedback, off by default. */ improve?: boolean };
   /** Owners can require two-step sign-in for everyone in the workspace. */
   security?: { require2fa?: boolean };
   /** The "Get started" checklist on the dashboard. */

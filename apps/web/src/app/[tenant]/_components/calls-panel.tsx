@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import Link from 'next/link';
 import { PhoneIncoming, PhoneMissed, PhoneOutgoing, Sparkles } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui';
+import { AI_SHORT } from '@/lib/brand';
 import { fmtDateTime } from '@/lib/format';
 import type { Ctx } from '@/lib/tenant';
 import type { Contact } from '@/server/contacts';
@@ -33,11 +34,11 @@ export async function CallsPanel({ ctx, contact }: { ctx: Ctx; contact: Contact 
                   </div>
                   {c.summary && (
                     <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-ink-2">
-                      <Sparkles size={12} className="mr-1 inline text-ink-2" aria-label="AI" />
+                      <Sparkles size={12} className="mr-1 inline text-ink-2" aria-label={`Notes by ${AI_SHORT}`} />
                       {c.summary}
                     </p>
                   )}
-                  {c.aiStatus === 'pending' && <p className="mt-1 text-xs text-muted">Writing AI notes…</p>}
+                  {c.aiStatus === 'pending' && <p className="mt-1 text-xs text-muted">{AI_SHORT} is writing notes…</p>}
                 </div>
               </Link>
             </li>

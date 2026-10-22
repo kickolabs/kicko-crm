@@ -167,21 +167,34 @@ Settings → Calling. Each agency connects **Exotel** (India) or **Twilio** (els
 - Callback URLs: `https://<app>/api/webhooks/telephony/{provider}/{workspace}?event=…&token=…`. Twilio callbacks are signature-checked (`X-Twilio-Signature`); Exotel doesn't sign callbacks, so each URL carries the connection's secret token. Status callbacks are idempotent and never move a call backwards.
 - Call minutes, transcription minutes and AI tokens are metered per agency (Settings → Integrations → Usage).
 
-## AI copilot and AI on every screen
+## Kicko Yu (Kicko's AI)
 
-The dashboard's **Copilot** rail gives a daily brief: up to four cards (document the AI check flagged, a chat the WhatsApp assistant handed to a person with no reply yet, expiring documents, overdue money, stalled cases, warm leads with nothing booked), each with one action. Plain code picks and orders the cards (`server/copilot.ts`); the model only words the headline and one line per card (`server/ai/brief.ts`). It's written at most once per day per set of cards (cached, 2 credits); with no model, no credits, or a read-only workspace the same cards come with template wording at no cost.
+Staff see one AI brand, **Kicko Yu** (name in `apps/web/src/lib/brand.ts`); clients never do: the WhatsApp assistant and voice agent use each agency's own persona name. Yu's rail on the dashboard gives a daily brief: up to four cards (document the AI check flagged, a chat the WhatsApp assistant handed to a person with no reply yet, expiring documents, overdue money, stalled cases, warm leads with nothing booked), each with one action. Plain code picks and orders the cards (`server/copilot.ts`); the model only words the headline and one line per card (`server/ai/brief.ts`). It's written at most once per day per set of cards (cached, 2 credits); with no model, no credits, or a read-only workspace the same cards come with template wording at no cost.
 
-Other AI surfaces: the sidebar's **AI agents** status (voice agent, WhatsApp assistant, call notes, document checks), **Live now** calls and WhatsApp AI stats on the dashboard, **AI flags** and a document-vs-profile comparison on the case page, and a **context panel** beside each inbox conversation (lead score, open cases, eligibility estimate, details the AI captured).
+Other Yu surfaces: the sidebar's agent status (voice agent, WhatsApp assistant, call notes, document checks), **Live now** calls and WhatsApp AI stats on the dashboard, **Yu flags** and a document-vs-profile comparison on the case page, and a **context panel** beside each inbox conversation (lead score, open cases, eligibility estimate, details the AI captured).
 
 | | Starter | Growth | Pro / trial |
 |---|---|---|---|
-| Copilot brief | Owners and admins see a "See Growth" card; staff see nothing | ✓ | ✓ |
-| Sidebar AI agents | hidden | WhatsApp, call notes | voice, WhatsApp, call notes, doc check |
+| Yu daily brief | Owners and admins see a "See Growth" card; staff see nothing | ✓ | ✓ |
+| Sidebar agent status | hidden | WhatsApp, call notes | voice, WhatsApp, call notes, doc check |
 | Live now (calls, WhatsApp AI) | Today card only | ✓ | ✓ |
-| Case: AI flags + comparison | hidden | hidden | ✓ (unless turned off in Settings → Integrations) |
+| Case: Yu flags + comparison | hidden | hidden | ✓ (unless turned off in Settings → Integrations) |
 | Inbox context panel | ✓ (no eligibility) | ✓ | ✓ |
 
 Cards follow the viewer's role like the rest of the dashboard: document and case cards need case access, money cards need billing access, lead cards need lead access. Accounts staff only see money; document officers don't see money or leads. Data an AI captured earlier (notes, lead scores, past checks) stays visible after a downgrade; nothing new runs.
+
+### Kicko's own model (per-task routing)
+
+Every AI task has a name (`whatsapp_reply`, `call_notes`, `document_check`, `copilot_brief`, `eligibility_explanation`) and `llmFor(task)` picks its model (`integrations/core/platform.ts`). Tasks listed in `KICKO_MODEL_TASKS` go to `KICKO_MODEL_URL`, any OpenAI-compatible server (vLLM, Ollama, Together, Groq…), for example a fine-tuned open model hosted in Mumbai; everything else stays on Claude. So one task can move to an own model, be compared, and move back, without code changes. Its tokens are metered as provider `kicko-model`.
+
+### Help improve Kicko Yu (opt-in feedback)
+
+Off by default, in Settings → Integrations. When an agency turns it on, Kicko records what Yu suggested and what a person then did, anonymised first (`server/ai/feedback.ts`: names, quoted values, ids, numbers, dates, emails and phones removed; no files):
+- a document Yu checked, then verified or rejected (did the team agree with the flags?)
+- a suggested task added, or extracted details applied, from Yu's call notes
+- a person taking over a WhatsApp chat right after an AI reply
+
+Rows live in `AiFeedback` (tenant RLS + super-admin read). Turning the setting off deletes them. `/admin` shows examples per task against the ~10,000 mark where fine-tuning an own model starts to make sense. The DPA and privacy page describe the programme.
 
 ## Daily job
 
@@ -198,4 +211,4 @@ Cards follow the viewer's role like the rest of the dashboard: document and case
 
 - `npm audit`: remaining findings are in the Prisma 6 CLI and Next 15's bundled postcss (build-time only). They're fixed by upgrading to Prisma 7 / Next 16, planned as a separate migration.
 - Invite emails are copy-link for now; Resend email delivery arrives with notifications.
-- Plain-English commands in the command bar (Ctrl+K / ⌘K) and "Ask copilot" questions are next for the copilot.
+- Plain-English commands in the command bar (Ctrl+K / ⌘K) and "Ask Yu" questions are next for Kicko Yu.

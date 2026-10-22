@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
+import { AI_SHORT } from '@/lib/brand';
 import type { ContactContext } from '@/server/thread-view';
 
 /** Beside the conversation: who this is and where they stand, so staff reply without switching pages. */
@@ -72,7 +73,7 @@ export function ContextPanel({ c }: { c: NonNullable<ContactContext> }) {
 
       {c.captured.length > 0 && (
         <section className="flex flex-col gap-2">
-          <span className="eyebrow flex items-center gap-1.5"><Sparkles size={11} aria-hidden="true" /> Captured by AI</span>
+          <span className="eyebrow flex items-center gap-1.5"><Sparkles size={11} aria-hidden="true" /> Captured by {AI_SHORT}</span>
           {c.captured.map((n) => (
             <div key={n.id} className="rounded-[12px] bg-paper-3 px-3 py-2.5 text-[13px] leading-normal whitespace-pre-line text-ink-2">
               {n.text}

@@ -86,15 +86,15 @@ test.describe.serial('Phase 5d · eligibility & document checks', () => {
     await page.goto(caseUrl);
     await page.getByLabel('Upload Passport (all pages)').setInputFiles(pdf('HDFC_bank_statement.pdf'));
     const row = page.locator('li', { hasText: 'Passport (all pages)' }).first();
-    await expect(row.getByText(/AI: 1 issue · This looks like a bank or financial statement/)).toBeVisible({ timeout: 20_000 });
+    await expect(row.getByText(/Yu: 1 issue · This looks like a bank or financial statement/)).toBeVisible({ timeout: 20_000 });
 
     await row.getByRole('button', { name: 'Review' }).click();
     const dlg = page.getByRole('dialog');
-    await expect(dlg.getByRole('region', { name: 'AI check' })).toContainText('Sandbox: judged from the file name and size only');
+    await expect(dlg.getByRole('region', { name: 'Yu check' })).toContainText('Sandbox: judged from the file name and size only');
     await page.keyboard.press('Escape');
 
     await page.getByLabel('Upload Passport (all pages)').setInputFiles(pdf('passport-all-pages.pdf'));
-    await expect(page.locator('li', { hasText: 'Passport (all pages)' }).first().getByText('AI: looks right')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('li', { hasText: 'Passport (all pages)' }).first().getByText('Yu: looks right')).toBeVisible({ timeout: 20_000 });
   });
 
   test('document checks can be switched off', async () => {

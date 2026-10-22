@@ -1,21 +1,22 @@
 import Link from 'next/link';
 import clsx from 'clsx';
 import { Lock, Sparkles } from 'lucide-react';
+import { AI_BRAND, AI_SHORT } from '@/lib/brand';
 import { PLANS, planFor } from '@/lib/plans';
 import type { Ctx } from '@/lib/tenant';
 import { getBrief } from '@/server/copilot';
 
-// The copilot's daily brief on the dashboard. Growth and Pro (and trials) get it;
+// Kicko Yu's daily brief on the dashboard. Growth and Pro (and trials) get it;
 // on Starter, admins see what it would do and where to get it, staff see nothing.
 
 function Shell({ children, label = 'Daily brief' }: { children: React.ReactNode; label?: string }) {
   return (
-    <aside aria-label="AI copilot" className="card flex flex-col gap-4 p-5">
+    <aside aria-label={AI_BRAND} className="card flex flex-col gap-4 p-5">
       <div className="flex items-center gap-2">
         <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] bg-lime">
           <Sparkles size={14} strokeWidth={2.2} aria-hidden="true" />
         </span>
-        <h2 className="font-bold">Copilot</h2>
+        <h2 className="font-bold">{AI_SHORT}</h2>
         <span className="eyebrow ml-auto">{label}</span>
       </div>
       {children}
@@ -69,7 +70,7 @@ export async function CopilotBrief({ ctx }: { ctx: Ctx }) {
       <p className="text-[11px] leading-[1.45] text-muted">
         {brief.note ? `${brief.note} ` : ''}
         {brief.mode === 'sandbox' && 'Sandbox: worded by rules until an AI model is connected. '}
-        AI suggestions are advisory. A licensed consultant confirms every decision.
+        {AI_SHORT}&apos;s suggestions are advisory. A licensed consultant confirms every decision.
       </p>
     </Shell>
   );
@@ -94,7 +95,7 @@ export function CopilotUpsell({ slug }: { slug: string }) {
   return (
     <Shell label={`${plan.name} plan`}>
       <p className="text-[17px] leading-[1.3] font-bold tracking-[-0.02em]">
-        A brief every morning: documents that don&apos;t match, expiring passports, chats waiting on you, money overdue.
+        {AI_BRAND} is part of {plan.name}. A brief every morning: documents that don&apos;t match, expiring passports, chats waiting on you, money overdue.
       </p>
       <Link href={`/${slug}/settings?tab=plan`} className="inline-flex items-center gap-2 self-start rounded-[10px] bg-ink px-3.5 py-2 text-[13px] font-bold text-paper">
         <Lock size={13} aria-hidden="true" /> See {plan.name}

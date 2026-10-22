@@ -137,7 +137,7 @@ export function CreditsCard({ slug, credits, currency, sandboxAi }: { slug: stri
   const pct = credits.allowance ? Math.min(100, Math.round((credits.used / credits.allowance) * 100)) : 100;
   return (
     <Card>
-      <CardHeader title="AI credits" sub="Used by AI call notes (4), WhatsApp AI replies (1), document checks (1) and voice agent notes (2). The allowance resets on the 1st." />
+      <CardHeader title="AI credits" sub="Used by AI call notes (4), WhatsApp AI replies (1), document checks (1), voice agent notes (2) and Kicko Yu daily briefs (2). The allowance resets on the 1st." />
       <div className="flex flex-col gap-3 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span><strong className="tabular-nums">{credits.used.toLocaleString('en-IN')}</strong> of {credits.allowance.toLocaleString('en-IN')} used this month</span>

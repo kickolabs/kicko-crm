@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { parseLocal } from '@/lib/format';
 import { audit } from './audit';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
+import { recordFeedback, scrub } from './ai/feedback';
 import { ALLOWED_TYPES, MAX_UPLOAD_BYTES, createDownloadUrl, createUploadUrl, newKey, objectSize } from './storage';
 
 /** Make sure every checklist item of the case's product has a Document row. Idempotent. */
@@ -130,7 +131,7 @@ export async function reviewDocument(scope: Scope, documentId: string, raw: unkn
 
 function reviewTx(scope: Scope, documentId: string, input: z.infer<typeof reviewInput>) {
   return inTenant(scope, async (tx) => {
-    const doc = await tx.document.findUnique({ where: { id: documentId }, include: { files: { take: 1 }, client: true } });
+    const doc = await tx.document.findUnique({ where: { id: documentId }, include: { files: { orderBy: { createdAt: 'desc' }, take: 1 }, client: true } });
     if (!doc) throw new UserError('Document not found');
     if (!doc.files.length) throw new UserError('Nothing uploaded yet');
     const verified = input.decision === 'VERIFIED';
@@ -150,6 +151,26 @@ function reviewTx(scope: Scope, documentId: string, input: z.infer<typeof review
       caseId: doc.caseId,
       clientId: doc.clientId,
     });
+    // Did the person agree with Kicko Yu's check? (Only with the agency's opt-in.)
+    const file = doc.files[0]!;
+    const check = file.aiStatus === 'done' ? (file.aiCheck as { documentType?: string; matchesExpected?: string; legible?: boolean; issues?: { severity: string; message: string }[] } | null) : null;
+    if (check) {
+      const names = [doc.client.firstName, doc.client.lastName];
+      const flagged = (check.issues ?? []).some((i) => i.severity === 'high');
+      await recordFeedback(tx, scope, {
+        task: 'document_check',
+        subjectId: file.id,
+        output: {
+          requested: scrub(doc.name, names),
+          documentType: scrub(check.documentType ?? '', names),
+          matchesExpected: check.matchesExpected ?? null,
+          legible: check.legible ?? null,
+          issues: (check.issues ?? []).map((i) => ({ severity: i.severity, message: scrub(i.message, names) })),
+        },
+        outcome: { decision: input.decision, reason: input.reason ? scrub(input.reason, names) : null },
+        agreed: verified ? !flagged : flagged,
+      });
+    }
     return doc;
   });
 }

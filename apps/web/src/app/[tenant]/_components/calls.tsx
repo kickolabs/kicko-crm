@@ -8,6 +8,7 @@ import { Bot, Phone, PhoneOff, Sparkles, X } from 'lucide-react';
 import { ActionForm, FormField, Modal, SubmitButton } from '@/components/forms';
 import { Button, Input, Select } from '@/components/ui';
 import { callStatusAction, setMyPhoneAction, startAiCallAction, startCallAction } from '../actions-phase5';
+import { AI_SHORT } from '@/lib/brand';
 
 // Click-to-call: the provider rings the counsellor's phone, then the client.
 // A floating HUD follows the call live, then shows the AI notes when ready.
@@ -256,7 +257,7 @@ export function CallHud({ slug, callId, contactName, sandbox, onClose }: { slug:
       {settled && live?.summary && (
         <div className="mt-3 rounded-[14px] bg-paper/10 px-3 py-2.5">
           <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-lime uppercase">
-            <Sparkles size={12} /> AI call notes
+            <Sparkles size={12} /> Call notes by {AI_SHORT}
           </div>
           <p className="text-[13px] leading-relaxed text-paper/90">{live.summary}</p>
         </div>

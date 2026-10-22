@@ -79,12 +79,12 @@ test.describe.serial('Phase 5 · calling (sandbox)', () => {
     const hud = page.getByRole('status', { name: 'Call in progress' });
     await expect(hud).toBeVisible();
     await expect(hud.getByText(/Call ended · 3:34/)).toBeVisible({ timeout: 15_000 });
-    await expect(hud.getByText('AI call notes')).toBeVisible({ timeout: 15_000 });
+    await expect(hud.getByText('Call notes by Yu')).toBeVisible({ timeout: 15_000 });
     await expect(hud.getByText(/Discussed studying in Canada/)).toBeVisible();
     await hud.getByRole('link', { name: 'Open call →' }).click();
     await page.waitForURL(/\/calls\/[a-z0-9]+$/);
 
-    await expect(page.getByRole('heading', { name: 'AI call notes' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Call notes by Yu' })).toBeVisible();
     await expect(page.getByLabel('Call recording')).toHaveAttribute('src', /\/api\/files\/download\?t=/);
     await expect(page.getByText('Hello, this is Divya from Call Agency')).toBeVisible();
     await expect(page.getByText('IELTS 7.0', { exact: true })).toBeVisible();

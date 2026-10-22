@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { LogoMark } from '@/components/logo';
+import { AI_BRAND } from '@/lib/brand';
 import type { AgentStatus } from '@/server/copilot';
 
 type Counts = { leads: number; cases: number; tasks: number; waiting: number; docs: number; inbox: number; missed: number };
@@ -126,8 +127,8 @@ export function Sidebar({
           );
         })}
         {agents && (
-          <div className="mt-5 flex flex-col gap-0.5" aria-label="AI agents" role="group">
-            <span className="eyebrow px-2.5 pb-1.5">AI agents</span>
+          <div className="mt-5 flex flex-col gap-0.5" aria-label={AI_BRAND} role="group">
+            <span className="eyebrow px-2.5 pb-1.5">{AI_BRAND}</span>
             {agents.map((a) => (
               <Link
                 key={a.key}

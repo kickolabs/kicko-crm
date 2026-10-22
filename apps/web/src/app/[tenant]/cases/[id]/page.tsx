@@ -11,6 +11,7 @@ import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
 import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { hasFeature } from '@/lib/plans';
+import { AI_SHORT } from '@/lib/brand';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { stagesOf } from '@/server/cases';
@@ -93,7 +94,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
           <Fact label="Lodged" value={c.lodgedAt ? fmtDate(c.lodgedAt, tz) : '—'} />
           {flagged !== null && (
             <a href="#documents" className="flex flex-col gap-0.5">
-              <span className="eyebrow">AI flags</span>
+              <span className="eyebrow">{AI_SHORT} flags</span>
               <span className={`text-xl font-extrabold tracking-tight ${flagged ? 'text-warn-ink' : 'text-ok'}`}>{flagged ? `${flagged} doc${flagged === 1 ? '' : 's'}` : 'None'}</span>
             </a>
           )}

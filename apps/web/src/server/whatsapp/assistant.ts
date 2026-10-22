@@ -10,6 +10,7 @@ import { bookingStaff, bookSlot, openSlots } from '../booking';
 import { stagesOf } from '../cases';
 import type { Contact } from '../contacts';
 import { inTenant, logActivity, UserError, type Scope } from '../scope';
+import { recordFeedback, scrub } from '../ai/feedback';
 import { sendText } from './service';
 import { consumeCredits, featureOn } from '../plan';
 
@@ -297,6 +298,14 @@ export async function setAssistantPaused(scope: Scope, contact: Contact, paused:
     if (contact.kind === 'client') await tx.client.update({ where: { id: contact.id }, data });
     else await tx.lead.update({ where: { id: contact.id }, data });
     await logActivity(tx, scope, { type: 'WHATSAPP', summary: paused ? 'Took over the chat from the AI assistant' : 'AI assistant resumed for this chat', ...link(contact) });
+    if (paused) {
+      // A person stepping in right after an AI reply: a signal that reply wasn't good enough.
+      const last = await tx.message.findFirst({ where: { ...link(contact), channel: 'WHATSAPP' }, orderBy: { createdAt: 'desc' } });
+      if (last?.aiGenerated && Date.now() - last.createdAt.getTime() < 6 * 3600_000) {
+        const who = contact.kind === 'client' ? await tx.client.findUnique({ where: { id: contact.id } }) : await tx.lead.findUnique({ where: { id: contact.id } });
+        await recordFeedback(tx, scope, { task: 'whatsapp_reply', subjectId: last.id, output: { reply: scrub(last.body ?? '', [who?.firstName, who?.lastName]) }, outcome: { tookOver: true }, agreed: false });
+      }
+    }
   });
 }
 

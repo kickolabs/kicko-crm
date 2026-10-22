@@ -14,6 +14,7 @@ import { normalizePhone } from '@/lib/phone';
 import { callNotes, type CallNotes } from '../ai/call-notes';
 import { findOrCreateByPhone, type Contact } from '../contacts';
 import { inTenant, logActivity, UserError, type Scope } from '../scope';
+import { recordFeedback, scrub } from '../ai/feedback';
 import { newKey, putObject } from '../storage';
 import { consumeCredits, featureOn, NO_CREDITS, requireFeature } from '../plan';
 
@@ -278,6 +279,7 @@ export async function addSuggestedTask(scope: Scope, callId: string, index: numb
       },
     });
     await tx.call.update({ where: { id: callId }, data: { ai: { ...ai, added: [...(ai.added ?? []), index] } } });
+    await recordFeedback(tx, scope, { task: 'call_notes', subjectId: `${callId}:task:${index}`, output: { suggestedTask: scrub(t.title), dueInDays: t.dueInDays }, outcome: { accepted: 'task' }, agreed: true });
   });
 }
 
@@ -301,6 +303,13 @@ export async function applyCallFields(scope: Scope, callId: string) {
       await tx.note.create({ data: { tenantId: scope.tenantId, body: `From call on ${call.startedAt.toISOString().slice(0, 10)}:\n${facts.join('\n')}`, authorId: scope.actorId, leadId: call.leadId, clientId: call.clientId } });
     }
     await logActivity(tx, scope, { type: 'CALL', summary: 'Details from AI call notes applied', ...link(contactOf(call)), data: { callId } });
+    await recordFeedback(tx, scope, {
+      task: 'call_notes',
+      subjectId: `${callId}:fields`,
+      output: { fieldsFound: Object.keys(f).filter((k) => f[k as keyof typeof f]), interestCountry: f.interestCountry ?? null, interestCategory: f.interestCategory ?? null },
+      outcome: { accepted: 'fields' },
+      agreed: true,
+    });
   });
 }
 

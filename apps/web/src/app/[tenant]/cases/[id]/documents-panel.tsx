@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Ban, Check, Eye, FileText, Plus, RotateCcw, Sparkles, TriangleAlert, Upload } from 'lucide-react';
 import type { DocumentStatus } from '@kicko/db';
+import { AI_SHORT } from '@/lib/brand';
 import { ActionForm, FormField, Modal, SubmitButton, Spinner } from '@/components/forms';
 import { Button, Input, Textarea, buttonCls } from '@/components/ui';
 import {
@@ -40,15 +41,15 @@ export type AiView = {
 
 function AiChip({ ai }: { ai: AiView | null | undefined }) {
   if (!ai?.status) return null;
-  if (ai.status === 'pending') return <span className="inline-flex items-center gap-1 text-muted"><Sparkles size={11} /> AI checking…</span>;
-  if (ai.status !== 'done') return <span className="inline-flex items-center gap-1 text-muted"><Sparkles size={11} /> AI: not checked</span>;
+  if (ai.status === 'pending') return <span className="inline-flex items-center gap-1 text-muted"><Sparkles size={11} /> {AI_SHORT} is checking…</span>;
+  if (ai.status !== 'done') return <span className="inline-flex items-center gap-1 text-muted"><Sparkles size={11} /> {AI_SHORT}: not checked</span>;
   const serious = (ai.issues ?? []).filter((i) => i.severity !== 'low');
   return serious.length ? (
     <span className={clsx('inline-flex items-center gap-1 font-semibold', serious.some((i) => i.severity === 'high') ? 'text-danger' : 'text-warn')}>
-      <Sparkles size={11} /> AI: {serious.length} issue{serious.length > 1 ? 's' : ''} · {serious[0]!.message}
+      <Sparkles size={11} /> {AI_SHORT}: {serious.length} issue{serious.length > 1 ? 's' : ''} · {serious[0]!.message}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 font-semibold text-ok"><Sparkles size={11} /> AI: looks right</span>
+    <span className="inline-flex items-center gap-1 font-semibold text-ok"><Sparkles size={11} /> {AI_SHORT}: looks right</span>
   );
 }
 
@@ -315,10 +316,10 @@ function ReviewModal({ slug, doc, canVerify, profile, aiChecks }: { slug: string
           </div>
           <div className="flex min-w-0 flex-col gap-4">
             {ai?.status && (
-              <section aria-label="AI check" className="flex flex-col gap-2 rounded-[14px] p-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
+              <section aria-label={`${AI_SHORT} check`} className="flex flex-col gap-2 rounded-[14px] p-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
                 <div className="flex flex-wrap items-center gap-2">
                   <Sparkles size={14} />
-                  <span className="text-sm font-bold">AI check</span>
+                  <span className="text-sm font-bold">{AI_SHORT} check</span>
                   {ai.status === 'done' && ai.documentType && <span className="text-xs text-muted">Looks like: {ai.documentType}</span>}
                   {aiChecks && <button type="button" disabled={rechecking} onClick={() => startRecheck(async () => { await recheckDocumentAction(slug, file.id); router.refresh(); })} className="ml-auto text-xs font-semibold text-ink underline underline-offset-4">
                     {rechecking ? 'Checking…' : 'Check again'}
@@ -347,7 +348,7 @@ function ReviewModal({ slug, doc, canVerify, profile, aiChecks }: { slug: string
                           ))}
                       </dl>
                     )}
-                    <p className="text-[11px] text-muted">{ai.sandbox ? 'Sandbox: judged from the file name and size only. Add an Anthropic API key to read the document itself.' : 'Read by AI. It can be wrong, so check before verifying.'}</p>
+                    <p className="text-[11px] text-muted">{ai.sandbox ? 'Sandbox: judged from the file name and size only. Add an Anthropic API key to read the document itself.' : `Read by ${AI_SHORT}. It can be wrong, so check before verifying.`}</p>
                   </>
                 )}
               </section>
@@ -364,7 +365,7 @@ function ReviewModal({ slug, doc, canVerify, profile, aiChecks }: { slug: string
                     <span className="flex flex-wrap items-center gap-2">
                       <Input name="expiresAt" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className="w-48" />
                       {ai?.fields?.expiryDate && ai.fields.expiryDate !== expiry && /^d{4}-d{2}-d{2}$/.test(ai.fields.expiryDate) && (
-                        <Button size="sm" variant="ghost" onClick={() => setExpiry(ai.fields!.expiryDate!)}>Use {ai.fields.expiryDate} (from AI)</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setExpiry(ai.fields!.expiryDate!)}>Use {ai.fields.expiryDate} (read by {AI_SHORT})</Button>
                       )}
                     </span>
                   </FormField>

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
 
-// AI surfaces follow the plan: the copilot brief, the sidebar's AI agents and
-// the case page's AI flags. Trial and Pro get everything, Growth part of it,
+// Kicko Yu follows the plan: the daily brief, the sidebar's agent status and
+// the case page's Yu flags. Trial and Pro get everything, Growth part of it,
 // Starter none (admins see where to get it), read-only gets the basic brief.
 
 const run = Date.now().toString(36);
@@ -19,8 +19,8 @@ async function setSub(fields: string) {
   }
 }
 
-const agents = (page: Page) => page.getByRole('group', { name: 'AI agents' });
-const copilot = (page: Page) => page.getByRole('complementary', { name: 'AI copilot' });
+const agents = (page: Page) => page.getByRole('group', { name: 'Kicko Yu' });
+const yu = (page: Page) => page.getByRole('complementary', { name: 'Kicko Yu' });
 
 test.describe.serial('AI surfaces by plan', () => {
   let page: Page;
@@ -37,25 +37,25 @@ test.describe.serial('AI surfaces by plan', () => {
     await page.waitForURL(`**/${slug}`);
   });
 
-  test('trial: copilot brief and every AI agent', async () => {
-    await expect(copilot(page).getByRole('heading', { name: 'Copilot' })).toBeVisible();
-    await expect(copilot(page).getByText('AI suggestions are advisory')).toBeVisible();
+  test('trial: Yu brief and every AI agent', async () => {
+    await expect(yu(page).getByRole('heading', { name: 'Yu', exact: true })).toBeVisible();
+    await expect(yu(page).getByText("Yu's suggestions are advisory")).toBeVisible();
     await expect(agents(page).getByRole('link')).toHaveText(['Voice · not set up', 'WhatsApp · off', 'Call notes · on', 'Doc check · on']);
   });
 
-  test('Growth: copilot, WhatsApp AI and call notes; no voice agent or doc checks', async () => {
+  test('Growth: Yu brief, WhatsApp AI and call notes; no voice agent or doc checks', async () => {
     await setSub(`plan = 'growth', status = 'active', "trialEndsAt" = NULL, "currentPeriodEnd" = now() + interval '30 days'`);
     await page.reload();
-    await expect(copilot(page).getByText('AI suggestions are advisory')).toBeVisible();
+    await expect(yu(page).getByText("Yu's suggestions are advisory")).toBeVisible();
     await expect(agents(page).getByRole('link')).toHaveText(['WhatsApp · off', 'Call notes · on']);
   });
 
-  test('Starter: no AI anywhere; the owner sees where to get the copilot', async () => {
+  test('Starter: no AI anywhere; the owner sees where to get Kicko Yu', async () => {
     await setSub(`plan = 'starter'`);
     await page.reload();
     await expect(agents(page)).toHaveCount(0);
-    await expect(copilot(page).getByRole('link', { name: 'See Growth' })).toBeVisible();
-    await expect(copilot(page).getByText('AI suggestions are advisory')).toHaveCount(0);
+    await expect(yu(page).getByRole('link', { name: 'See Growth' })).toBeVisible();
+    await expect(yu(page).getByText("Yu's suggestions are advisory")).toHaveCount(0);
     // The command bar doesn't promise AI commands either.
     await page.getByLabel('Search or jump to').click();
     await expect(page.getByText('Plain-English commands')).toHaveCount(0);
@@ -64,7 +64,7 @@ test.describe.serial('AI surfaces by plan', () => {
   test('read-only workspace keeps the brief, without AI writing it', async () => {
     await setSub(`plan = 'pro', status = 'read_only', "statusSince" = now()`);
     await page.reload();
-    await expect(copilot(page).getByText('AI suggestions are advisory')).toBeVisible();
+    await expect(yu(page).getByText("Yu's suggestions are advisory")).toBeVisible();
     await expect(agents(page).getByRole('link')).toHaveCount(4);
   });
 });

@@ -145,7 +145,7 @@ export async function buildContactContext(ctx: Ctx, contact: Contact) {
       nextAppointment: appointment ? `${fmtDateTime(appointment.startsAt, tz)} · ${appointment.title}` : null,
       amountDue: billing && due > 0 ? formatMoney(due) : null,
       eligibility: check ? { label: check.kind === 'CRS' ? 'CRS score' : 'AU points', score: check.score, at: fmtDate(check.createdAt, tz, { year: undefined }) } : null,
-      captured: notes.map((n) => ({ id: n.id, text: n.body.replace(AI_NOTE, '').trim(), at: fmtDate(n.createdAt, tz, { year: undefined }), via: n.body.startsWith('From AI voice call') ? 'AI call' : 'WhatsApp AI' })),
+      captured: notes.map((n) => ({ id: n.id, text: n.body.replace(AI_NOTE, '').trim(), at: fmtDate(n.createdAt, tz, { year: undefined }), via: n.body.startsWith('From AI voice call') ? 'Voice agent call' : 'WhatsApp assistant' })),
     };
   });
 }

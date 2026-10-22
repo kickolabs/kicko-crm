@@ -1,5 +1,6 @@
 import 'server-only';
 import { claude } from '../llm/claude';
+import { openaiCompatible } from '../llm/openai-compatible';
 import type { LlmAdapter } from '../llm/port';
 import { sandboxLlm } from '../llm/sandbox';
 import { deepgram } from '../stt/deepgram';
@@ -17,6 +18,20 @@ export function llm(): LlmAdapter {
   return key ? claude(key) : sandboxLlm;
 }
 
+/** AI tasks: whatsapp_reply, call_notes, document_check, copilot_brief, eligibility_explanation. */
+export type AiTask = 'whatsapp_reply' | 'call_notes' | 'document_check' | 'copilot_brief' | 'eligibility_explanation';
+
+/**
+ * The model for one task. Tasks listed in KICKO_MODEL_TASKS go to Kicko's own
+ * model (KICKO_MODEL_URL, an OpenAI-compatible server); everything else to Claude.
+ * So one task can move to a fine-tuned model without touching the others.
+ */
+export function llmFor(task: AiTask): LlmAdapter {
+  const { KICKO_MODEL_URL: url, KICKO_MODEL_NAME: model, KICKO_MODEL_KEY: apiKey, KICKO_MODEL_TASKS: tasks } = process.env;
+  const routed = (tasks ?? '').split(',').map((t) => t.trim()).includes(task);
+  return url && model && routed ? openaiCompatible({ baseUrl: url, model, apiKey }) : llm();
+}
+
 export function stt(): SttAdapter {
   const key = process.env.DEEPGRAM_API_KEY;
   return key ? deepgram(key) : sandboxStt;
@@ -24,6 +39,7 @@ export function stt(): SttAdapter {
 
 export const platformStatus = () => ({
   llm: process.env.ANTHROPIC_API_KEY ? `Claude (${process.env.AI_MODEL ?? 'claude-sonnet-5-5'})` : null,
+  ownModel: process.env.KICKO_MODEL_URL && process.env.KICKO_MODEL_TASKS ? `${process.env.KICKO_MODEL_NAME} for ${process.env.KICKO_MODEL_TASKS}` : null,
   stt: process.env.DEEPGRAM_API_KEY ? 'Deepgram' : null,
 });
 

@@ -1,4 +1,5 @@
 import 'server-only';
+import type { TenantSettings } from '@kicko/db/provision';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { prisma, withPlatformRead, withTenant, type Prisma, type Subscription, type Tx } from '@kicko/db';
@@ -141,6 +142,25 @@ export function overview(rows: AgencyRow[], now = new Date()) {
     revenueMonthInr: rows.filter((r) => r.currency === 'INR').reduce((a, r) => a + r.revenueMonth, 0),
     seats: rows.reduce((a, r) => a + r.members, 0),
     foundingUsed: rows.filter((r) => (r.sub?.discountPct ?? 0) >= FOUNDING_PCT).length,
+  };
+}
+
+/** Labelled examples for a future fine-tuned Kicko model, from agencies that opted in. */
+export const FINE_TUNE_READY = 10_000;
+
+export async function yuTrainingData() {
+  const [byTask, agreed, tenants] = await Promise.all([
+    platformRead((tx) => tx.aiFeedback.groupBy({ by: ['task'], _count: { _all: true } })),
+    platformRead((tx) => tx.aiFeedback.groupBy({ by: ['task'], where: { agreed: true }, _count: { _all: true } })),
+    prisma.tenant.findMany({ select: { settings: true } }),
+  ]);
+  const yes = new Map(agreed.map((g) => [g.task, g._count._all]));
+  return {
+    optedIn: tenants.filter((t) => (t.settings as TenantSettings).ai?.improve === true).length,
+    tasks: ['document_check', 'call_notes', 'whatsapp_reply'].map((task) => {
+      const n = byTask.find((g) => g.task === task)?._count._all ?? 0;
+      return { task, examples: n, agreement: n ? Math.round(((yes.get(task) ?? 0) / n) * 100) : null };
+    }),
   };
 }
 
