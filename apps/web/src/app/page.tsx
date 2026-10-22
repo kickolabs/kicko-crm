@@ -6,16 +6,21 @@ import { buttonCls } from '@/components/ui';
 import { getSession } from '@/lib/auth';
 import { getAdmin } from '@/server/admin';
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ choose?: string }> }) {
   const session = await getSession();
   if (session) {
     const tenants = await tenantsForUser(session.user.id);
-    if (tenants.length === 1) redirect(`/${tenants[0]!.slug}`);
-    if (tenants.length > 1) {
+    // "Switch workspace" asks for the list (?choose=1) even with one workspace, so it never just reloads the same page.
+    const choose = (await searchParams).choose === '1';
+    if (tenants.length === 1 && !choose) redirect(`/${tenants[0]!.slug}`);
+    if (tenants.length > 1 || (choose && tenants.length === 1)) {
       return (
         <div className="dotgrid flex min-h-dvh items-start justify-center px-4 pt-20">
           <div className="card w-full max-w-md p-8">
             <h1 className="text-2xl font-extrabold tracking-tight">Choose a workspace</h1>
+            {tenants.length === 1 && (
+              <p className="mt-2 text-sm text-muted">You belong to one agency. Create another, or ask an agency to invite {session.user.email}, and it will show here.</p>
+            )}
             <ul className="mt-5 flex flex-col gap-2">
               {tenants.map((t) => (
                 <li key={t.id}>

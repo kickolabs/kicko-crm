@@ -41,7 +41,7 @@ export function UserMenu({ name, email, role }: { slug: string; name: string; em
           <Link role="menuitem" href="/account" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
             <UserCog size={15} aria-hidden="true" /> My account & security
           </Link>
-          <Link role="menuitem" href="/" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
+          <Link role="menuitem" href="/?choose=1" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
             <Repeat size={15} aria-hidden="true" /> Switch workspace
           </Link>
           <Link role="menuitem" href="/signup" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-semibold hover:bg-paper-3">
