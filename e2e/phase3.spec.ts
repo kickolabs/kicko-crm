@@ -49,7 +49,7 @@ test.describe.serial('Phase 3 · client portal', () => {
     await staff.getByRole('button', { name: 'Create portal link' }).click();
     link = await staff.getByLabel('Portal link').inputValue();
     expect(link).toContain(`/portal/${slug}/auth?t=`);
-    await expect(staff.getByRole('link', { name: 'WhatsApp' })).toHaveAttribute('href', /wa\.me\/919840011223/);
+    await expect(staff.getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', /wa\.me\/919840011223/);
   });
 
   test('client signs in with one click and sees their journey', async () => {

@@ -20,7 +20,7 @@ function useShortcutLabel() {
 }
 
 /** Command bar: search leads, clients and cases, or jump anywhere. Opens with Ctrl+K or ⌘K. */
-export function CommandBar({ slug }: { slug: string }) {
+export function CommandBar({ slug, ai }: { slug: string; ai: boolean }) {
   const router = useRouter();
   const shortcut = useShortcutLabel();
   const [open, setOpen] = useState(false);
@@ -175,10 +175,12 @@ export function CommandBar({ slug }: { slug: string }) {
               {r.sub && <span className="truncate text-xs text-muted">{r.sub}</span>}
             </button>
           ))}
-          <div className="mt-1 flex items-center gap-2 border-t border-line px-3 pt-2.5 pb-1 text-xs text-muted">
-            <Sparkles size={13} aria-hidden="true" />
-            Plain-English commands ("move Priya's case to lodged") arrive with the AI copilot.
-          </div>
+          {ai && (
+            <div className="mt-1 flex items-center gap-2 border-t border-line px-3 pt-2.5 pb-1 text-xs text-muted">
+              <Sparkles size={13} aria-hidden="true" />
+              Plain-English commands ("move Priya's case to lodged") are coming to the copilot.
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -6,8 +6,9 @@ import { can } from '@/lib/permissions';
 import { getCtx } from '@/lib/tenant';
 import { connectionSummary } from '@/integrations/core/connections';
 import { listThreads, parseContactKey } from '@/server/messages';
-import { buildThread } from '@/server/thread-view';
+import { buildContactContext, buildThread } from '@/server/thread-view';
 import { Conversation } from '../_components/conversation';
+import { ContextPanel } from './context-panel';
 
 export const metadata = { title: 'Inbox' };
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export default async function InboxPage({
   const threads = await listThreads(ctx, filter);
   const activeKey = parseContactKey(sp.c) ? sp.c : threads[0]?.key;
   const contact = parseContactKey(activeKey);
-  const view = contact ? await buildThread(ctx, contact) : null;
+  const [view, context] = contact ? await Promise.all([buildThread(ctx, contact), buildContactContext(ctx, contact)]) : [null, null];
   const wa = await connectionSummary(ctx.tenant.id, 'messaging');
   const totalUnread = threads.reduce((a, t) => a + t.unread, 0);
   const q = (f?: string, c?: string) => `?${new URLSearchParams(Object.entries({ f: f === 'all' ? undefined : f, c }).filter(([, v]) => v) as [string, string][])}`;
@@ -68,7 +69,7 @@ export default async function InboxPage({
           />
         </Card>
       ) : (
-        <Card className="grid h-[74vh] grid-cols-1 overflow-hidden md:grid-cols-[320px_minmax(0,1fr)]">
+        <Card className="grid h-[74vh] grid-cols-1 overflow-hidden md:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_280px]">
           <nav aria-label="Conversations" className="overflow-y-auto border-b border-line md:border-r md:border-b-0">
             {threads.map((t) => {
               const on = t.key === activeKey;
@@ -109,6 +110,7 @@ export default async function InboxPage({
               </div>
             </section>
           )}
+          {view && context && <ContextPanel c={context} />}
         </Card>
       )}
     </div>

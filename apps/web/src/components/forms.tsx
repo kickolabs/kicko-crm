@@ -177,11 +177,14 @@ export function Modal({
   title,
   children,
   wide,
+  xl,
 }: {
   trigger: (open: () => void) => ReactNode;
   title: string;
   children: (close: () => void) => ReactNode;
   wide?: boolean;
+  /** Side-by-side layouts, e.g. a document beside its review. */
+  xl?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -202,7 +205,7 @@ export function Modal({
         onClick={(e) => e.target === ref.current && close()}
         className={clsx(
           'pop-in m-auto w-[calc(100%-32px)] rounded-[22px] bg-card p-0 text-ink shadow-[var(--shadow-pop)]',
-          wide ? 'max-w-3xl' : 'max-w-lg',
+          xl ? 'max-w-6xl' : wide ? 'max-w-3xl' : 'max-w-lg',
         )}
       >
         {mounted && (

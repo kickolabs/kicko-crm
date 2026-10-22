@@ -12,6 +12,7 @@ export type Feature =
   | 'calling'
   | 'call_notes'
   | 'wa_assistant'
+  | 'copilot'
   | 'voice_agent'
   | 'sub_agents'
   | 'doc_checks'
@@ -45,8 +46,8 @@ export const PLANS: Record<PlanId, {
     price: { INR: { month: 239_900, year: 199_900 }, USD: { month: 3_500, year: 2_900 } },
     creditsPerUser: 300,
     storageGb: 50,
-    features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant'],
-    highlights: ['Everything in Starter', 'Calling with AI call notes', 'WhatsApp AI assistant', 'Payment links, eligibility calculators, form sheets'],
+    features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'copilot'],
+    highlights: ['Everything in Starter', 'Calling with AI call notes', 'WhatsApp AI assistant', 'AI copilot with a daily brief', 'Payment links, eligibility calculators, form sheets'],
   },
   pro: {
     name: 'Pro',
@@ -54,7 +55,7 @@ export const PLANS: Record<PlanId, {
     price: { INR: { month: 419_900, year: 349_900 }, USD: { month: 5_900, year: 4_900 } },
     creditsPerUser: 1000,
     storageGb: 200,
-    features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'voice_agent', 'sub_agents', 'doc_checks', 'custom_fields', 'api'],
+    features: ['payment_links', 'eligibility', 'forms', 'calling', 'call_notes', 'wa_assistant', 'copilot', 'voice_agent', 'sub_agents', 'doc_checks', 'custom_fields', 'api'],
     highlights: ['Everything in Growth', 'AI voice agent', 'Sub-agent network', 'AI document checks & API', 'Custom fields & report builder'],
   },
 };
@@ -66,6 +67,7 @@ export const FEATURE_LABEL: Record<Feature, string> = {
   calling: 'Calling',
   call_notes: 'AI call notes',
   wa_assistant: 'WhatsApp AI assistant',
+  copilot: 'AI copilot',
   voice_agent: 'AI voice agent',
   sub_agents: 'Sub-agent network',
   doc_checks: 'AI document checks',
@@ -74,7 +76,7 @@ export const FEATURE_LABEL: Record<Feature, string> = {
 };
 
 /** Credits per AI action (1 credit ≈ ₹1 of AI cost). Only charged when a real model runs. */
-export const CREDIT_COST = { call_notes: 4, voice_notes: 2, wa_reply: 1, doc_check: 1 } as const;
+export const CREDIT_COST = { call_notes: 4, voice_notes: 2, wa_reply: 1, doc_check: 1, brief: 2 } as const;
 export type CreditAction = keyof typeof CREDIT_COST;
 
 /** Trials get every feature, with a small AI allowance. */
@@ -83,7 +85,7 @@ export const TOP_UP = { credits: 1000, price: { INR: 149_900, USD: 1_900 } };
 export const GST_RATE = 0.18;
 
 /** Features that spend AI credits. */
-export const AI_FEATURES: Feature[] = ['call_notes', 'wa_assistant', 'voice_agent', 'doc_checks'];
+export const AI_FEATURES: Feature[] = ['call_notes', 'wa_assistant', 'copilot', 'voice_agent', 'doc_checks'];
 
 /** Whether the plan has anything to spend AI credits on (trials do). */
 export const hasAi = (sub: { plan: string; status: string }) => AI_FEATURES.some((f) => hasFeature(sub, f));

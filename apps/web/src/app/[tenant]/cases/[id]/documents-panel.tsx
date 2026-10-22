@@ -3,7 +3,7 @@
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { Ban, Eye, FileText, Plus, RotateCcw, Sparkles, Upload } from 'lucide-react';
+import { Ban, Check, Eye, FileText, Plus, RotateCcw, Sparkles, TriangleAlert, Upload } from 'lucide-react';
 import type { DocumentStatus } from '@kicko/db';
 import { ActionForm, FormField, Modal, SubmitButton, Spinner } from '@/components/forms';
 import { Button, Input, Textarea, buttonCls } from '@/components/ui';
@@ -73,12 +73,18 @@ export function DocumentsPanel({
   docs,
   canWrite,
   canVerify,
+  profile,
+  aiChecks,
 }: {
   slug: string;
   caseId: string;
   docs: DocRow[];
   canWrite: boolean;
   canVerify: boolean;
+  /** The client's details, for comparing with what the AI check read. */
+  profile: Profile;
+  /** The plan includes AI checks and they're on: offer "Check again". */
+  aiChecks: boolean;
 }) {
   // AI checks run in the background after an upload: refresh until they finish.
   const router = useRouter();
@@ -100,7 +106,7 @@ export function DocumentsPanel({
   const pct = required.length ? Math.round((verified / required.length) * 100) : 0;
 
   return (
-    <section className="card" aria-label="Documents">
+    <section id="documents" className="card scroll-mt-24" aria-label="Documents">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="flex min-w-0 flex-col gap-1">
           <h2 className="text-base font-bold">Documents</h2>
@@ -122,7 +128,7 @@ export function DocumentsPanel({
             <div className="eyebrow px-5 pt-3.5 pb-1">{g}</div>
             <ul>
               {docs.filter((d) => d.group === g).map((d) => (
-                <DocItem key={d.id} slug={slug} doc={d} canWrite={canWrite} canVerify={canVerify} />
+                <DocItem key={d.id} slug={slug} doc={d} canWrite={canWrite} canVerify={canVerify} profile={profile} aiChecks={aiChecks} />
               ))}
             </ul>
           </div>
@@ -132,7 +138,7 @@ export function DocumentsPanel({
   );
 }
 
-function DocItem({ slug, doc, canWrite, canVerify }: { slug: string; doc: DocRow; canWrite: boolean; canVerify: boolean }) {
+function DocItem({ slug, doc, canWrite, canVerify, profile, aiChecks }: { slug: string; doc: DocRow; canWrite: boolean; canVerify: boolean; profile: Profile; aiChecks: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -195,7 +201,7 @@ function DocItem({ slug, doc, canWrite, canVerify }: { slug: string; doc: DocRow
         ) : (
           <>
             {current && (
-              <ReviewModal slug={slug} doc={doc} canVerify={canVerify && doc.status !== 'NOT_APPLICABLE'} />
+              <ReviewModal slug={slug} doc={doc} canVerify={canVerify && doc.status !== 'NOT_APPLICABLE'} profile={profile} aiChecks={aiChecks} />
             )}
             {canWrite && doc.status !== 'VERIFIED' && doc.status !== 'NOT_APPLICABLE' && (
               <>
@@ -233,7 +239,7 @@ function DocItem({ slug, doc, canWrite, canVerify }: { slug: string; doc: DocRow
   );
 }
 
-function ReviewModal({ slug, doc, canVerify }: { slug: string; doc: DocRow; canVerify: boolean }) {
+function ReviewModal({ slug, doc, canVerify, profile, aiChecks }: { slug: string; doc: DocRow; canVerify: boolean; profile: Profile; aiChecks: boolean }) {
   const [fileId, setFileId] = useState(doc.files[0]!.id);
   const [url, setUrl] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
@@ -251,7 +257,7 @@ function ReviewModal({ slug, doc, canVerify }: { slug: string; doc: DocRow; canV
 
   return (
     <Modal
-      wide
+      xl
       title={doc.name}
       trigger={(open) => (
         <Button
@@ -267,109 +273,162 @@ function ReviewModal({ slug, doc, canVerify }: { slug: string; doc: DocRow; canV
       )}
     >
       {(close) => (
-        <div className="flex flex-col gap-4">
-          {doc.files.length > 1 && (
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Versions">
-              {doc.files.map((f, i) => (
-                <button key={f.id} type="button" role="tab" aria-selected={f.id === fileId} onClick={() => { setFileId(f.id); void load(f.id); }} className={clsx('rounded-full px-3 py-1 text-xs font-semibold', f.id === fileId ? 'bg-ink text-paper' : 'bg-paper-2 text-ink-2')}>
-                  v{doc.files.length - i} · {new Date(f.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex h-[55vh] items-center justify-center overflow-hidden rounded-[14px] bg-paper-3 shadow-[inset_0_0_0_1px_var(--color-line)]">
-            {!url ? (
-              <Spinner />
-            ) : file.contentType === 'application/pdf' ? (
-              <iframe src={url} title={file.fileName} className="h-full w-full" />
-            ) : file.contentType.startsWith('image/') && file.contentType !== 'image/heic' ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt={doc.name} className="max-h-full max-w-full object-contain" />
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-sm text-muted">
-                <FileText size={28} />
-                No preview for this file type.
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex min-w-0 flex-col gap-4">
+            {doc.files.length > 1 && (
+              <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Versions">
+                {doc.files.map((f, i) => (
+                  <button key={f.id} type="button" role="tab" aria-selected={f.id === fileId} onClick={() => { setFileId(f.id); void load(f.id); }} className={clsx('rounded-full px-3 py-1 text-xs font-semibold', f.id === fileId ? 'bg-ink text-paper' : 'bg-paper-2 text-ink-2')}>
+                    v{doc.files.length - i} · {new Date(f.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </button>
+                ))}
               </div>
             )}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-            <span>{file.fileName} · {kb(file.size)}</span>
-            <button
-              type="button"
-              className="font-semibold text-ink underline underline-offset-4"
-              onClick={async () => {
-                const r = await fileUrlAction(slug, file.id, false);
-                if (r.ok && r.data) window.location.href = r.data;
-              }}
-            >
-              Download
-            </button>
-          </div>
-          {ai?.status && (
-            <section aria-label="AI check" className="flex flex-col gap-2 rounded-[14px] p-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
-              <div className="flex flex-wrap items-center gap-2">
-                <Sparkles size={14} />
-                <span className="text-sm font-bold">AI check</span>
-                {ai.status === 'done' && ai.documentType && <span className="text-xs text-muted">Looks like: {ai.documentType}</span>}
-                <button type="button" disabled={rechecking} onClick={() => startRecheck(async () => { await recheckDocumentAction(slug, file.id); router.refresh(); })} className="ml-auto text-xs font-semibold text-ink underline underline-offset-4">
-                  {rechecking ? 'Checking…' : 'Check again'}
-                </button>
-              </div>
-              {ai.status === 'pending' && <p className="text-xs text-muted">Reading the document…</p>}
-              {ai.status !== 'done' && ai.status !== 'pending' && <p className="text-xs text-muted">{ai.reason ?? 'Not checked.'}</p>}
-              {ai.status === 'done' && (
-                <>
-                  {(ai.issues ?? []).length === 0 ? (
-                    <p className="text-sm text-ok">No problems found.</p>
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {ai.issues!.map((i) => (
-                        <li key={i.message} className={clsx('text-sm', i.severity === 'high' ? 'font-semibold text-danger' : i.severity === 'medium' ? 'text-warn-ink' : 'text-ink-2')}>{i.message}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {ai.fields && Object.values(ai.fields).some(Boolean) && (
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
-                      {([['Name', ai.fields.fullName], ['Date of birth', ai.fields.dateOfBirth], ['Number', ai.fields.documentNumber], ['Expiry', ai.fields.expiryDate], ['Country', ai.fields.issuingCountry]] as const)
-                        .filter(([, v]) => v)
-                        .map(([k, v]) => (
-                          <div key={k}><dt className="text-muted">{k}</dt><dd className="font-semibold">{v}</dd></div>
-                        ))}
-                    </dl>
-                  )}
-                  <p className="text-[11px] text-muted">{ai.sandbox ? 'Sandbox: judged from the file name and size only. Add an Anthropic API key to read the document itself.' : 'Read by AI. It can be wrong, so check before verifying.'}</p>
-                </>
-              )}
-            </section>
-          )}
-          {canVerify && (
-            <ActionForm action={reviewDocumentAction.bind(null, slug, doc.id)} onSuccess={close} className="flex flex-col gap-3 rounded-[14px] bg-paper-3 p-4">
-              <input type="hidden" name="decision" value={rejecting ? 'REJECTED' : 'VERIFIED'} />
-              {rejecting ? (
-                <FormField label="What needs fixing? (the client will see this)" name="reason">
-                  <Textarea name="reason" className="min-h-16" placeholder="e.g. Last page missing; upload all pages of the passport" autoFocus />
-                </FormField>
+            <div className="flex h-[55vh] items-center justify-center lg:h-[68vh] overflow-hidden rounded-[14px] bg-paper-3 shadow-[inset_0_0_0_1px_var(--color-line)]">
+              {!url ? (
+                <Spinner />
+              ) : file.contentType === 'application/pdf' ? (
+                <iframe src={url} title={file.fileName} className="h-full w-full" />
+              ) : file.contentType.startsWith('image/') && file.contentType !== 'image/heic' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={url} alt={doc.name} className="max-h-full max-w-full object-contain" />
               ) : (
-                <FormField label="Expiry date (optional)" name="expiresAt" hint="Passports, test scores, police and medical certificates expire; we'll remind you.">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Input name="expiresAt" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className="w-48" />
-                    {ai?.fields?.expiryDate && ai.fields.expiryDate !== expiry && /^d{4}-d{2}-d{2}$/.test(ai.fields.expiryDate) && (
-                      <Button size="sm" variant="ghost" onClick={() => setExpiry(ai.fields!.expiryDate!)}>Use {ai.fields.expiryDate} (from AI)</Button>
-                    )}
-                  </span>
-                </FormField>
+                <div className="flex flex-col items-center gap-3 text-sm text-muted">
+                  <FileText size={28} />
+                  No preview for this file type.
+                </div>
               )}
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button size="md" variant={rejecting ? 'ghost' : 'danger'} onClick={() => setRejecting((r) => !r)}>
-                  {rejecting ? 'Cancel' : 'Reject'}
-                </Button>
-                <SubmitButton variant={rejecting ? 'danger' : 'primary'}>{rejecting ? 'Reject & ask again' : 'Verify'}</SubmitButton>
-              </div>
-            </ActionForm>
-          )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+              <span>{file.fileName} · {kb(file.size)}</span>
+              <button
+                type="button"
+                className="font-semibold text-ink underline underline-offset-4"
+                onClick={async () => {
+                  const r = await fileUrlAction(slug, file.id, false);
+                  if (r.ok && r.data) window.location.href = r.data;
+                }}
+              >
+                Download
+              </button>
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            {ai?.status && (
+              <section aria-label="AI check" className="flex flex-col gap-2 rounded-[14px] p-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Sparkles size={14} />
+                  <span className="text-sm font-bold">AI check</span>
+                  {ai.status === 'done' && ai.documentType && <span className="text-xs text-muted">Looks like: {ai.documentType}</span>}
+                  {aiChecks && <button type="button" disabled={rechecking} onClick={() => startRecheck(async () => { await recheckDocumentAction(slug, file.id); router.refresh(); })} className="ml-auto text-xs font-semibold text-ink underline underline-offset-4">
+                    {rechecking ? 'Checking…' : 'Check again'}
+                  </button>}
+                </div>
+                {ai.status === 'pending' && <p className="text-xs text-muted">Reading the document…</p>}
+                {ai.status !== 'done' && ai.status !== 'pending' && <p className="text-xs text-muted">{ai.reason ?? 'Not checked.'}</p>}
+                {ai.status === 'done' && (
+                  <>
+                    {(ai.issues ?? []).length === 0 ? (
+                      <p className="text-sm text-ok">No problems found.</p>
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {ai.issues!.map((i) => (
+                          <li key={i.message} className={clsx('text-sm', i.severity === 'high' ? 'font-semibold text-danger' : i.severity === 'medium' ? 'text-warn-ink' : 'text-ink-2')}>{i.message}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {ai.fields && <Comparison fields={ai.fields} profile={profile} passport={/passport/i.test(doc.name) || /passport/i.test(ai.documentType ?? '')} />}
+                    {ai.fields && (ai.fields.expiryDate || ai.fields.issuingCountry || ai.fields.documentNumber) && (
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                        {([['Number', /passport/i.test(doc.name) ? null : ai.fields.documentNumber], ['Expiry', ai.fields.expiryDate], ['Country', ai.fields.issuingCountry]] as const)
+                          .filter(([, v]) => v)
+                          .map(([k, v]) => (
+                            <div key={k}><dt className="text-muted">{k}</dt><dd className="font-semibold">{v}</dd></div>
+                          ))}
+                      </dl>
+                    )}
+                    <p className="text-[11px] text-muted">{ai.sandbox ? 'Sandbox: judged from the file name and size only. Add an Anthropic API key to read the document itself.' : 'Read by AI. It can be wrong, so check before verifying.'}</p>
+                  </>
+                )}
+              </section>
+            )}
+            {canVerify && (
+              <ActionForm action={reviewDocumentAction.bind(null, slug, doc.id)} onSuccess={close} className="flex flex-col gap-3 rounded-[14px] bg-paper-3 p-4">
+                <input type="hidden" name="decision" value={rejecting ? 'REJECTED' : 'VERIFIED'} />
+                {rejecting ? (
+                  <FormField label="What needs fixing? (the client will see this)" name="reason">
+                    <Textarea name="reason" className="min-h-16" placeholder="e.g. Last page missing; upload all pages of the passport" autoFocus />
+                  </FormField>
+                ) : (
+                  <FormField label="Expiry date (optional)" name="expiresAt" hint="Passports, test scores, police and medical certificates expire; we'll remind you.">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Input name="expiresAt" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className="w-48" />
+                      {ai?.fields?.expiryDate && ai.fields.expiryDate !== expiry && /^d{4}-d{2}-d{2}$/.test(ai.fields.expiryDate) && (
+                        <Button size="sm" variant="ghost" onClick={() => setExpiry(ai.fields!.expiryDate!)}>Use {ai.fields.expiryDate} (from AI)</Button>
+                      )}
+                    </span>
+                  </FormField>
+                )}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button size="md" variant={rejecting ? 'ghost' : 'danger'} onClick={() => setRejecting((r) => !r)}>
+                    {rejecting ? 'Cancel' : 'Reject'}
+                  </Button>
+                  <SubmitButton variant={rejecting ? 'danger' : 'primary'}>{rejecting ? 'Reject & ask again' : 'Verify'}</SubmitButton>
+                </div>
+              </ActionForm>
+            )}
+          </div>
         </div>
       )}
     </Modal>
+  );
+}
+
+export type Profile = { fullName: string; dob: string | null; passportNumber: string | null };
+
+const words = (s: string) => new Set(s.toLowerCase().normalize('NFKD').replace(/[^a-zs]/g, ' ').split(/s+/).filter((t) => t.length > 1));
+const sameName = (a: string, b: string) => {
+  const x = words(a);
+  const y = words(b);
+  return x.size === y.size && [...x].every((t) => y.has(t));
+};
+const alnum = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/** What the AI read beside what's on the client's profile, so a mismatch is visible at a glance. */
+function Comparison({ fields, profile, passport }: { fields: NonNullable<AiView['fields']>; profile: Profile; passport: boolean }) {
+  const rows = [
+    { label: 'Name', doc: fields.fullName, mine: profile.fullName, same: (a: string, b: string) => sameName(a, b) },
+    { label: 'Date of birth', doc: fields.dateOfBirth, mine: profile.dob, same: (a: string, b: string) => a.slice(0, 10) === b.slice(0, 10) },
+    ...(passport ? [{ label: 'Passport no.', doc: fields.documentNumber, mine: profile.passportNumber, same: (a: string, b: string) => alnum(a) === alnum(b) }] : []),
+  ].filter((r) => r.doc);
+  if (!rows.length) return null;
+  return (
+    <table className="w-full border-collapse text-xs">
+      <thead>
+        <tr className="text-left text-[10px] font-bold tracking-wider text-muted uppercase">
+          <th className="py-1.5 pr-2 font-bold" />
+          <th className="py-1.5 pr-2 font-bold">On the document</th>
+          <th className="py-1.5 font-bold">On the profile</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const ok = r.mine ? r.same(r.doc!, r.mine) : null;
+          return (
+            <tr key={r.label} className="border-t border-line align-top">
+              <th scope="row" className="py-2 pr-2 text-left font-medium text-muted">{r.label}</th>
+              <td className={clsx('py-2 pr-2 font-semibold', ok === false && 'text-danger')}>
+                <span className="inline-flex items-start gap-1">
+                  {ok === false ? <TriangleAlert size={12} className="mt-px shrink-0" aria-label="Doesn't match" /> : ok ? <Check size={12} className="mt-px shrink-0 text-ok" aria-label="Matches" /> : null}
+                  {r.doc}
+                </span>
+              </td>
+              <td className="py-2 font-semibold">{r.mine ?? <span className="font-normal text-muted">Not on profile</span>}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 

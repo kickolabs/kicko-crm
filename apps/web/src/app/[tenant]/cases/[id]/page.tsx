@@ -10,6 +10,7 @@ import { DocumentsPanel } from './documents-panel';
 import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
 import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
+import { hasFeature } from '@/lib/plans';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { CustomFieldsPanel } from '../../_components/custom-fields-panel';
 import { stagesOf } from '@/server/cases';
@@ -41,7 +42,16 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
     can(ctx.role, 'billing.read') ? listInvoicesFor(ctx, { caseId: c.id }) : Promise.resolve(null),
   ]);
   const tz = ctx.tenant.timezone;
-  const checksOn = docChecksOn(ctx.tenant.settings);
+  // AI document checks: Pro (and trials), unless the agency turned them off.
+  const checksOn = Boolean(ctx.subscription && hasFeature(ctx.subscription, 'doc_checks')) && docChecksOn(ctx.tenant.settings);
+  const flagged = checksOn
+    ? docs.filter((d) => {
+        if (d.status === 'VERIFIED' || d.status === 'NOT_APPLICABLE') return false;
+        const f = d.files[0];
+        const issues = f?.aiStatus === 'done' ? ((f.aiCheck as { issues?: { severity: string }[] } | null)?.issues ?? []) : [];
+        return issues.some((i) => i.severity !== 'low');
+      }).length
+    : null;
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const editable = can(ctx.role, 'case.write') && c.status !== 'CLOSED';
   const stages = stagesOf(c.product);
@@ -81,6 +91,12 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
           <Fact label="Case" value={c.ref} />
           <Fact label="Days open" value={String(daysOpen)} />
           <Fact label="Lodged" value={c.lodgedAt ? fmtDate(c.lodgedAt, tz) : '—'} />
+          {flagged !== null && (
+            <a href="#documents" className="flex flex-col gap-0.5">
+              <span className="eyebrow">AI flags</span>
+              <span className={`text-xl font-extrabold tracking-tight ${flagged ? 'text-warn-ink' : 'text-ok'}`}>{flagged ? `${flagged} doc${flagged === 1 ? '' : 's'}` : 'None'}</span>
+            </a>
+          )}
           {can(ctx.role, 'case.write') && <StatusControls slug={slug} caseId={c.id} status={c.status} />}
         </div>
       </header>
@@ -94,6 +110,8 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
             caseId={c.id}
             canWrite={can(ctx.role, 'document.write')}
             canVerify={can(ctx.role, 'document.verify')}
+            aiChecks={checksOn}
+            profile={{ fullName: name, dob: c.client.dob?.toISOString().slice(0, 10) ?? null, passportNumber: c.client.passportNumber }}
             docs={docs.map((d) => ({
               id: d.id,
               name: d.name,

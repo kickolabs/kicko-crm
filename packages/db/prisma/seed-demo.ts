@@ -6,7 +6,7 @@ import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nextRef, prisma, withTenant, type Tx } from '../src/index';
+import { nextRef, Prisma, prisma, withTenant, type Tx } from '../src/index';
 import { provisionTenant } from '../src/provision';
 import type { Stage } from '../src/visa-catalog';
 
@@ -385,18 +385,28 @@ async function seedPhase2(T: string) {
       });
     }
     const priya = byName('Priya');
-    const setDoc = async (caseId: string, nameStart: string, status: 'VERIFIED' | 'UPLOADED' | 'REJECTED', extra: { expiresAt?: Date; rejectionReason?: string } = {}) => {
+    const setDoc = async (caseId: string, nameStart: string, status: 'VERIFIED' | 'UPLOADED' | 'REJECTED', extra: { expiresAt?: Date; rejectionReason?: string } = {}, aiCheck?: Prisma.InputJsonValue) => {
       const doc = await tx.document.findFirst({ where: { caseId, name: { startsWith: nameStart } } });
       if (!doc) return;
       const f = await storeFile(T, doc.name.replace(/\W+/g, '-').toLowerCase());
-      await tx.documentFile.create({ data: { tenantId: T, documentId: doc.id, storageKey: f.key, fileName: `${doc.name.replace(/[^\w ]+/g, '').trim()}.pdf`, contentType: 'application/pdf', size: f.size, uploadedBy: owner } });
+      await tx.documentFile.create({ data: { tenantId: T, documentId: doc.id, storageKey: f.key, fileName: `${doc.name.replace(/[^\w ]+/g, '').trim()}.pdf`, contentType: 'application/pdf', size: f.size, uploadedBy: owner, ...(aiCheck ? { aiStatus: 'done', aiCheck } : {}) } });
       await tx.document.update({ where: { id: doc.id }, data: { status, ...extra, ...(status === 'VERIFIED' ? { verifiedBy: docOfficer, verifiedAt: days(-5) } : {}) } });
     };
     await setDoc(priya.id, 'Passport', 'VERIFIED', { expiresAt: new Date('2031-03-14') });
     await setDoc(priya.id, '10th', 'VERIFIED');
     await setDoc(priya.id, 'Degree', 'VERIFIED');
     await setDoc(priya.id, 'English', 'VERIFIED', { expiresAt: days(45) });
-    await setDoc(priya.id, 'Letter of acceptance', 'UPLOADED');
+    // The AI document check caught the surname mismatch (shows on the case, the dashboard brief and the review).
+    await setDoc(priya.id, 'Letter of acceptance', 'UPLOADED', {}, {
+      model: 'demo',
+      sandbox: false,
+      checkedAt: days(-2).toISOString(),
+      documentType: 'Offer letter, Seneca Polytechnic',
+      matchesExpected: 'yes',
+      legible: true,
+      fields: { fullName: 'Priya Ramanathan', dateOfBirth: null, documentNumber: null, issueDate: null, expiryDate: null, issuingCountry: 'Canada' },
+      issues: [{ severity: 'high', message: 'Surname does not match the passport: "Ramanathan" here, "Raman" on the passport. Ask the college for a corrected letter.' }],
+    });
     await setDoc(priya.id, 'GIC', 'UPLOADED');
     await setDoc(priya.id, 'Bank statements', 'REJECTED', { rejectionReason: 'Statements must cover the last 6 months' });
     const arjun = byName('Arjun');

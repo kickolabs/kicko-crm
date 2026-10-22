@@ -1,8 +1,13 @@
 import 'server-only';
-import { fmtDateTime, fullName } from '@/lib/format';
+import { CATEGORY_LABEL, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from '@/lib/constants';
+import { fmtDate, fmtDateTime, fullName } from '@/lib/format';
+import { formatMoney } from '@/lib/money';
+import { can } from '@/lib/permissions';
+import { hasFeature } from '@/lib/plans';
 import { db, type Ctx } from '@/lib/tenant';
 import { contactKey, getThread, staffNames } from './messages';
 import { scopeOf } from './scope';
+import { stagesOf } from './cases';
 import { assistantSettings, assistantState, describeAssistant } from './whatsapp/assistant';
 import { messagingStatus, windowClosesAt, windowOpen, type Contact } from './whatsapp/service';
 
@@ -40,7 +45,9 @@ export async function buildThread(ctx: Ctx, contact: Contact) {
   const creds = await messagingStatus({ tenantId: ctx.tenant.id, slug: ctx.tenant.slug });
   const open = windowOpen(who.waLastInbound);
   const bot = assistantSettings(ctx.tenant.settings);
-  const botState = creds && bot.mode !== 'off' ? await assistantState(scopeOf(ctx), contact) : null;
+  // The assistant only runs on plans that include it (a lapsed trial keeps its settings).
+  const botOn = Boolean(ctx.subscription && hasFeature(ctx.subscription, 'wa_assistant'));
+  const botState = creds && botOn && bot.mode !== 'off' ? await assistantState(scopeOf(ctx), contact) : null;
   const closes = windowClosesAt(who.waLastInbound);
 
   return {
@@ -81,4 +88,64 @@ export async function buildThread(ctx: Ctx, contact: Contact) {
       readByClient: m.channel === 'PORTAL' && m.direction === 'OUTBOUND' && Boolean(m.readAt),
     })),
   };
+}
+
+// ── Context panel beside the conversation ───────────────────────────────────
+
+const AI_NOTE = /^From (?:WhatsApp (AI assistant)|AI voice call):s*/;
+
+export type ContactContext = Awaited<ReturnType<typeof buildContactContext>>;
+
+/** Who this is, where they are, and what the AI picked up. AI-only parts follow the plan. */
+export async function buildContactContext(ctx: Ctx, contact: Contact) {
+  const slug = ctx.tenant.slug;
+  const tz = ctx.tenant.timezone;
+  const sub = ctx.subscription;
+  const eligibilityOn = Boolean(sub && hasFeature(sub, 'eligibility'));
+  const billing = can(ctx.role, 'billing.read');
+  const link = contact.kind === 'client' ? { clientId: contact.id } : { leadId: contact.id };
+
+  return db(ctx, async (tx) => {
+    const [lead, client, notes, appointment] = await Promise.all([
+      contact.kind === 'lead' ? tx.lead.findUnique({ where: { id: contact.id } }) : null,
+      contact.kind === 'client'
+        ? tx.client.findUnique({
+            where: { id: contact.id },
+            include: {
+              cases: { where: { status: { not: 'CLOSED' } }, include: { product: true }, orderBy: { createdAt: 'desc' }, take: 3 },
+              invoices: billing ? { where: { status: { in: ['ISSUED', 'PARTIALLY_PAID'] } }, select: { total: true, amountPaid: true, currency: true } } : false,
+              eligibility: eligibilityOn ? { orderBy: { createdAt: 'desc' }, take: 1 } : false,
+            },
+          })
+        : null,
+      tx.note.findMany({ where: { ...link, OR: [{ body: { startsWith: 'From WhatsApp (AI assistant):' } }, { body: { startsWith: 'From AI voice call:' } }] }, orderBy: { createdAt: 'desc' }, take: 3 }),
+      tx.appointment.findFirst({ where: { ...link, status: 'SCHEDULED', startsAt: { gte: new Date() } }, orderBy: { startsAt: 'asc' } }),
+    ]);
+    const row = lead ?? client;
+    if (!row) return null;
+    const ownerId = row.ownerId;
+    const owner = ownerId ? (await staffNames([ownerId]))[ownerId] ?? null : null;
+    const interest = lead ? [lead.interestCountry && (COUNTRIES[lead.interestCountry] ?? lead.interestCountry), lead.interestCategory && CATEGORY_LABEL[lead.interestCategory]].filter(Boolean).join(' · ') : null;
+    const due = client && Array.isArray(client.invoices) ? client.invoices.reduce((a, i) => a + i.total - i.amountPaid, 0) : 0;
+    const check = client && Array.isArray(client.eligibility) ? client.eligibility[0] : undefined;
+
+    return {
+      status: lead ? LEAD_STATUS_LABEL[lead.status] : 'Client',
+      source: lead ? LEAD_SOURCE_LABEL[lead.source] : null,
+      owner,
+      interest: interest || null,
+      score: lead?.score ?? null,
+      cases: (client?.cases ?? []).map((c) => ({
+        id: c.id,
+        ref: c.ref,
+        product: c.product.name,
+        stage: stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey,
+        href: `/${slug}/cases/${c.id}`,
+      })),
+      nextAppointment: appointment ? `${fmtDateTime(appointment.startsAt, tz)} · ${appointment.title}` : null,
+      amountDue: billing && due > 0 ? formatMoney(due) : null,
+      eligibility: check ? { label: check.kind === 'CRS' ? 'CRS score' : 'AU points', score: check.score, at: fmtDate(check.createdAt, tz, { year: undefined }) } : null,
+      captured: notes.map((n) => ({ id: n.id, text: n.body.replace(AI_NOTE, '').trim(), at: fmtDate(n.createdAt, tz, { year: undefined }), via: n.body.startsWith('From AI voice call') ? 'AI call' : 'WhatsApp AI' })),
+    };
+  });
 }

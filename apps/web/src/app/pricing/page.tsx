@@ -16,7 +16,7 @@ const FAQ: [q: string, a: string][] = [
   ['What happens after the 14-day trial?', 'Choose a plan to keep going. If you don’t, the workspace becomes read-only (you can still view and export everything) until you do.'],
   ['Can I change plans or users later?', 'Yes, any time from Settings → Plan & billing. A new plan starts straight away.'],
   ['How does GST work?', 'Prices for Indian agencies exclude 18% GST. Your invoices show CGST and SGST, or IGST, and your GSTIN so you can claim input credit.'],
-  ['What are AI credits?', `They pay for AI work: ${CREDIT_COST.call_notes} credits for AI call notes, ${CREDIT_COST.voice_notes} for voice agent notes, ${CREDIT_COST.wa_reply} per WhatsApp AI reply and ${CREDIT_COST.doc_check} per document check. Growth and Pro include a monthly allowance; extra packs of ${TOP_UP.credits.toLocaleString('en-IN')} cost ${formatMoney(TOP_UP.price.INR, 'INR')} and never expire.`],
+  ['What are AI credits?', `They pay for AI work: ${CREDIT_COST.call_notes} credits for AI call notes, ${CREDIT_COST.voice_notes} for voice agent notes, ${CREDIT_COST.wa_reply} per WhatsApp AI reply, ${CREDIT_COST.doc_check} per document check and ${CREDIT_COST.brief} per copilot brief (at most a few a day). Growth and Pro include a monthly allowance; extra packs of ${TOP_UP.credits.toLocaleString('en-IN')} cost ${formatMoney(TOP_UP.price.INR, 'INR')} and never expire.`],
   ['Can I cancel?', 'Yes. Your plan runs to the end of the period you paid for, and you can export all your data at any time.'],
 ];
 

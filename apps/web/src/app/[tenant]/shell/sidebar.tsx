@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { LogoMark } from '@/components/logo';
+import type { AgentStatus } from '@/server/copilot';
 
 type Counts = { leads: number; cases: number; tasks: number; waiting: number; docs: number; inbox: number; missed: number };
 
@@ -32,12 +33,15 @@ export function Sidebar({
   counts,
   canSettings,
   canBilling,
+  agents,
 }: {
   slug: string;
   tenantName: string;
   counts: Counts;
   canSettings: boolean;
   canBilling: boolean;
+  /** AI agents the plan includes; null on plans without AI. */
+  agents: AgentStatus[] | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -82,7 +86,7 @@ export function Sidebar({
       <nav
         aria-label="Primary"
         className={clsx(
-          'shrink-0 flex-col gap-1 border-r border-line bg-paper-2 px-3.5 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[232px]',
+          'shrink-0 flex-col gap-1 border-r border-line bg-paper-2 px-3.5 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[232px] lg:overflow-y-auto',
           open ? 'flex' : 'hidden',
         )}
       >
@@ -121,6 +125,25 @@ export function Sidebar({
             </Link>
           );
         })}
+        {agents && (
+          <div className="mt-5 flex flex-col gap-0.5" aria-label="AI agents" role="group">
+            <span className="eyebrow px-2.5 pb-1.5">AI agents</span>
+            {agents.map((a) => (
+              <Link
+                key={a.key}
+                href={a.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink-2 hover:bg-ink/5 hover:text-ink"
+              >
+                <span
+                  aria-hidden="true"
+                  className={clsx('h-2 w-2 shrink-0 rounded-full', a.state === 'off' ? 'bg-[#B9BCC0]' : 'bg-[#8DC21F]', a.state === 'live' && 'live-dot')}
+                />
+                {a.label} · {a.text}
+              </Link>
+            ))}
+          </div>
+        )}
         {canSettings && (
           <Link href={`${base}/import`} className="mt-auto hidden rounded-[14px] bg-card p-3.5 text-xs leading-relaxed text-muted shadow-[var(--shadow-card)] hover:text-ink lg:block">
             <span className="eyebrow mb-1 block">Switching to Kicko?</span>

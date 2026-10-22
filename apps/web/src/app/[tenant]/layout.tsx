@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { dayBounds } from '@/lib/format';
 import { db, getCtx } from '@/lib/tenant';
 import { can } from '@/lib/permissions';
+import { agentStatus } from '@/server/copilot';
 import { Sidebar } from './shell/sidebar';
 import { CommandBar } from './shell/command-bar';
 import { UserMenu } from './shell/user-menu';
@@ -61,6 +62,8 @@ export default async function TenantLayout({
     );
   }
 
+  const agents = await agentStatus(ctx);
+
   return (
     <div className="dotgrid flex min-h-dvh flex-col lg:flex-row">
       <Sidebar
@@ -69,10 +72,11 @@ export default async function TenantLayout({
         counts={counts}
         canSettings={can(ctx.role, 'settings.manage')}
         canBilling={can(ctx.role, 'billing.read')}
+        agents={agents}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-paper/85 px-4 py-3 backdrop-blur sm:px-7">
-          <CommandBar slug={slug} />
+          <CommandBar slug={slug} ai={Boolean(agents)} />
           <UserMenu slug={slug} name={ctx.user.name} email={ctx.user.email} role={ctx.role} />
         </div>
         <PlanBanner slug={slug} sub={ctx.subscription} tz={ctx.tenant.timezone} canManage={canManage} />

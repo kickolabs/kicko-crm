@@ -167,6 +167,22 @@ Settings → Calling. Each agency connects **Exotel** (India) or **Twilio** (els
 - Callback URLs: `https://<app>/api/webhooks/telephony/{provider}/{workspace}?event=…&token=…`. Twilio callbacks are signature-checked (`X-Twilio-Signature`); Exotel doesn't sign callbacks, so each URL carries the connection's secret token. Status callbacks are idempotent and never move a call backwards.
 - Call minutes, transcription minutes and AI tokens are metered per agency (Settings → Integrations → Usage).
 
+## AI copilot and AI on every screen
+
+The dashboard's **Copilot** rail gives a daily brief: up to four cards (document the AI check flagged, a chat the WhatsApp assistant handed to a person with no reply yet, expiring documents, overdue money, stalled cases, warm leads with nothing booked), each with one action. Plain code picks and orders the cards (`server/copilot.ts`); the model only words the headline and one line per card (`server/ai/brief.ts`). It's written at most once per day per set of cards (cached, 2 credits); with no model, no credits, or a read-only workspace the same cards come with template wording at no cost.
+
+Other AI surfaces: the sidebar's **AI agents** status (voice agent, WhatsApp assistant, call notes, document checks), **Live now** calls and WhatsApp AI stats on the dashboard, **AI flags** and a document-vs-profile comparison on the case page, and a **context panel** beside each inbox conversation (lead score, open cases, eligibility estimate, details the AI captured).
+
+| | Starter | Growth | Pro / trial |
+|---|---|---|---|
+| Copilot brief | Owners and admins see a "See Growth" card; staff see nothing | ✓ | ✓ |
+| Sidebar AI agents | hidden | WhatsApp, call notes | voice, WhatsApp, call notes, doc check |
+| Live now (calls, WhatsApp AI) | Today card only | ✓ | ✓ |
+| Case: AI flags + comparison | hidden | hidden | ✓ (unless turned off in Settings → Integrations) |
+| Inbox context panel | ✓ (no eligibility) | ✓ | ✓ |
+
+Cards follow the viewer's role like the rest of the dashboard: document and case cards need case access, money cards need billing access, lead cards need lead access. Accounts staff only see money; document officers don't see money or leads. Data an AI captured earlier (notes, lead scores, past checks) stays visible after a downgrade; nothing new runs.
+
 ## Daily job
 
 `/api/cron/daily` (Vercel Cron, 08:00 IST via `apps/web/vercel.json`, `Authorization: Bearer $CRON_SECRET`) creates tasks for overdue installments, verified documents expiring within 60 days, and passports expiring within 6 months. Safe to re-run.
@@ -182,4 +198,4 @@ Settings → Calling. Each agency connects **Exotel** (India) or **Twilio** (els
 
 - `npm audit`: remaining findings are in the Prisma 6 CLI and Next 15's bundled postcss (build-time only). They're fixed by upgrading to Prisma 7 / Next 16, planned as a separate migration.
 - Invite emails are copy-link for now; Resend email delivery arrives with notifications.
-- Plain-English commands in the command bar (Ctrl+K / ⌘K) and the AI copilot come in Phase 5.
+- Plain-English commands in the command bar (Ctrl+K / ⌘K) and "Ask copilot" questions are next for the copilot.
