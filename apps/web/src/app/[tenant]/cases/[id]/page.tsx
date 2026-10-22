@@ -20,8 +20,6 @@ import { routeFor } from '@/lib/route';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
 import { Timeline } from '../../_components/timeline';
 import { DetailsForm, Journey, StatusControls } from './case-controls';
-import { BranchSelect } from '../../_components/branch-select';
-import { setRecordBranchAction } from '../../actions-branches';
 
 // Study applications that decide where the client is headed, best first.
 const COLLEGE_RANK = ['ENROLLED', 'ACCEPTED', 'UNCONDITIONAL_OFFER', 'CONDITIONAL_OFFER'];
@@ -113,11 +111,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
               {branches.length > 1 && (
                 <>
                   <span>·</span>
-                  {can(ctx.role, 'case.write') ? (
-                    <BranchSelect id="case-branch" value={c.branchId} branches={branches} save={setRecordBranchAction.bind(null, slug, 'case', c.id)} className="h-7 w-36 text-xs" />
-                  ) : (
-                    <span>{branches.find((b) => b.id === c.branchId)?.name ?? 'No branch'}</span>
-                  )}
+                  <span>{branches.find((b) => b.id === c.branchId)?.name ?? 'No branch'}</span>
                 </>
               )}
             </div>
@@ -221,7 +215,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
             <CardHeader title="Case details" />
             <div className="p-5">
               {can(ctx.role, 'case.write') ? (
-                <DetailsForm slug={slug} caseId={c.id} ownerId={c.ownerId} team={team} dateFields={DATE_FIELDS} dates={dates} />
+                <DetailsForm slug={slug} caseId={c.id} ownerId={c.ownerId} branchId={c.branchId} branches={branches} team={team} dateFields={DATE_FIELDS} dates={dates} />
               ) : (
                 <dl className="grid grid-cols-2 gap-3 text-[13px]">
                   {DATE_FIELDS.map((f) => <div key={f.key}><dt className="text-xs text-muted">{f.label}</dt><dd className="font-semibold">{dates[f.key] ?? '—'}</dd></div>)}

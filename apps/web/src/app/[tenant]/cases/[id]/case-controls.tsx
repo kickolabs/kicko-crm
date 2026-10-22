@@ -258,6 +258,8 @@ export function DetailsForm({
   slug,
   caseId,
   ownerId,
+  branchId,
+  branches,
   team,
   dateFields,
   dates,
@@ -265,6 +267,9 @@ export function DetailsForm({
   slug: string;
   caseId: string;
   ownerId: string | null;
+  branchId: string | null;
+  /** Shown only when the agency has more than one branch. */
+  branches: { id: string; name: string }[];
   team: { userId: string; name: string }[];
   dateFields: { key: string; label: string }[];
   dates: Record<string, string>;
@@ -273,12 +278,22 @@ export function DetailsForm({
   return (
     <ActionForm action={updateCaseDetailsAction.bind(null, slug, caseId, dateFields.map((f) => f.key))} onSuccess={() => setSaved(true)} className="flex flex-col gap-3.5">
       {saved && <FormBanner tone="ok">Saved.</FormBanner>}
-      <FormField label="Case owner" name="ownerId">
-        <Select name="ownerId" defaultValue={ownerId ?? ''}>
-          <option value="">Unassigned</option>
-          {team.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
-        </Select>
-      </FormField>
+      <div className="flex flex-col gap-3.5">
+        <FormField label="Case owner" name="ownerId">
+          <Select name="ownerId" defaultValue={ownerId ?? ''}>
+            <option value="">Unassigned</option>
+            {team.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
+          </Select>
+        </FormField>
+        {branches.length > 1 && (
+          <FormField label="Branch" name="branchId">
+            <Select name="branchId" defaultValue={branchId ?? ''}>
+              <option value="">No branch</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Select>
+          </FormField>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         {dateFields.map((f) => (
           <FormField key={f.key} label={f.label} name={`date_${f.key}`}>

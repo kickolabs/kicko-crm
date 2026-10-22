@@ -169,7 +169,12 @@ export async function updateCaseDetailsAction(slug: string, caseId: string, date
   const res = await run(async () => {
     assertCan(ctx, 'case.write');
     const dates = Object.fromEntries(dateKeys.map((k) => [k, String(fd.get(`date_${k}`) ?? '') || null]));
-    await cases.updateCaseDetails(scopeOf(ctx), caseId, { ownerId: String(fd.get('ownerId') ?? '') || null, dates });
+    await cases.updateCaseDetails(scopeOf(ctx), caseId, {
+      ownerId: String(fd.get('ownerId') ?? '') || null,
+      // Only when the form shows a branch picker (agencies with more than one branch).
+      ...(fd.has('branchId') ? { branchId: String(fd.get('branchId')) || null } : {}),
+      dates,
+    });
   }, 'Saved');
   refresh(slug);
   return res;

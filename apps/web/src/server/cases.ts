@@ -138,7 +138,7 @@ export async function setCaseStatus(
 export async function updateCaseDetails(
   scope: Scope,
   caseId: string,
-  input: { ownerId: string | null; dates: Record<string, string | null> },
+  input: { ownerId: string | null; branchId?: string | null; dates: Record<string, string | null> },
 ) {
   return inTenant(scope, async (tx) => {
     const c = await tx.case.findUnique({ where: { id: caseId } });
@@ -149,8 +149,9 @@ export async function updateCaseDetails(
       });
       if (!m?.active) throw new UserError('That owner is not an active team member');
     }
+    if (input.branchId && !(await tx.branch.findUnique({ where: { id: input.branchId } }))) throw new UserError('Branch not found');
     const dates = Object.fromEntries(Object.entries(input.dates).filter(([, v]) => v));
-    await tx.case.update({ where: { id: caseId }, data: { ownerId: input.ownerId, dates } });
+    await tx.case.update({ where: { id: caseId }, data: { ownerId: input.ownerId, ...(input.branchId !== undefined ? { branchId: input.branchId } : {}), dates } });
     if (c.ownerId !== input.ownerId) {
       await logActivity(tx, scope, { type: 'ASSIGNED', summary: 'Case owner changed', caseId, clientId: c.clientId });
     }
