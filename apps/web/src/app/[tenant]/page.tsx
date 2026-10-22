@@ -8,6 +8,7 @@ import { formatMoney } from '@/lib/money';
 import { can } from '@/lib/permissions';
 import { hasFeature } from '@/lib/plans';
 import { liveNow } from '@/server/copilot';
+import { getKpiTrends } from '@/server/kpis';
 import { getDashboard } from '@/server/queries';
 import { CopilotBrief, CopilotUpsell } from './_components/copilot';
 import { GetStarted } from './_components/get-started';
@@ -17,7 +18,7 @@ export const metadata = { title: 'Command' };
 export default async function Dashboard({ params }: { params: Promise<{ tenant: string }> }) {
   const { tenant: slug } = await params;
   const ctx = await getCtx(slug);
-  const [d, team, live] = await Promise.all([getDashboard(ctx), getTeam(ctx), liveNow(ctx)]);
+  const [d, team, live, k] = await Promise.all([getDashboard(ctx), getTeam(ctx), liveNow(ctx), getKpiTrends(ctx)]);
   const tz = ctx.tenant.timezone;
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const weekday = new Intl.DateTimeFormat('en-IN', { weekday: 'long', timeZone: tz }).format(new Date());
@@ -60,15 +61,36 @@ export default async function Dashboard({ params }: { params: Promise<{ tenant: 
           {can(ctx.role, 'settings.manage') && <GetStarted ctx={ctx} />}
 
           <section aria-label="Key numbers" className={`card grid grid-cols-2 divide-line sm:grid-cols-3 ${rail ? 'xl:[&>*:nth-child(-n+3)]:border-b xl:[&>*:nth-child(3n)]:border-r-0' : billing ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} [&>*]:border-line [&>*:not(:last-child)]:border-r`}>
-            <Stat label="New leads · 7d" value={d.newLeads} />
-            <Stat label="Open leads" value={funnel.reduce((a, f) => a + (f.s === 'WON' ? 0 : f.n), 0)} sub={`${d.unassigned.length} unassigned`} subTone={d.unassigned.length ? 'warn' : undefined} />
-            <Stat label="Conversion · 30d" value={d.conversion === null ? '—' : `${d.conversion}%`} sub="won vs lost" />
-            <Stat label="Active cases" value={d.activeCases} sub={`${d.stuckCases.length} stuck 14d+`} subTone={d.stuckCases.length ? 'warn' : undefined} />
-            <Stat label="Lodged this month" value={d.lodgedMonth} sub={d.docsToReview.length ? `${d.docsToReview.length} docs to review` : undefined} subTone={d.docsToReview.length ? 'warn' : undefined} />
-            {billing && (
+            <Stat
+              label="New leads · 7d"
+              value={d.newLeads}
+              trend={k.newLeads}
+              sub={parts([change(k.newLeads.points, 'count'), tone(k.newLeads.points)], [d.unassigned.length ? `${d.unassigned.length} unassigned` : null, 'warn'])}
+            />
+            <Stat
+              label="Conversion · 30d"
+              value={d.conversion === null ? '—' : `${d.conversion}%`}
+              trend={{ ...k.conversion, format: (n) => `${n}%` }}
+              sub={parts([change(k.conversion.points, 'pts'), tone(k.conversion.points)]) ?? 'won vs lost'}
+            />
+            <Stat
+              label="Active cases"
+              value={d.activeCases}
+              trend={k.activeCases}
+              sub={parts([`+${k.openedThisWeek} this week`, undefined], [d.stuckCases.length ? `${d.stuckCases.length} stuck 14d+` : null, 'warn'])}
+            />
+            <Stat label="Lodged this month" value={d.lodgedMonth} trend={k.lodged} sub={parts([change(k.lodged.points, 'count'), tone(k.lodged.points)], [d.docsToReview.length ? `${d.docsToReview.length} docs to review` : null, 'warn'])} />
+            <Stat
+              label="Approval rate · 90d"
+              value={k.approval.rate === null ? '—' : `${k.approval.rate}%`}
+              trend={{ ...k.approval, format: (n) => `${n}%` }}
+              sub={k.approval.decisions ? `of ${k.approval.decisions} decision${k.approval.decisions === 1 ? '' : 's'}` : 'no decisions yet'}
+            />
+            {billing && k.collected && (
               <Stat
                 label="Collected · month"
                 value={formatMoney(d.collectedMonth, 'INR', { compact: true })}
+                trend={{ ...k.collected, format: (n) => formatMoney(n, 'INR', { compact: true }) }}
                 sub={d.overdueAmount ? `${formatMoney(d.overdueAmount, 'INR', { compact: true })} overdue` : 'nothing overdue'}
                 subTone={d.overdueAmount ? 'warn' : 'ok'}
               />
@@ -286,6 +308,33 @@ export default async function Dashboard({ params }: { params: Promise<{ tenant: 
       </div>
     </div>
   );
+}
+
+/** "+3 vs last week" / "−2.5 pts vs last week", or null when there's nothing to compare. */
+function change(points: (number | null)[], unit: 'count' | 'pts') {
+  const [prev, last] = points.slice(-2);
+  if (prev == null || last == null || prev === last) return null;
+  const diff = Math.round((last - prev) * 10) / 10;
+  return `${diff > 0 ? '+' : '−'}${Math.abs(diff)}${unit === 'pts' ? ' pts' : ''} vs last week`;
+}
+
+/** A tile's line of facts, each in its own colour: "+3 vs last week · 2 unassigned". */
+function parts(...items: [string | null, 'ok' | 'warn' | undefined][]) {
+  const shown = items.filter((i): i is [string, 'ok' | 'warn' | undefined] => Boolean(i[0]));
+  if (!shown.length) return undefined;
+  return shown.map(([text, t], i) => (
+    <span key={text} className={t === 'ok' ? 'text-ok' : t === 'warn' ? 'text-warn' : undefined}>
+      {i > 0 && <span className="text-muted"> · </span>}
+      {text}
+    </span>
+  ));
+}
+
+/** Up is good for every tile that shows a change. */
+function tone(points: (number | null)[]): 'ok' | 'warn' | undefined {
+  const [prev, last] = points.slice(-2);
+  if (prev == null || last == null || prev === last) return undefined;
+  return last > prev ? 'ok' : 'warn';
 }
 
 function Bar({ label, n, pct, href, lime }: { label: string; n: number; pct: number; href: string; lime?: boolean }) {

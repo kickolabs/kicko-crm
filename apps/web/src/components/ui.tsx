@@ -199,12 +199,59 @@ export function Avatar({ name, size = 32, tone = 'ink' }: { name: string; size?:
   );
 }
 
-export function Stat({ label, value, sub, subTone }: { label: string; value: ReactNode; sub?: ReactNode; subTone?: 'warn' | 'ok' }) {
+export type SparkTrend = { points: (number | null)[]; labels: string[]; format?: (n: number) => string };
+
+/**
+ * Number tile: label, value, an optional 8-week sparkline and a line underneath.
+ * The value uses proportional figures (tabular ones look loose at this size).
+ */
+export function Stat({ label, value, sub, subTone, trend }: { label: string; value: ReactNode; sub?: ReactNode; subTone?: 'warn' | 'ok'; trend?: SparkTrend }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 px-5 py-4">
       <span className="eyebrow">{label}</span>
-      <span className="text-[30px] leading-none font-extrabold tracking-[-0.04em]">{value}</span>
+      <div className="flex items-end justify-between gap-3">
+        <span className="text-[30px] leading-none font-extrabold tracking-[-0.04em] [font-variant-numeric:proportional-nums]">{value}</span>
+        {trend && <Sparkline label={label} {...trend} />}
+      </div>
       {sub && <span className={clsx('text-xs font-semibold', subTone === 'warn' ? 'text-warn' : subTone === 'ok' ? 'text-ok' : 'text-muted')}>{sub}</span>}
     </div>
+  );
+}
+
+/**
+ * Small trend line: muted line, this week's point in lime with an ink ring.
+ * Gaps (no data that week) break the line. Hover a week for its value; screen
+ * readers get the whole series.
+ */
+export function Sparkline({ points, labels, format = String, label, width = 72, height = 26 }: SparkTrend & { label: string; width?: number; height?: number }) {
+  const known = points.filter((v): v is number => v !== null);
+  if (known.length < 2) return null;
+  const pad = 4;
+  const min = Math.min(...known);
+  const max = Math.max(...known);
+  const x = (i: number) => pad + (i * (width - pad * 2)) / (points.length - 1);
+  const y = (v: number) => (max === min ? height / 2 : height - pad - ((v - min) * (height - pad * 2)) / (max - min));
+  const runs: string[] = [];
+  let run: string[] = [];
+  points.forEach((v, i) => {
+    if (v === null) {
+      if (run.length > 1) runs.push(run.join(' '));
+      run = [];
+    } else run.push(`${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  });
+  if (run.length > 1) runs.push(run.join(' '));
+  const last = points.at(-1);
+  const step = (width - pad * 2) / (points.length - 1);
+  const summary = points.map((v, i) => `${labels[i]}: ${v === null ? 'no data' : format(v)}`).join('; ');
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label}, last ${points.length} weeks. ${summary}`} className="shrink-0 overflow-visible">
+      {runs.map((r) => <polyline key={r} points={r} fill="none" stroke="var(--color-faint)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />)}
+      {last !== null && last !== undefined && <circle cx={x(points.length - 1)} cy={y(last)} r={3.2} fill="var(--color-lime)" stroke="var(--color-ink)" strokeWidth={1.2} />}
+      {points.map((v, i) => (
+        <rect key={i} x={x(i) - step / 2} y={0} width={step} height={height} fill="transparent">
+          <title>{`${labels[i]}: ${v === null ? 'no data' : format(v)}`}</title>
+        </rect>
+      ))}
+    </svg>
   );
 }
