@@ -6,7 +6,7 @@ import { tenantsForUser, type TenantSettings } from '@kicko/db/provision';
 import { LogoMark } from '@/components/logo';
 import { Card, CardHeader } from '@/components/ui';
 import { auth, getSession } from '@/lib/auth';
-import { relative } from '@/lib/format';
+import { displayIp, relative } from '@/lib/format';
 import { deviceName } from '@/server/audit';
 import { adminEmails } from '@/server/admin';
 import { signOutAction } from '../(auth)/actions';
@@ -61,7 +61,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <SessionsList
               sessions={sessions
                 .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-                .map((s) => ({ id: s.id, device: deviceName(s.userAgent), ip: s.ipAddress ?? null, when: relative(s.createdAt), current: s.id === session.session.id }))}
+                .map((s) => ({ id: s.id, device: deviceName(s.userAgent), ip: displayIp(s.ipAddress), when: relative(s.createdAt), current: s.id === session.session.id }))}
             />
           </div>
         </Card>
