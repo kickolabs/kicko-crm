@@ -129,6 +129,8 @@ model Membership {
   active    Boolean  @default(true)
   branchId  String?
   phone     String? // E.164; click-to-call rings this number first
+  // Own working hours { days: number[] (0 = Sun), start: 'HH:MM', end: 'HH:MM' }; null = the agency's hours
+  hours     Json?
   createdAt DateTime @default(now())
 
   @@unique([tenantId, userId])
@@ -440,6 +442,9 @@ model Appointment {
   status    AppointmentStatus @default(SCHEDULED)
   staffId   String?
   notes     String?
+  createdBy String?
+  // the start time before the latest reschedule
+  rescheduledFrom DateTime?
   leadId    String?
   lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
   clientId  String?
@@ -447,8 +452,10 @@ model Appointment {
   caseId    String?
   case      Case?             @relation(fields: [caseId], references: [id], onDelete: Cascade)
   createdAt DateTime          @default(now())
+  updatedAt DateTime          @default(now()) @updatedAt
 
   @@index([tenantId, startsAt])
+  @@index([tenantId, staffId, startsAt])
 }
 
 model Note {

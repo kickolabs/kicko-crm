@@ -5,6 +5,7 @@ import { addDays, isYmd, step, viewDays, type CalView } from '@/lib/calendar';
 import { fmtTime, fullName, parseLocal, toLocalInput } from '@/lib/format';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { listAppointments } from '@/server/queries';
+import { can } from '@/lib/permissions';
 import { NewAppointmentButton } from '../tasks/new-task-button';
 import { AgendaList, DayAgenda, MonthGrid, TimeGrid, type CalDay, type CalEvent } from './views';
 
@@ -112,7 +113,7 @@ export default async function CalendarPage({
               <Link href={q({ date: step(view, date, 1) })} className={buttonCls('secondary', 'md')} aria-label={`Next ${unit}`}>→</Link>
             </div>
             <Link href={q({ mine: sp.mine ? undefined : '1' })} className={buttonCls(sp.mine ? 'primary' : 'secondary', 'md')}>Only mine</Link>
-            <NewAppointmentButton slug={slug} team={team} me={ctx.user.id} />
+            <NewAppointmentButton slug={slug} team={team} me={ctx.user.id} tz={tz} canOverride={can(ctx.role, 'settings.manage')} />
           </>
         }
       />

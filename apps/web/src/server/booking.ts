@@ -1,5 +1,7 @@
 import 'server-only';
+import type { Tx } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
+import type { WorkingHours } from '@/lib/booking-rules';
 import { fmtDateTime, parseLocal, toLocalInput } from '@/lib/format';
 import type { Contact } from './contacts';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
@@ -16,6 +18,30 @@ export const DEFAULT_BOOKING: NonNullable<TenantSettings['portal']> = {
   end: '18:00',
   slotMinutes: 30,
 };
+
+/** The agency's office hours (the same days and times as online booking). */
+export function agencyHours(scope: Scope): WorkingHours {
+  const cfg = { ...DEFAULT_BOOKING, ...scope.settings.portal };
+  return { days: cfg.days, start: cfg.start, end: cfg.end };
+}
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** A member's own hours when set and valid, else null. */
+export function parseHours(v: unknown): WorkingHours | null {
+  const h = v as Partial<WorkingHours> | null;
+  if (!h || !Array.isArray(h.days) || typeof h.start !== 'string' || typeof h.end !== 'string') return null;
+  if (!HHMM.test(h.start) || !HHMM.test(h.end) || h.start >= h.end) return null;
+  return { days: h.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6), start: h.start, end: h.end };
+}
+
+/** Whose hours apply to a booking with `staffId`: their own, else the agency's. */
+export async function hoursFor(scope: Scope, staffId: string | null, tx?: Tx) {
+  if (!staffId) return agencyHours(scope);
+  const find = (t: Tx) => t.membership.findFirst({ where: { userId: staffId }, select: { hours: true } });
+  const m = tx ? await find(tx) : await inTenant(scope, find);
+  return parseHours(m?.hours) ?? agencyHours(scope);
+}
 
 /** Who takes the booking: the contact's owner, else the first owner/admin. */
 export async function bookingStaff(scope: Scope, ownerId: string | null) {
@@ -35,13 +61,14 @@ export async function openSlots(scope: Scope, staffId: string | null, horizonDay
     ? await inTenant(scope, (tx) => tx.appointment.findMany({ where: { staffId, status: 'SCHEDULED', startsAt: { lt: until }, endsAt: { gt: now } }, select: { startsAt: true, endsAt: true } }))
     : [];
 
-  const [sh, sm] = cfg.start.split(':').map(Number) as [number, number];
-  const [eh, em] = cfg.end.split(':').map(Number) as [number, number];
+  const hours = await hoursFor(scope, staffId);
+  const [sh, sm] = hours.start.split(':').map(Number) as [number, number];
+  const [eh, em] = hours.end.split(':').map(Number) as [number, number];
   const days: { date: string; label: string; slots: string[] }[] = [];
   for (let d = 0; d <= horizonDays; d++) {
     const date = toLocalInput(new Date(now.getTime() + d * 86400_000), tz, true);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-    if (!cfg.days.includes(weekday)) continue;
+    if (!hours.days.includes(weekday)) continue;
     const slots: string[] = [];
     for (let m = sh * 60 + sm; m + cfg.slotMinutes <= eh * 60 + em; m += cfg.slotMinutes) {
       const local = `${date}T${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;

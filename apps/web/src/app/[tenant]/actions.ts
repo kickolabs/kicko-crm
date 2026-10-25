@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { CaseOutcome, CaseStatus, LeadStatus, Role } from '@kicko/db';
 import { formObject, run, type ActionResult } from '@/lib/action';
+import { can } from '@/lib/permissions';
 import { assertCan, getCtx } from '@/lib/tenant';
 import { scopeOf, UserError } from '@/server/scope';
 import * as leads from '@/server/leads';
@@ -216,8 +217,18 @@ export async function createAppointmentAction(slug: string, _: Prev, fd: FormDat
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'task.write');
-    await work.createAppointment(scopeOf(ctx), formObject(fd) as never);
+    await work.createAppointment(scopeOf(ctx), formObject(fd) as never, { outsideHours: can(ctx.role, 'settings.manage') });
   });
+  refresh(slug);
+  return res;
+}
+
+export async function rescheduleAppointmentAction(slug: string, id: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'task.write');
+    await work.rescheduleAppointment(scopeOf(ctx), id, formObject(fd), { outsideHours: can(ctx.role, 'settings.manage') });
+  }, 'Appointment moved');
   refresh(slug);
   return res;
 }
@@ -298,6 +309,16 @@ export async function updateMemberAction(slug: string, userId: string, patch: { 
     if (patch.role === 'OWNER' && ctx.role !== 'OWNER') throw new UserError('Only an owner can make someone an owner');
     await team.updateMember(scopeOf(ctx), userId, patch);
   });
+  refresh(slug);
+  return res;
+}
+
+export async function setMemberHoursAction(slug: string, userId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'team.manage');
+    await team.setMemberHours(scopeOf(ctx), userId, { ...formObject(fd), days: fd.getAll('days').map(String) } as never);
+  }, 'Working hours saved');
   refresh(slug);
   return res;
 }

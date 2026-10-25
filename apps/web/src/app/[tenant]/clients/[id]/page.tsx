@@ -155,7 +155,7 @@ export default async function ClientPage({
               />
             )}
             <TasksPanel slug={slug} tasks={client.tasks} tz={tz} links={{ clientId: client.id }} team={team} me={ctx.user.id} />
-            <AppointmentsPanel slug={slug} items={client.appointments} tz={tz} links={{ clientId: client.id }} team={team} me={ctx.user.id} />
+            <AppointmentsPanel slug={slug} items={client.appointments} tz={tz} links={{ clientId: client.id }} team={team} me={ctx.user.id} canOverride={can(ctx.role, 'settings.manage')} />
             {client.lead && (
               <Link href={`/${slug}/leads/${client.lead.id}`} className="card px-5 py-4 text-sm hover:bg-paper-3">
                 <span className="eyebrow block">Original lead</span>

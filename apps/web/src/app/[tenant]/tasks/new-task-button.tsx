@@ -13,10 +13,22 @@ export function NewTaskButton({ slug, team, me }: { slug: string; team: { userId
   );
 }
 
-export function NewAppointmentButton({ slug, team, me }: { slug: string; team: { userId: string; name: string }[]; me: string }) {
+export function NewAppointmentButton({
+  slug,
+  team,
+  me,
+  tz,
+  canOverride,
+}: {
+  slug: string;
+  team: { userId: string; name: string }[];
+  me: string;
+  tz: string;
+  canOverride?: boolean;
+}) {
   return (
     <Modal title="Book appointment" trigger={(open) => <Button variant="primary" onClick={open}><Plus size={15} /> Book</Button>}>
-      {(close) => <AppointmentForm slug={slug} links={{}} team={team} me={me} onDone={close} defaultTitle="Meeting" />}
+      {(close) => <AppointmentForm slug={slug} links={{}} team={team} me={me} tz={tz} canOverride={canOverride} onDone={close} defaultTitle="Meeting" />}
     </Modal>
   );
 }

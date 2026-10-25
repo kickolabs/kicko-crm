@@ -7,7 +7,7 @@ import { fmtDate } from '@/lib/format';
 import { can, ROLE_LABEL } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { listInvites, listProducts } from '@/server/queries';
-import { GeneralForm, InviteForm, LeadCapture, MemberControls, ProductEditor, RevokeInvite } from './settings-forms';
+import { GeneralForm, InviteForm, LeadCapture, MemberControls, MemberHours, ProductEditor, RevokeInvite } from './settings-forms';
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
 import { ConnectionCard } from './connection-card';
 import { UpgradeCard } from '@/components/upgrade';
@@ -27,6 +27,7 @@ import { VoiceAgentCard, VoiceQueueCard, VoiceSimulatorCard, VoiceSyncCard } fro
 import { buildPrompt, QUESTIONS, syncStatus, TOOLS, voiceSettings } from '@/server/voice/agent';
 import { PERSONAS } from '@/server/voice/personas';
 import { scopeOf } from '@/server/scope';
+import { agencyHours, parseHours } from '@/server/booking';
 import { fullName } from '@/lib/format';
 import { callingSettings } from '@/server/calls/service';
 import { CALL_SCRIPTS } from '@/integrations/telephony/sandbox-scripts';
@@ -373,9 +374,11 @@ export default async function SettingsPage({
       getTeam(ctx),
       listInvites(ctx),
       db(ctx, (tx) => tx.branch.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, name: true } })),
-      db(ctx, (tx) => tx.membership.findMany({ where: { active: true }, select: { userId: true, branchId: true } })),
+      db(ctx, (tx) => tx.membership.findMany({ where: { active: true }, select: { userId: true, branchId: true, hours: true } })),
     ]);
     const home = (userId: string) => homes.find((h) => h.userId === userId)?.branchId ?? null;
+    const ownHours = (userId: string) => parseHours(homes.find((h) => h.userId === userId)?.hours);
+    const office = agencyHours(scopeOf(ctx));
     return (
       <div className="flex flex-col gap-5">
         <Card>
@@ -390,6 +393,7 @@ export default async function SettingsPage({
                 {branches.length > 1 && (
                   <BranchSelect id={`branch-${m.userId}`} value={home(m.userId)} branches={branches} save={setMemberBranchAction.bind(null, slug, m.userId)} label={`Branch for ${m.name}`} />
                 )}
+                <MemberHours slug={slug} userId={m.userId} name={m.name} hours={ownHours(m.userId)} agency={office} />
                 <MemberControls slug={slug} userId={m.userId} role={m.role} isMe={m.userId === me} canMakeOwner={ctxRole === 'OWNER'} />
               </li>
             ))}

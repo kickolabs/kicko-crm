@@ -1,6 +1,9 @@
 import 'server-only';
 import { z } from 'zod';
+import type { Tx } from '@kicko/db';
+import { checkSlot } from '@/lib/booking-rules';
 import { parseLocal } from '@/lib/format';
+import { hoursFor } from './booking';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 
 // Tasks, appointments and notes attach to a lead, client and/or case.
@@ -82,23 +85,65 @@ export const appointmentInput = z
     mode: z.enum(['IN_PERSON', 'VIDEO', 'PHONE']).default('IN_PERSON'),
     staffId: z.string().optional().transform((v) => v || null),
     notes: z.string().trim().max(2000).optional(),
+    outsideHours: z.string().optional().transform((v) => v === 'on'),
     ...link,
   });
 
-export async function createAppointment(scope: Scope, raw: unknown) {
+export const rescheduleInput = z.object({
+  startsAt: z.string().min(1, 'Pick a new time'),
+  durationMin: z.coerce.number().int().min(5).max(480),
+  staffId: z.string().optional().transform((v) => v || null),
+  outsideHours: z.string().optional().transform((v) => v === 'on'),
+});
+
+/** Who may book outside office hours: decided by the caller from the signed-in role, never from the form. */
+export type BookingRights = { outsideHours: boolean };
+
+/**
+ * Parse the start time and check the slot (not in the past, inside the consultant's hours,
+ * no clash). Runs inside the write transaction so two bookings can't take the same time.
+ */
+async function validSlot(
+  tx: Tx,
+  scope: Scope,
+  o: { startsAt: string; durationMin: number; staffId: string | null; outsideHours: boolean; ignoreId?: string },
+) {
+  const startsAt = parseLocal(o.startsAt, scope.timezone);
+  if (!startsAt) throw new UserError('Pick a valid date and time', 'startsAt');
+  const endsAt = new Date(startsAt.getTime() + o.durationMin * 60_000);
+  if (o.staffId && !(await tx.membership.findFirst({ where: { userId: o.staffId, active: true } }))) {
+    throw new UserError('Pick someone on your team', 'staffId');
+  }
+  const busy = o.staffId
+    ? await tx.appointment.findMany({
+        where: { staffId: o.staffId, status: 'SCHEDULED', startsAt: { lt: endsAt }, endsAt: { gt: startsAt }, ...(o.ignoreId ? { id: { not: o.ignoreId } } : {}) },
+        select: { startsAt: true, endsAt: true, title: true },
+      })
+    : [];
+  const problem = checkSlot({
+    startsAt,
+    endsAt,
+    now: new Date(),
+    tz: scope.timezone,
+    hours: await hoursFor(scope, o.staffId, tx),
+    busy,
+    allowOutsideHours: o.outsideHours,
+  });
+  if (problem) throw new UserError(problem.message, problem.code === 'clash' ? 'staffId' : 'startsAt');
+  return { startsAt, endsAt };
+}
+
+export async function createAppointment(scope: Scope, raw: unknown, rights: BookingRights = { outsideHours: false }) {
   const input = appointmentInput.parse(raw);
-  const startsAt = parseLocal(input.startsAt, scope.timezone);
-  if (!startsAt) throw new UserError('Invalid start time');
-  const endsAt = new Date(startsAt.getTime() + input.durationMin * 60_000);
   return inTenant(scope, async (tx) => {
     const links = await resolveLinks(tx, input);
     const staffId = input.staffId ?? scope.actorId;
-    if (staffId) {
-      const clash = await tx.appointment.findFirst({
-        where: { staffId, status: 'SCHEDULED', startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
-      });
-      if (clash) throw new UserError(`Clashes with "${clash.title}"`);
-    }
+    const { startsAt, endsAt } = await validSlot(tx, scope, {
+      startsAt: input.startsAt,
+      durationMin: input.durationMin,
+      staffId,
+      outsideHours: rights.outsideHours && input.outsideHours,
+    });
     const appt = await tx.appointment.create({
       data: {
         tenantId: scope.tenantId,
@@ -108,6 +153,7 @@ export async function createAppointment(scope: Scope, raw: unknown) {
         mode: input.mode,
         staffId,
         notes: input.notes || null,
+        createdBy: scope.actorId,
         ...links,
       },
     });
@@ -135,7 +181,42 @@ export async function setAppointmentStatus(
   return inTenant(scope, async (tx) => {
     const a = await tx.appointment.findUnique({ where: { id } });
     if (!a) throw new UserError('Appointment not found');
+    // Status only: no time checks, so a past appointment can still be marked done or no-show.
     await tx.appointment.update({ where: { id }, data: { status } });
+  });
+}
+
+/** Move a scheduled appointment. The time rules run only when the time, length or person changes. */
+export async function rescheduleAppointment(scope: Scope, id: string, raw: unknown, rights: BookingRights = { outsideHours: false }) {
+  const input = rescheduleInput.parse(raw);
+  return inTenant(scope, async (tx) => {
+    const a = await tx.appointment.findUnique({ where: { id } });
+    if (!a) throw new UserError('Appointment not found');
+    if (a.status !== 'SCHEDULED') throw new UserError('Only scheduled appointments can be moved');
+    const staffId = input.staffId ?? a.staffId;
+    const startsAt = parseLocal(input.startsAt, scope.timezone);
+    const sameLength = a.endsAt.getTime() - a.startsAt.getTime() === input.durationMin * 60_000;
+    if (startsAt && startsAt.getTime() === a.startsAt.getTime() && sameLength && staffId === a.staffId) return a;
+    const slot = await validSlot(tx, scope, {
+      startsAt: input.startsAt,
+      durationMin: input.durationMin,
+      staffId,
+      outsideHours: rights.outsideHours && input.outsideHours,
+      ignoreId: a.id,
+    });
+    const moved = await tx.appointment.update({
+      where: { id },
+      data: { startsAt: slot.startsAt, endsAt: slot.endsAt, staffId, rescheduledFrom: a.startsAt },
+    });
+    await logActivity(tx, scope, {
+      type: 'APPOINTMENT',
+      summary: `Appointment moved: ${a.title}`,
+      leadId: a.leadId,
+      clientId: a.clientId,
+      caseId: a.caseId,
+      data: { from: a.startsAt.toISOString(), startsAt: slot.startsAt.toISOString() },
+    });
+    return moved;
   });
 }
 

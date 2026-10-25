@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayIp } from './format';
+import { displayIp, parseLocal, toLocalInput } from './format';
 
 describe('displayIp', () => {
   it('hides addresses that mean "no real IP" (local development)', () => {
@@ -18,5 +18,21 @@ describe('displayIp', () => {
     expect(displayIp('49.37.120.5')).toBe('49.37.120.5');
     expect(displayIp('::ffff:49.37.120.5')).toBe('49.37.120.5');
     expect(displayIp('0000:0000:0000:0000:0000:ffff:3125:7805')).toBe('49.37.120.5');
+  });
+});
+
+describe('parseLocal / toLocalInput', () => {
+  it('reads a datetime-local value as wall-clock time in the timezone', () => {
+    expect(parseLocal('2026-10-22T14:30', 'Asia/Kolkata')!.toISOString()).toBe('2026-10-22T09:00:00.000Z');
+    expect(parseLocal('2026-10-22T14:30', 'America/Toronto')!.toISOString()).toBe('2026-10-22T18:30:00.000Z');
+    expect(parseLocal('2026-10-22', 'Asia/Kolkata')!.toISOString()).toBe('2026-10-21T18:30:00.000Z');
+    expect(parseLocal('', 'Asia/Kolkata')).toBeNull();
+    expect(parseLocal('not a date', 'Asia/Kolkata')).toBeNull();
+  });
+
+  it('round-trips, including across a daylight-saving change', () => {
+    for (const [v, tz] of [['2026-10-22T14:30', 'Asia/Kolkata'], ['2026-11-01T12:00', 'America/Toronto'], ['2026-03-08T12:00', 'America/Toronto']] as const) {
+      expect(toLocalInput(parseLocal(v, tz), tz)).toBe(v);
+    }
   });
 });

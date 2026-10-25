@@ -1,6 +1,6 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import { prisma, withTenant, type Role } from '@kicko/db';
+import { Prisma, prisma, withTenant, type Role } from '@kicko/db';
 import { z } from 'zod';
 import { assertSeatAvailable } from './plan';
 import { normalizeEmail } from '@/lib/phone';
@@ -92,4 +92,30 @@ export async function updateMember(scope: Scope, userId: string, patch: { role?:
     if (patch.active === false && m.active) await audit(scope, 'team.deactivated', `Deactivated ${who}`);
     if (patch.active === true && !m.active) await audit(scope, 'team.reactivated', `Reactivated ${who}`);
   });
+}
+
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
+
+export const hoursInput = z
+  .object({
+    own: z.string().optional().transform((v) => v === 'on'),
+    days: z.array(z.coerce.number().int().min(0).max(6)).default([]),
+    start: hhmm.default('10:00'),
+    end: hhmm.default('18:00'),
+  })
+  .refine((h) => !h.own || h.start < h.end, { message: 'End must be after start', path: ['end'] })
+  .refine((h) => !h.own || h.days.length > 0, { message: 'Pick at least one working day', path: ['days'] });
+
+/** A consultant's own working hours, used for bookings with them. Off = the agency's office hours. */
+export async function setMemberHours(scope: Scope, userId: string, raw: z.input<typeof hoursInput>) {
+  const h = hoursInput.parse(raw);
+  await inTenant(scope, async (tx) => {
+    const m = await tx.membership.findUnique({ where: { tenantId_userId: { tenantId: scope.tenantId, userId } } });
+    if (!m) throw new UserError('Member not found');
+    await tx.membership.update({
+      where: { id: m.id },
+      data: { hours: h.own ? { days: [...new Set(h.days)].sort(), start: h.start, end: h.end } : Prisma.DbNull },
+    });
+  });
+  await audit(scope, 'team.hours', h.own ? `Set working hours ${h.start}–${h.end}` : 'Working hours set to the agency hours');
 }

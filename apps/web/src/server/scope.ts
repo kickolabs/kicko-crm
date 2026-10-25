@@ -62,4 +62,9 @@ export async function logActivity(
   });
 }
 
-export class UserError extends Error {}
+/** A problem the user can fix. Pass `field` to show it under that form input. */
+export class UserError extends Error {
+  constructor(message: string, readonly field?: string) {
+    super(message);
+  }
+}

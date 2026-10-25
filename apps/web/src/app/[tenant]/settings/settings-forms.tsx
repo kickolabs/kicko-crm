@@ -2,14 +2,16 @@
 
 import { useState } from 'react';
 import type { Role } from '@kicko/db';
-import { ActionButton, ActionForm, CopyField, FormBanner, FormField, SubmitButton } from '@/components/forms';
-import { Card, CardHeader, Input, Select, Textarea } from '@/components/ui';
+import { ActionButton, ActionForm, CopyField, FormBanner, FormField, Modal, SubmitButton } from '@/components/forms';
+import { Button, Card, CardHeader, Input, Select, Textarea } from '@/components/ui';
+import type { WorkingHours } from '@/lib/booking-rules';
 import { ROLE_LABEL } from '@/lib/permissions';
 import type { ActionResult } from '@/lib/action';
 import {
   inviteAction,
   revokeInviteAction,
   rotateFormKeyAction,
+  setMemberHoursAction,
   updateGeneralAction,
   updateMemberAction,
   updateProductAction,
@@ -106,6 +108,52 @@ export function MemberControls({ slug, userId, role, isMe, canMakeOwner }: { slu
         </ActionButton>
       )}
     </span>
+  );
+}
+
+const WEEK = [
+  [1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun'],
+] as const;
+
+/** A consultant's own working hours. Bookings with them must fit these; off = the agency's office hours. */
+export function MemberHours({ slug, userId, name, hours, agency }: { slug: string; userId: string; name: string; hours: WorkingHours | null; agency: WorkingHours }) {
+  const [own, setOwn] = useState(hours !== null);
+  const h = hours ?? agency;
+  return (
+    <Modal
+      title={`Working hours · ${name}`}
+      trigger={(open) => (
+        <Button size="sm" variant="ghost" onClick={open} aria-label={`Working hours for ${name}`}>
+          {hours ? `${hours.start}–${hours.end}` : 'Office hours'}
+        </Button>
+      )}
+    >
+      {(close) => (
+        <ActionForm action={setMemberHoursAction.bind(null, slug, userId)} onSuccess={close} className="flex flex-col gap-4">
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" name="own" checked={own} onChange={(e) => setOwn(e.target.checked)} className="size-4 accent-[var(--color-ink)]" />
+            Set own hours (otherwise the office hours apply: {agency.start}–{agency.end})
+          </label>
+          <fieldset disabled={!own} className="flex flex-col gap-3 disabled:opacity-50">
+            <FormField label="Working days" name="days">
+              <div className="flex flex-wrap gap-2">
+                {WEEK.map(([d, label]) => (
+                  <label key={d} className="flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-sm shadow-[inset_0_0_0_1px_var(--color-line-2)]">
+                    <input type="checkbox" name="days" value={d} defaultChecked={h.days.includes(d)} className="accent-[var(--color-ink)]" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </FormField>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="From" name="start"><Input name="start" type="time" defaultValue={h.start} required /></FormField>
+              <FormField label="Until" name="end"><Input name="end" type="time" defaultValue={h.end} required /></FormField>
+            </div>
+          </fieldset>
+          <div className="flex justify-end"><SubmitButton>Save hours</SubmitButton></div>
+        </ActionForm>
+      )}
+    </Modal>
   );
 }
 

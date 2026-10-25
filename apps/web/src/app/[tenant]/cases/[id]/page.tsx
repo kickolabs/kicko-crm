@@ -225,7 +225,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
             </div>
           </Card>
           <CustomFieldsPanel ctx={ctx} entity="cases" recordId={c.id} values={c.customFields} canEdit={can(ctx.role, 'case.write')} />
-          <AppointmentsPanel slug={slug} items={c.appointments} tz={tz} links={{ caseId: c.id }} team={team} me={ctx.user.id} />
+          <AppointmentsPanel slug={slug} items={c.appointments} tz={tz} links={{ caseId: c.id }} team={team} me={ctx.user.id} canOverride={can(ctx.role, 'settings.manage')} />
           {dependants.length > 0 && (
             <Card>
               <CardHeader title="Included dependants" />

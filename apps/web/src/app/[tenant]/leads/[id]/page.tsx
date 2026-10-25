@@ -138,7 +138,7 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
         <div className="flex flex-col gap-5">
           {!lead.clientId && <CallsPanel ctx={ctx} contact={{ kind: 'lead', id: lead.id }} />}
           <TasksPanel slug={slug} tasks={lead.tasks} tz={tz} links={{ leadId: lead.id }} team={team} me={ctx.user.id} />
-          <AppointmentsPanel slug={slug} items={lead.appointments} tz={tz} links={{ leadId: lead.id }} team={team} me={ctx.user.id} />
+          <AppointmentsPanel slug={slug} items={lead.appointments} tz={tz} links={{ leadId: lead.id }} team={team} me={ctx.user.id} canOverride={can(ctx.role, 'settings.manage')} />
         </div>
       </div>
     </div>

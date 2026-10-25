@@ -7,11 +7,14 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import type { Appointment, Task } from '@kicko/db';
 import { ActionButton, ActionForm, FormField, Modal, SubmitButton } from '@/components/forms';
 import { Button, Input, Select, Textarea } from '@/components/ui';
+import { minLocalInput } from '@/lib/booking-rules';
+import { toLocalInput } from '@/lib/format';
 import {
   addNoteAction,
   createAppointmentAction,
   createTaskAction,
   deleteTaskAction,
+  rescheduleAppointmentAction,
   setAppointmentStatusAction,
   toggleTaskAction,
 } from '../actions';
@@ -190,11 +193,48 @@ export function NoteBox({ slug, links }: { slug: string; links: Links }) {
   );
 }
 
+/**
+ * The start-time picker: today and earlier times are not selectable (`min` is "now" in the
+ * agency's timezone). The server checks again, so a stale page or a crafted request can't book the past.
+ */
+function StartsAt({ tz, defaultValue }: { tz: string; defaultValue?: string }) {
+  const [min] = useState(() => minLocalInput(tz));
+  const [value, setValue] = useState(defaultValue ?? '');
+  const past = value !== '' && value < min;
+  return (
+    <>
+      <Input
+        name="startsAt"
+        type="datetime-local"
+        required
+        min={min}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        aria-invalid={past || undefined}
+      />
+      {past && <p className="mt-1 text-xs font-semibold text-danger">That time has already passed. Pick a later time.</p>}
+    </>
+  );
+}
+
+const DURATIONS = [15, 30, 45, 60, 90, 120];
+
+function OutsideHoursBox() {
+  return (
+    <label className="flex items-center gap-2 text-sm text-ink-2">
+      <input type="checkbox" name="outsideHours" className="size-4 accent-[var(--color-ink)]" />
+      Book outside office hours
+    </label>
+  );
+}
+
 export function AppointmentForm({
   slug,
   links,
   team,
   me,
+  tz,
+  canOverride,
   defaultTitle,
   onDone,
 }: {
@@ -202,6 +242,9 @@ export function AppointmentForm({
   links: Links;
   team: Member[];
   me: string;
+  tz: string;
+  /** Owners and admins may book outside office hours. */
+  canOverride?: boolean;
   defaultTitle?: string;
   onDone?: () => void;
 }) {
@@ -213,11 +256,11 @@ export function AppointmentForm({
       </FormField>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Starts" name="startsAt">
-          <Input name="startsAt" type="datetime-local" required />
+          <StartsAt tz={tz} />
         </FormField>
         <FormField label="Duration" name="durationMin">
           <Select name="durationMin" defaultValue="30">
-            {[15, 30, 45, 60, 90].map((m) => (
+            {DURATIONS.map((m) => (
               <option key={m} value={m}>
                 {m} min
               </option>
@@ -244,8 +287,62 @@ export function AppointmentForm({
       <FormField label="Notes" name="notes">
         <Textarea name="notes" className="min-h-16" />
       </FormField>
+      {canOverride && <OutsideHoursBox />}
       <div className="flex justify-end">
         <SubmitButton>Book appointment</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+
+function RescheduleForm({
+  slug,
+  appt,
+  team,
+  tz,
+  canOverride,
+  onDone,
+}: {
+  slug: string;
+  appt: Appointment;
+  team: Member[];
+  tz: string;
+  canOverride?: boolean;
+  onDone: () => void;
+}) {
+  const length = Math.round((new Date(appt.endsAt).getTime() - new Date(appt.startsAt).getTime()) / 60_000);
+  const durations = DURATIONS.includes(length) ? DURATIONS : [...DURATIONS, length].sort((a, b) => a - b);
+  return (
+    <ActionForm action={rescheduleAppointmentAction.bind(null, slug, appt.id)} onSuccess={onDone} className="flex flex-col gap-3">
+      <p className="text-sm text-muted">
+        {appt.title} · now {fmt(appt.startsAt, tz)}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField label="New time" name="startsAt">
+          <StartsAt tz={tz} defaultValue={toLocalInput(new Date(appt.startsAt), tz)} />
+        </FormField>
+        <FormField label="Duration" name="durationMin">
+          <Select name="durationMin" defaultValue={String(length)}>
+            {durations.map((m) => (
+              <option key={m} value={m}>
+                {m} min
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="With" name="staffId">
+          <Select name="staffId" defaultValue={appt.staffId ?? ''}>
+            {team.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      </div>
+      {canOverride && <OutsideHoursBox />}
+      <div className="flex justify-end">
+        <SubmitButton>Move appointment</SubmitButton>
       </div>
     </ActionForm>
   );
@@ -260,6 +357,7 @@ export function AppointmentsPanel({
   links,
   team,
   me,
+  canOverride,
 }: {
   slug: string;
   items: Appointment[];
@@ -267,6 +365,7 @@ export function AppointmentsPanel({
   links: Links;
   team: Member[];
   me: string;
+  canOverride?: boolean;
 }) {
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   return (
@@ -281,7 +380,7 @@ export function AppointmentsPanel({
             </Button>
           )}
         >
-          {(close) => <AppointmentForm slug={slug} links={links} team={team} me={me} onDone={close} />}
+          {(close) => <AppointmentForm slug={slug} links={links} team={team} me={me} tz={tz} canOverride={canOverride} onDone={close} />}
         </Modal>
       </div>
       <ul className="divide-y divide-line px-5">
@@ -297,6 +396,16 @@ export function AppointmentsPanel({
             </div>
             {a.status === 'SCHEDULED' ? (
               <div className="flex gap-1">
+                <Modal
+                  title="Reschedule"
+                  trigger={(open) => (
+                    <Button size="sm" variant="ghost" onClick={open}>
+                      Reschedule
+                    </Button>
+                  )}
+                >
+                  {(close) => <RescheduleForm slug={slug} appt={a} team={team} tz={tz} canOverride={canOverride} onDone={close} />}
+                </Modal>
                 <ActionButton action={() => setAppointmentStatusAction(slug, a.id, 'COMPLETED')} size="sm">
                   Done
                 </ActionButton>
