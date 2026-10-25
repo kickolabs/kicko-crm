@@ -17,7 +17,8 @@
     "build": "npm run generate --workspace @kicko/db && npm run build --workspace @kicko/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "library:import": "npm run library:import --workspace @kicko/db --"
   },
   "engines": {
     "node": ">=22"

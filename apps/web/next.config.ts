@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   // E2E runs a production build in its own folder so it never clashes with `next dev`.
   distDir: process.env.NEXT_DIST_DIR || '.next',
-  transpilePackages: ['@kicko/db'],
+  transpilePackages: ['@kicko/db', '@kicko/packs'],
   serverExternalPackages: ['@prisma/client', '.prisma/client', 'pdf-lib', '@pdf-lib/fontkit'],
   // PDF fonts are read from disk at runtime; make sure they ship with the server bundle.
   outputFileTracingIncludes: {

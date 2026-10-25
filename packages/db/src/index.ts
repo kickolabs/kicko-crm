@@ -50,6 +50,21 @@ export function withPlatformRead<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   );
 }
 
+/**
+ * Write the global reference library (industry packs' countries, pathways, occupations…).
+ * Only Kicko's library admin and the import script may call this; workspaces can read the
+ * library but RLS refuses their writes.
+ */
+export function withLibraryWrite<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.library_admin', 'on', true)`;
+      return fn(tx);
+    },
+    { maxWait: 10_000, timeout: 120_000 },
+  );
+}
+
 /** Next sequential human reference for a tenant, e.g. nextRef(tx, t, 'lead', 'L') → "L-1001". */
 export async function nextRef(tx: Tx, tenantId: string, key: string, prefix: string): Promise<string> {
   const row = await tx.counter.upsert({

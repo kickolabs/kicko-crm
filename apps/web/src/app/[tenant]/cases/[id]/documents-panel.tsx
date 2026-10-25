@@ -59,6 +59,7 @@ const STATUS: Record<DocumentStatus, { label: string; dot: string; chip: string 
   VERIFIED: { label: 'Verified', dot: 'bg-[#6FA82A]', chip: 'bg-ok-bg text-ok' },
   REJECTED: { label: 'Rejected', dot: 'bg-[#E8862A]', chip: 'bg-warn-bg text-warn-ink' },
   NOT_APPLICABLE: { label: 'N/A', dot: 'bg-transparent ring-1 ring-[#B9BCC0]', chip: 'bg-paper-2 text-muted' },
+  EXPIRED: { label: 'Expired', dot: 'bg-[#D9534F]', chip: 'bg-danger-bg text-danger' },
 };
 
 const EXT_TYPES: Record<string, string> = {

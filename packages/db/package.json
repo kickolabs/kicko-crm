@@ -20,10 +20,12 @@
     "test": "dotenv -e ../../.env -- vitest run",
     "typecheck": "tsc --noEmit",
     "admin:grant": "dotenv -e ../../.env -- tsx scripts/grant-admin.ts",
-    "clean:test": "dotenv -e ../../.env -- tsx scripts/clean-test-data.ts"
+    "clean:test": "dotenv -e ../../.env -- tsx scripts/clean-test-data.ts",
+    "library:import": "dotenv -e ../../.env -- tsx scripts/import-library.ts"
   },
   "dependencies": {
-    "@prisma/client": "6.19.3"
+    "@prisma/client": "6.19.3",
+    "@kicko/packs": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

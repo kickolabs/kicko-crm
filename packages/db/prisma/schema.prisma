@@ -30,22 +30,22 @@ model Tenant {
 
 // Better-Auth core tables
 model User {
-  id            String       @id
-  name          String
-  email         String       @unique
-  emailVerified Boolean      @default(false)
-  twoFactorEnabled Boolean?  @default(false)
+  id                  String       @id
+  name                String
+  email               String       @unique
+  emailVerified       Boolean      @default(false)
+  twoFactorEnabled    Boolean?     @default(false)
   // Mobile verified by OTP at sign-up (E.164). One free trial per verified number.
-  phoneNumber         String?   @unique
-  phoneNumberVerified Boolean   @default(false)
+  phoneNumber         String?      @unique
+  phoneNumberVerified Boolean      @default(false)
   trialUsedAt         DateTime?
-  image         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  memberships   Membership[]
-  twoFactors    TwoFactor[]
+  image               String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  sessions            Session[]
+  accounts            Account[]
+  memberships         Membership[]
+  twoFactors          TwoFactor[]
 
   @@map("user")
 }
@@ -177,25 +177,33 @@ enum VisaCategory {
   WORK
   VISIT
   FAMILY
+  OTHER
 }
 
 model VisaProduct {
-  id        String           @id @default(cuid())
-  tenantId  String
-  code      String
-  country   String // ISO-2
-  category  VisaCategory
-  name      String
-  // [{ key, name }]
-  stages    Json
-  // [{ key, name, required, group }]
-  checklist Json
-  active    Boolean          @default(true)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  cases     Case[]
-  leads     Lead[]
-  packages  ServicePackage[]
+  id             String           @id @default(cuid())
+  tenantId       String
+  code           String
+  country        String // ISO-2
+  category       VisaCategory
+  name           String
+  // [{ key, name, optional?, lodged?, when?, requires?, deadlineDays?, track?, tasks?: [{ title, dueDays }] }]
+  stages         Json
+  // [{ key, name, required, group, when?, docType?, expires? }]
+  checklist      Json
+  active         Boolean          @default(true)
+  // Where this workflow came from: an industry pack's library item, at a version.
+  packId         String?
+  libraryKey     String?
+  libraryVersion Int?
+  // Reference info copied from the library: { summary, eligibility[], steps[], fees[], processing, portalUrl, sources[] }
+  info           Json             @default("{}")
+  kind           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  cases          Case[]
+  leads          Lead[]
+  packages       ServicePackage[]
 
   @@unique([tenantId, code])
 }
@@ -270,7 +278,7 @@ model Lead {
 }
 
 model Client {
-  id              String         @id @default(cuid())
+  id              String             @id @default(cuid())
   tenantId        String
   ref             String
   firstName       String
@@ -286,14 +294,14 @@ model Client {
   maritalStatus   String?
   address         String?
   // [{ level, institution, field, year, score }]
-  education       Json           @default("[]")
+  education       Json               @default("[]")
   // [{ test: IELTS|PTE|TOEFL|DUOLINGO, overall, l, r, w, s, date }]
-  tests           Json           @default("[]")
+  tests           Json               @default("[]")
   // [{ employer, title, from, to, anzsco, noc }]
-  work            Json           @default("[]")
+  work            Json               @default("[]")
   ownerId         String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
   lead            Lead?
   family          FamilyMember[]
   cases           Case[]
@@ -307,20 +315,22 @@ model Client {
   messages        Message[]
   portalInvitedAt DateTime?
   portalLastSeen  DateTime?
-  waOptIn         Boolean        @default(false)
+  waOptIn         Boolean            @default(false)
   waOptInAt       DateTime?
   waLastInbound   DateTime?
   calls           Call[]
   eligibility     EligibilityCheck[]
   subAgentId      String?
-  subAgent        SubAgent?      @relation(fields: [subAgentId], references: [id], onDelete: SetNull)
+  subAgent        SubAgent?          @relation(fields: [subAgentId], references: [id], onDelete: SetNull)
   // Answers for government forms not covered by the profile: { key: { v, by: 'client' | 'staff', at } }
-  formAnswers     Json           @default("{}")
+  formAnswers     Json               @default("{}")
   formRequests    FormRequest[]
+  openings        OpeningCandidate[]
+  credentials     CredentialVault[]
   aiHandoffAt     DateTime?
   aiHandoffReason String?
   aiResumedAt     DateTime?
-  customFields    Json           @default("{}")
+  customFields    Json               @default("{}")
 
   @@unique([tenantId, ref])
   @@index([tenantId, phoneNormalized])
@@ -355,35 +365,52 @@ enum CaseOutcome {
 }
 
 model Case {
-  id           String         @id @default(cuid())
-  tenantId     String
-  ref          String
-  clientId     String
-  client       Client         @relation(fields: [clientId], references: [id])
-  productId    String
-  product      VisaProduct    @relation(fields: [productId], references: [id])
-  stageKey     String
-  status       CaseStatus     @default(OPEN)
-  outcome      CaseOutcome?
-  ownerId      String?
-  branchId     String?
-  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  lodgedAt     DateTime?
-  decisionAt   DateTime?
+  id             String         @id @default(cuid())
+  tenantId       String
+  ref            String
+  clientId       String
+  client         Client         @relation(fields: [clientId], references: [id])
+  productId      String
+  product        VisaProduct    @relation(fields: [productId], references: [id])
+  stageKey       String
+  status         CaseStatus     @default(OPEN)
+  outcome        CaseOutcome?
+  ownerId        String?
+  branchId       String?
+  branch         Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  lodgedAt       DateTime?
+  decisionAt     DateTime?
   // free-form key dates: { biometrics, medical, intake, ... }
-  dates        Json           @default("{}")
-  stageSince   DateTime       @default(now())
-  customFields Json           @default("{}")
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  history      StageHistory[]
-  tasks        Task[]
-  notes        Note[]
-  activities   Activity[]
-  appointments Appointment[]
-  documents    Document[]
-  applications Application[]
-  invoices     Invoice[]
+  dates          Json           @default("{}")
+  stageSince     DateTime       @default(now())
+  // The workflow (stages + checklist) as it was when the case opened, so later edits never change it silently.
+  workflow       Json?
+  // [{ label, value }]: application, file and government reference numbers
+  refs           Json           @default("[]")
+  nextAction     String?
+  closureReason  String?
+  // { rating, comment, at }
+  feedback       Json?
+  // Parallel tracks beside the main stages: { [trackKey]: { status, at } }
+  tracks         Json           @default("{}")
+  packageId      String?
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  openingId      String?
+  opening        Opening?       @relation(fields: [openingId], references: [id], onDelete: SetNull)
+  // { title, salary, currency, startDate, contract, notes }
+  jobOffer       Json?
+  customFields   Json           @default("{}")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  history        StageHistory[]
+  tasks          Task[]
+  notes          Note[]
+  activities     Activity[]
+  appointments   Appointment[]
+  documents      Document[]
+  applications   Application[]
+  invoices       Invoice[]
 
   @@unique([tenantId, ref])
   @@index([tenantId, status])
@@ -433,26 +460,26 @@ enum AppointmentStatus {
 }
 
 model Appointment {
-  id        String            @id @default(cuid())
-  tenantId  String
-  title     String
-  startsAt  DateTime
-  endsAt    DateTime
-  mode      String            @default("IN_PERSON") // IN_PERSON | VIDEO | PHONE
-  status    AppointmentStatus @default(SCHEDULED)
-  staffId   String?
-  notes     String?
-  createdBy String?
+  id              String            @id @default(cuid())
+  tenantId        String
+  title           String
+  startsAt        DateTime
+  endsAt          DateTime
+  mode            String            @default("IN_PERSON") // IN_PERSON | VIDEO | PHONE
+  status          AppointmentStatus @default(SCHEDULED)
+  staffId         String?
+  notes           String?
+  createdBy       String?
   // the start time before the latest reschedule
   rescheduledFrom DateTime?
-  leadId    String?
-  lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  clientId  String?
-  client    Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  caseId    String?
-  case      Case?             @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @default(now()) @updatedAt
+  leadId          String?
+  lead            Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientId        String?
+  client          Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId          String?
+  case            Case?             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
 
   @@index([tenantId, startsAt])
   @@index([tenantId, staffId, startsAt])
@@ -528,6 +555,7 @@ enum DocumentStatus {
   VERIFIED
   REJECTED
   NOT_APPLICABLE
+  EXPIRED
 }
 
 // One row per required or requested document on a case (built from the product checklist).
@@ -1048,10 +1076,15 @@ model CustomField {
   entity    String // leads | clients | cases
   key       String
   label     String
-  type      String // text | number | date | select | yesno
+  type      String // text | number | date | select | yesno | lookup | multi_lookup | repeater
   options   String[]
   sortOrder Int      @default(0)
   archived  Boolean  @default(false)
+  // Declared by an industry pack: managed by Kicko, can be hidden but not deleted; doesn't count toward the limit.
+  packId    String?
+  system    Boolean  @default(false)
+  // { library: 'country', dependsOn: 'destination', columns: [...], carry: true }
+  config    Json     @default("{}")
   createdAt DateTime @default(now())
 
   @@unique([tenantId, entity, key])
@@ -1361,6 +1394,161 @@ model PortalSession {
   userAgent  String?
   lastSeenAt DateTime @default(now())
   createdAt  DateTime @default(now())
+
+  @@index([tenantId, clientId])
+}
+
+// ─── Industry packs & reference library ─────────────────────────────────────
+
+// Kicko-curated reference data shipped by an industry pack (countries, visa pathways,
+// occupations, document types...). Global: every workspace reads it; only the library
+// admin path can write it (RLS). Agencies adopt items into their own editable copies.
+model LibraryItem {
+  id             String          @id @default(cuid())
+  packId         String
+  type           String
+  key            String
+  parentKey      String?
+  name           String
+  // basic | full: how deeply it is researched
+  coverage       String?
+  status         String          @default("published") // draft | published | archived
+  version        Int             @default(1)
+  data           Json            @default("{}")
+  // [{ url, title, publisher, official, verifiedAt }]
+  sources        Json            @default("[]")
+  unverified     Boolean         @default(false)
+  lastReviewedAt DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  changes        LibraryChange[]
+
+  @@unique([packId, type, key])
+  @@index([packId, type, parentKey])
+}
+
+// Append-only history of library edits.
+model LibraryChange {
+  id      String      @id @default(cuid())
+  itemId  String
+  item    LibraryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  version Int
+  actor   String
+  action  String // import | edit | publish | archive | verify
+  diff    Json?
+  at      DateTime    @default(now())
+
+  @@index([itemId, at])
+}
+
+// Which industry packs a workspace runs.
+model TenantPack {
+  id        String   @id @default(cuid())
+  tenantId  String
+  packId    String
+  version   Int      @default(1)
+  enabled   Boolean  @default(true)
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, packId])
+}
+
+// An agency's own entries for a pack library type (e.g. extra occupations), or
+// overrides of a library item (hidden, renamed).
+model TenantLibraryItem {
+  id        String   @id @default(cuid())
+  tenantId  String
+  packId    String
+  type      String
+  key       String
+  name      String
+  parentKey String?
+  data      Json     @default("{}")
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, packId, type, key])
+}
+
+// ─── Organizations & openings (Employers & vacancies in the immigration pack) ─
+
+model Organization {
+  id        String    @id @default(cuid())
+  tenantId  String
+  kind      String    @default("employer")
+  name      String
+  country   String?
+  city      String?
+  industry  String?
+  // { name, email, phone, website }
+  contact   Json      @default("{}")
+  // pack fields, e.g. { sponsorLicence }
+  data      Json      @default("{}")
+  notes     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  openings  Opening[]
+  cases     Case[]
+
+  @@index([tenantId, kind, active])
+}
+
+model Opening {
+  id             String             @id @default(cuid())
+  tenantId       String
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  // { occupation, country, pathway, positions, salaryMin, salaryMax, currency, minExperience, licences[], languages[], qualification }
+  data           Json               @default("{}")
+  status         String             @default("open") // open | on_hold | filled | closed
+  closesAt       DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  candidates     OpeningCandidate[]
+  cases          Case[]
+
+  @@index([tenantId, status])
+}
+
+model OpeningCandidate {
+  id          String    @id @default(cuid())
+  tenantId    String
+  openingId   String
+  opening     Opening   @relation(fields: [openingId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  stage       String    @default("shortlisted") // shortlisted | submitted | interview | offered | hired | rejected
+  score       Int?
+  interviewAt DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([openingId, clientId])
+  @@index([tenantId, clientId])
+}
+
+// Logins for government and college portals (IRCC/GCKey, ImmiAccount, UKVI...).
+// The secret is encrypted at rest; every reveal is audited.
+model CredentialVault {
+  id             String    @id @default(cuid())
+  tenantId       String
+  clientId       String
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caseId         String?
+  label          String
+  portalUrl      String?
+  username       String
+  secret         String
+  notes          String?
+  createdBy      String?
+  lastRevealedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([tenantId, clientId])
 }

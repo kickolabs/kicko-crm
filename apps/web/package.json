@@ -32,7 +32,8 @@
     "read-excel-file": "9.3.12",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.3.1",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@kicko/packs": "*"
   },
   "devDependencies": {
     "@next/env": "15.5.28",

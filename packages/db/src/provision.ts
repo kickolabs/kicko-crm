@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { prisma, withTenant, type Role } from './index';
-import { VISA_CATALOG } from './visa-catalog';
+import { DEFAULT_PACK, getPack } from '@kicko/packs';
 
 export const RESERVED_SLUGS = new Set([
   'api', 'app', 'login', 'logout', 'signup', 'invite', 'f', 'embed', 'static', 'assets',
@@ -87,10 +87,12 @@ export type TenantSettings = {
 export const TRIAL_DAYS = 14;
 
 /**
- * Create an agency: tenant row, owner membership, HQ branch, default visa catalog.
+ * Create an agency: tenant row, owner membership, HQ branch, its industry pack and that
+ * pack's starter workflows.
  * `trial: false` starts it as "pending" (choose a plan, or verify a mobile to start the one free trial).
  */
-export async function provisionTenant(input: { name: string; slug: string; ownerUserId: string; trial?: boolean }) {
+export async function provisionTenant(input: { name: string; slug: string; ownerUserId: string; trial?: boolean; packId?: string }) {
+  const pack = getPack(input.packId ?? DEFAULT_PACK);
   const settings: TenantSettings = {
     leadAssignment: 'round_robin',
     formKey: randomBytes(12).toString('base64url'),
@@ -111,15 +113,19 @@ export async function provisionTenant(input: { name: string; slug: string; owner
             ? { tenantId: tenant.id, plan: 'starter', status: 'pending', seats: 1, trialEndsAt: null } // nothing included until a plan or trial starts
             : { tenantId: tenant.id, plan: 'pro', status: 'trialing', seats: 10, trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400_000) },
       });
+      await tx.tenantPack.create({ data: { tenantId: tenant.id, packId: pack.id, version: pack.version } });
       await tx.visaProduct.createMany({
-        data: VISA_CATALOG.map((p) => ({
+        data: pack.starterWorkflows().map((p) => ({
           tenantId: tenant.id,
           code: p.code,
           country: p.country,
-          category: p.category,
+          category: p.category as 'STUDY',
           name: p.name,
           stages: p.stages,
           checklist: p.checklist,
+          packId: pack.id,
+          libraryKey: p.code,
+          libraryVersion: 1,
         })),
       });
     });

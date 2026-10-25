@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { prisma, withPlatformRead, withTenant } from '../src/index';
+import { prisma, withLibraryWrite, withPlatformRead, withTenant } from '../src/index';
 import { provisionTenant, tenantsForUser } from '../src/provision';
 
 // Runs against the local database as the non-owner app role (DATABASE_URL),
@@ -276,5 +276,35 @@ describe('audit log', () => {
     const rows = await withTenant(a.id, (tx) => tx.auditEvent.findMany({ where: { action: 'test.event' } }));
     expect(rows.map((r) => r.summary)).toEqual(['original']);
     expect(await withTenant(b.id, (tx) => tx.auditEvent.count({ where: { action: 'test.event' } }))).toBe(0);
+  });
+});
+
+describe('industry pack library', () => {
+  const key = `TEST_${run}`;
+  afterAll(() => withLibraryWrite((tx) => tx.libraryItem.deleteMany({ where: { packId: 'test', key } })));
+
+  it('workspaces can read the library but never write it; the library admin path can', async () => {
+    await expect(withTenant(a.id, (tx) => tx.libraryItem.create({ data: { packId: 'test', type: 'country', key, name: 'Nowhere' } }))).rejects.toThrow();
+    const item = await withLibraryWrite((tx) => tx.libraryItem.create({ data: { packId: 'test', type: 'country', key, name: 'Testland' } }));
+    expect(await withTenant(b.id, (tx) => tx.libraryItem.findUnique({ where: { id: item.id } }))).toMatchObject({ name: 'Testland' });
+    const edited = await withTenant(a.id, (tx) => tx.libraryItem.updateMany({ where: { id: item.id }, data: { name: 'hacked' } }));
+    const removed = await withTenant(a.id, (tx) => tx.libraryItem.deleteMany({ where: { id: item.id } }));
+    expect([edited.count, removed.count]).toEqual([0, 0]);
+    await withLibraryWrite((tx) => tx.libraryChange.create({ data: { itemId: item.id, version: 1, actor: 'test', action: 'import' } }));
+    const tamper = await withLibraryWrite((tx) => tx.libraryChange.updateMany({ where: { itemId: item.id }, data: { actor: 'x' } }));
+    expect(tamper.count).toBe(0); // the change log is append-only, even for the admin path
+  });
+
+  it('employers, vacancies, candidates and vault entries stay inside their workspace', async () => {
+    const org = await withTenant(a.id, (tx) => tx.organization.create({ data: { tenantId: a.id, name: 'Gulf Logistics' } }));
+    await withTenant(a.id, (tx) => tx.opening.create({ data: { tenantId: a.id, organizationId: org.id, title: 'Truck driver' } }));
+    expect(await withTenant(b.id, (tx) => tx.organization.count())).toBe(0);
+    expect(await withTenant(b.id, (tx) => tx.opening.count())).toBe(0);
+    await expect(withTenant(b.id, (tx) => tx.opening.create({ data: { tenantId: a.id, organizationId: org.id, title: 'Sneaky' } }))).rejects.toThrow();
+    expect(await withTenant(b.id, (tx) => tx.credentialVault.count())).toBe(0);
+  });
+
+  it('new workspaces run the immigration pack', async () => {
+    expect(await withTenant(a.id, (tx) => tx.tenantPack.findMany({ select: { packId: true } }))).toEqual([{ packId: 'immigration' }]);
   });
 });
