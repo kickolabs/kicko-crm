@@ -388,6 +388,16 @@ export async function setTrackAction(slug: string, caseId: string, key: string, 
   return res;
 }
 
+export async function setCasePackageAction(slug: string, caseId: string, packageId: string | null) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'billing.write');
+    await cases.setCasePackage(scopeOf(ctx), caseId, packageId);
+  });
+  refresh(slug);
+  return res;
+}
+
 export async function updateClientPackAction(slug: string, clientId: string, _: Prev, fd: FormData) {
   const ctx = await getCtx(slug);
   const res = await run(async () => {
@@ -463,11 +473,20 @@ export async function deleteVaultAction(slug: string, id: string) {
 
 // ─── Document templates ─────────────────────────────────────────────────────
 
-export async function generateDocumentAction(slug: string, caseId: string, templateId: string) {
+export async function previewDocumentAction(slug: string, caseId: string, templateId: string) {
+  const ctx = await getCtx(slug);
+  return run(async () => {
+    assertCan(ctx, 'document.write');
+    return docTemplates.previewDocument(scopeOf(ctx), caseId, templateId, ctx.tenant.name);
+  });
+}
+
+/** `body`: the text as staff edited it in the preview; omitted, the template is filled in as is. */
+export async function generateDocumentAction(slug: string, caseId: string, templateId: string, body?: string) {
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'document.write');
-    const r = await docTemplates.generateDocument(scopeOf(ctx), caseId, templateId, ctx.tenant.name);
+    const r = await docTemplates.generateDocument(scopeOf(ctx), caseId, templateId, ctx.tenant.name, body);
     return r.missing;
   });
   refresh(slug);

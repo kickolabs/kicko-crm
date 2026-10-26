@@ -287,6 +287,18 @@ export async function updateCaseExtras(scope: Scope, caseId: string, raw: z.inpu
 export const TRACK_STATUSES = ['todo', 'in_progress', 'done', 'not_needed'] as const;
 
 /** Status of a side track (medical, police clearance, loan…) beside the main stages. */
+/** The service package the client bought for this case (merged into agreements). */
+export async function setCasePackage(scope: Scope, caseId: string, packageId: string | null) {
+  return inTenant(scope, async (tx) => {
+    const c = await tx.case.findUnique({ where: { id: caseId } });
+    if (!c) throw new UserError('Case not found');
+    const pkg = packageId ? await tx.servicePackage.findUnique({ where: { id: packageId } }) : null;
+    if (packageId && !pkg) throw new UserError('Package not found');
+    await tx.case.update({ where: { id: caseId }, data: { packageId } });
+    await logActivity(tx, scope, { type: 'INVOICE', summary: pkg ? `Service package: ${pkg.name}` : 'Service package removed', caseId, clientId: c.clientId });
+  });
+}
+
 export async function setTrack(scope: Scope, caseId: string, key: string, status: (typeof TRACK_STATUSES)[number]) {
   if (!TRACK_STATUSES.includes(status)) throw new UserError('Unknown status');
   return inTenant(scope, async (tx) => {

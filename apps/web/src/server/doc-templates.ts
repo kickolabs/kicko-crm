@@ -4,7 +4,7 @@ import { prisma, type Prisma } from '@kicko/db';
 import { z } from 'zod';
 import { countryName } from '@/lib/countries';
 import { fmtDate, fullName } from '@/lib/format';
-import { blocksOf, renderTemplate, type MergeData } from '@/lib/merge';
+import { BLANK, blocksOf, renderTemplate, type MergeData } from '@/lib/merge';
 import { formatMoney } from '@/lib/money';
 import { audit } from './audit';
 import { tenantPack } from './library';
@@ -51,7 +51,7 @@ export async function mergeDataFor(scope: Scope, caseId: string, agencyName: str
   const c = await inTenant(scope, (tx) =>
     tx.case.findUnique({
       where: { id: caseId },
-      include: { client: true, product: true, documents: { where: { required: true, status: 'PENDING' }, select: { name: true } }, invoices: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: { client: true, product: true, documents: { where: { required: true, status: 'PENDING' }, select: { name: true } }, invoices: { where: { status: { not: 'VOID' } }, orderBy: { createdAt: 'desc' }, take: 1, include: { items: { orderBy: { sortOrder: 'asc' } }, installments: { orderBy: { sortOrder: 'asc' } } } } },
     }),
   );
   if (!c) throw new UserError('Case not found');
@@ -67,17 +67,75 @@ export async function mergeDataFor(scope: Scope, caseId: string, agencyName: str
       passportNumber: c.client.passportNumber, nationality: c.client.nationality, address: c.client.address?.replace(/\n/g, ', '),
     },
     case: { ref: c.ref, workflow: c.product.name, country: countryName(c.product.country), owner: owner?.name },
-    fees: { total: inv ? formatMoney(inv.total, inv.currency) : pkg ? formatMoney(pkg.price) : null, package: pkg?.name },
+    fees: feesOf(inv, pkg, scope.timezone),
     documents: { missing: c.documents.map((d) => d.name) },
   };
 }
 
-/** Create a document on the case from a template (as a PDF), ready to send or sign. */
-export async function generateDocument(scope: Scope, caseId: string, templateId: string, agencyName: string) {
+type FeeInvoice = {
+  total: number; taxTotal: number; amountPaid: number; currency: string;
+  items: { description: string; quantity: number; amount: number }[];
+  installments: { label: string; amount: number; dueDate: Date }[];
+};
+
+/**
+ * Fees for templates: the case's latest invoice if it has one, otherwise its service
+ * package. `lines` and `instalments` are "- " lists, so a field on its own line in a
+ * template becomes a list in the document.
+ */
+export function feesOf(inv: FeeInvoice | undefined, pkg: { name: string; price: number; taxRate?: number; plan: unknown } | null, tz: string) {
+  if (inv) {
+    const m = (n: number) => formatMoney(n, inv.currency);
+    const lines = inv.items.map((i) => `- ${i.description}${i.quantity > 1 ? ` × ${i.quantity}` : ''}: ${m(i.amount)}`);
+    if (inv.taxTotal) lines.push(`- GST: ${m(inv.taxTotal)}`);
+    return {
+      total: m(inv.total),
+      package: pkg?.name,
+      lines: lines.join('\n'),
+      instalments: inv.installments.length
+        ? inv.installments.map((p) => `- ${p.label}: ${m(p.amount)}, due ${fmtDate(p.dueDate, tz)}`).join('\n')
+        : `- In full: ${m(inv.total)}`,
+      paid: m(inv.amountPaid),
+      balance: m(inv.total - inv.amountPaid),
+    };
+  }
+  if (!pkg) return {};
+  // Package prices are before tax (taxRate in basis points).
+  const tax = Math.round((pkg.price * (pkg.taxRate ?? 0)) / 10_000);
+  const total = pkg.price + tax;
+  const plan = Array.isArray(pkg.plan) ? (pkg.plan as { label: string; percent: number; dueDays: number }[]) : [];
+  return {
+    total: formatMoney(total),
+    package: pkg.name,
+    lines: [`- ${pkg.name}: ${formatMoney(pkg.price)}`, ...(tax ? [`- GST: ${formatMoney(tax)}`] : [])].join('\n'),
+    instalments: plan.length
+      ? plan.map((p) => `- ${p.label}: ${formatMoney(Math.round((total * p.percent) / 100))}, ${p.dueDays ? `due ${p.dueDays} days after signing` : 'on signing'}`).join('\n')
+      : `- In full on signing: ${formatMoney(total)}`,
+    paid: formatMoney(0),
+    balance: formatMoney(total),
+  };
+}
+
+/** The filled-in text of a template for a case, for staff to check or edit before creating it. */
+export async function previewDocument(scope: Scope, caseId: string, templateId: string, agencyName: string) {
   const t = await inTenant(scope, (tx) => tx.docTemplate.findUnique({ where: { id: templateId } }));
   if (!t || !t.active) throw new UserError('Template not found');
-  const data = await mergeDataFor(scope, caseId, agencyName);
-  const { text, missing } = renderTemplate(t.body, data);
+  return renderTemplate(t.body, await mergeDataFor(scope, caseId, agencyName));
+}
+
+const editedBody = z.string().trim().min(10, 'The document is empty').max(40_000);
+
+/**
+ * Create a document on the case from a template (as a PDF), ready to send or sign.
+ * `body` is the text staff edited from the preview; without it the template is filled in as it stands.
+ */
+export async function generateDocument(scope: Scope, caseId: string, templateId: string, agencyName: string, body?: string) {
+  const t = await inTenant(scope, (tx) => tx.docTemplate.findUnique({ where: { id: templateId } }));
+  if (!t || !t.active) throw new UserError('Template not found');
+  const filled = body === undefined ? renderTemplate(t.body, await mergeDataFor(scope, caseId, agencyName)) : null;
+  const text = filled ? filled.text : editedBody.parse(body);
+  // Edited text: report blanks still left in it.
+  const missing = filled ? filled.missing : text.includes(BLANK) ? ['the blanks (________) left in the text'] : [];
   const pdf = await documentPdf({ agency: { name: agencyName, ...(scope.settings.billing ?? {}) }, title: t.name, blocks: blocksOf(text), tz: scope.timezone });
   const key = newKey(scope.tenantId, 'generated', 'application/pdf');
   await putObject(key, pdf, 'application/pdf');
@@ -92,7 +150,7 @@ export async function generateDocument(scope: Scope, caseId: string, templateId:
         files: { create: { tenantId: scope.tenantId, storageKey: key, fileName: `${t.name}.pdf`, contentType: 'application/pdf', size: pdf.length, uploadedBy: scope.actorId } },
       },
     });
-    await logActivity(tx, scope, { type: 'DOCUMENT', summary: `${t.name} generated${t.signature ? ' and sent for signature' : ''}`, caseId, clientId: c.clientId });
+    await logActivity(tx, scope, { type: 'DOCUMENT', summary: `${t.name} generated${filled ? '' : ' (edited before sending)'}${t.signature ? ' and sent for signature' : ''}`, caseId, clientId: c.clientId });
     return d;
   });
   return { id: doc.id, missing };

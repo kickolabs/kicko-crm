@@ -30,6 +30,7 @@ export function InvoiceBuilder({
   const [issueDate, setIssueDate] = useState(defaults.today);
   const [lines, setLines] = useState<Line[]>([blank()]);
   const [plan, setPlan] = useState('');
+  const [packageId, setPackageId] = useState('');
   const [notes, setNotes] = useState('');
   const [issue, setIssue] = useState(true);
   const client = clients.find((c) => c.id === clientId);
@@ -45,12 +46,14 @@ export function InvoiceBuilder({
   const applyPackage = (p: PackageOpt) => {
     setLines([{ description: p.name + (p.description ? ` — ${p.description}` : ''), quantity: '1', unitPrice: toInputAmount(p.price), taxRate: String(p.taxRate / 100) }]);
     setPlan(p.plan.map((s) => `${s.label}, ${s.percent}, ${s.dueDays}`).join('\n'));
+    setPackageId(p.id);
   };
   const set = (i: number, k: keyof Line, v: string) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
 
   const payload = JSON.stringify({
     clientId,
     caseId,
+    packageId,
     issueDate,
     taxMode,
     notes,

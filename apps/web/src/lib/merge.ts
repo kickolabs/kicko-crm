@@ -27,6 +27,9 @@ function lookup(data: MergeData, path: string): unknown {
 
 const text = (v: unknown) => (v == null ? '' : Array.isArray(v) ? v.join(', ') : v instanceof Date ? v.toISOString().slice(0, 10) : String(v));
 
+/** What a missing field renders as. */
+export const BLANK = '________';
+
 /** Fill the fields. Missing ones render as a visible blank and are listed. */
 export function renderTemplate(template: string, data: MergeData): { text: string; missing: string[] } {
   const missing: string[] = [];
@@ -34,7 +37,7 @@ export function renderTemplate(template: string, data: MergeData): { text: strin
     const v = text(lookup(data, path)).trim();
     if (!v) {
       if (!missing.includes(path)) missing.push(path);
-      return '________';
+      return BLANK;
     }
     return v;
   });
@@ -93,5 +96,9 @@ export const CORE_FIELDS: [string, string][] = [
   ['case.owner', 'Case owner'],
   ['fees.total', 'Total fee (from the latest invoice)'],
   ['fees.package', 'Service package'],
+  ['fees.lines', 'Fee breakdown, one line per item (put it on its own line)'],
+  ['fees.instalments', 'Instalments with due dates (put it on its own line)'],
+  ['fees.paid', 'Amount paid so far'],
+  ['fees.balance', 'Balance still due'],
   ['documents.missing', 'Documents still needed'],
 ];

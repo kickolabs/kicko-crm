@@ -242,6 +242,49 @@ test.describe.serial('Immigration pack journey', () => {
     }
   });
 
+  test('the fee schedule uses the case package, and staff can edit it for this client before sending', async () => {
+    await page.goto(`/${agency.slug}/settings?tab=billing`);
+    await page.getByRole('button', { name: '+ Package' }).click();
+    const d = page.getByRole('dialog');
+    await d.getByLabel('Name').fill('Gulf work visa: full service');
+    await d.getByLabel('Price before tax (₹)').fill('40000');
+    await d.getByRole('button', { name: 'Save package' }).click();
+    await expect(page.getByText('₹40,000')).toBeVisible();
+
+    await page.goto(caseUrl);
+    await page.getByLabel('Service package').selectOption({ label: 'Gulf work visa: full service · ₹40,000' });
+    await expect.poll(async () => {
+      await page.reload();
+      return page.getByLabel('Service package').inputValue();
+    }).not.toBe('');
+
+    const card = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Agreements & letters' }) });
+    await card.getByRole('listitem').filter({ hasText: 'Fee schedule' }).getByRole('button', { name: 'Edit first' }).click();
+    const m = page.getByRole('dialog');
+    await m.getByRole('button', { name: 'Fill in from the case' }).click();
+    const text = m.getByLabel('Document text');
+    // ₹40,000 + 18% GST, from the package; the breakdown is a list.
+    await expect(text).toHaveValue(/- Gulf work visa: full service: ₹40,000\n- GST: ₹7,200/);
+    await expect(text).toHaveValue(/Total service fee: \*\*₹47,200\*\*/);
+    await text.fill(((await text.inputValue()) + '\n\nSpecial terms: 10% off for early payment.').replace('________', 'n/a'));
+    await m.getByRole('button', { name: 'Send to sign' }).click();
+    await expect(m).toBeHidden();
+    await expect(card.getByText(/Fee schedule created/)).toBeVisible();
+    await expect(page.getByText('Fee schedule generated (edited before sending)')).toBeVisible();
+
+    const db = new Pg('postgresql://postgres:postgres@localhost:5433/kicko');
+    await db.connect();
+    try {
+      const { rows } = await db.query(
+        `SELECT d.body FROM "Document" d JOIN "Tenant" t ON t.id = d."tenantId" WHERE t.slug = $1 AND d.name = 'Fee schedule'`,
+        [agency.slug],
+      );
+      expect(rows[0].body).toContain('Special terms: 10% off for early payment.');
+    } finally {
+      await db.end();
+    }
+  });
+
   test('a Facebook lead-ad submission (sandbox) becomes a lead once, with its campaign', async ({ request }) => {
     await page.goto(`/${agency.slug}/settings?tab=capture`);
     await page.getByRole('button', { name: 'Use sandbox lead ads' }).click();

@@ -26,9 +26,10 @@ export function BookingForm({
     <ActionForm action={portalBookAction.bind(null, slug)} className="mt-6 flex flex-col gap-6">
       <input type="hidden" name="startsAt" value={slot ?? ''} />
       <input type="hidden" name="mode" value={mode} />
-      <fieldset>
+      {/* min-w-0: a fieldset otherwise grows to its content and pushes past the card. */}
+      <fieldset className="min-w-0">
         <legend className="mb-2 text-sm font-bold">Day</legend>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-wrap gap-2">
           {days.map((d) => (
             <button
               key={d.date}

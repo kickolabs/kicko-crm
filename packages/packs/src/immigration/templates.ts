@@ -65,7 +65,15 @@ Client: **{{client.fullName}}**   File: {{case.ref}}   Date: {{today}}
 
 Service: {{case.workflow}} ({{fees.package}})
 
+## Service fees
+
+{{fees.lines}}
+
 Total service fee: **{{fees.total}}**
+
+## Payment schedule
+
+{{fees.instalments}}
 
 Government fees, biometrics, medical examinations, police clearance certificates, language tests and courier charges are paid separately at the rates published by the authority or provider at the time of payment.
 

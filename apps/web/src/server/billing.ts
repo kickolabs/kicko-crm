@@ -91,6 +91,7 @@ export async function savePackage(scope: Scope, id: string | null, raw: unknown)
 export const invoiceInput = z.object({
   clientId: z.string().min(1, 'Choose a client'),
   caseId: z.string().optional().transform((v) => v || null),
+  packageId: z.string().optional().transform((v) => v || null),
   issueDate: z.string().min(1, 'Pick a date'),
   taxMode: z.enum(['NONE', 'GST_INTRA', 'GST_INTER']),
   notes: z.string().trim().max(2000).optional(),
@@ -122,6 +123,10 @@ export async function createInvoice(scope: Scope, raw: unknown) {
     if (input.caseId) {
       const c = await tx.case.findUnique({ where: { id: input.caseId } });
       if (!c || c.clientId !== client.id) throw new UserError('That case belongs to another client');
+      // An invoice started from a package sets the case's package (for agreements), if it has none.
+      if (input.packageId && !c.packageId && (await tx.servicePackage.findUnique({ where: { id: input.packageId } }))) {
+        await tx.case.update({ where: { id: c.id }, data: { packageId: input.packageId } });
+      }
     }
     const prefix = scope.settings.billing?.invoicePrefix || 'INV';
     const ref = await nextDocNumber(tx, scope.tenantId, 'invoice', prefix, financialYear(issueDate, scope.timezone));

@@ -23,6 +23,7 @@ import { Timeline } from '../../_components/timeline';
 import { DetailsForm, Journey, StatusControls } from './case-controls';
 import { NextActionCard, TracksCard } from './case-extras';
 import { TemplatesCard } from './templates-card';
+import { PackagePicker } from './package-picker';
 import { listTemplates } from '@/server/doc-templates';
 import { scopeOf } from '@/server/scope';
 import { gateProblems, mainStages, overdueDays, trackStages } from '@/lib/workflow';
@@ -90,7 +91,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
   for (const s of stages) {
     const hit = UPCOMING_DATES.find(([re]) => re.test(s.key));
     const v = hit && dates[hit[1]];
-    if (v && /^d{4}-d{2}-d{2}/.test(v)) ahead[s.key] = `${hit[2]}${fmtDate(new Date(`${v.slice(0, 10)}T00:00:00Z`), 'UTC', { year: undefined })}`;
+    if (v && /^\d{4}-\d{2}-\d{2}/.test(v)) ahead[s.key] = `${hit[2]}${fmtDate(new Date(`${v.slice(0, 10)}T00:00:00Z`), 'UTC', { year: undefined })}`;
   }
   const daysOpen = Math.max(0, Math.floor((Date.now() - c.createdAt.getTime()) / 86400_000));
 
@@ -263,6 +264,15 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
               <CardHeader
                 title="Billing"
                 action={can(ctx.role, 'billing.write') && <LinkButton size="sm" href={`/${slug}/billing/new?client=${c.client.id}&case=${c.id}`}>+ Invoice</LinkButton>}
+              />
+              <PackagePicker
+                slug={slug}
+                caseId={c.id}
+                value={c.packageId}
+                canEdit={can(ctx.role, 'billing.write')}
+                packages={(await db(ctx, (tx) => tx.servicePackage.findMany({ where: { OR: [{ active: true }, ...(c.packageId ? [{ id: c.packageId }] : [])] }, orderBy: { name: 'asc' } })))
+                  .sort((a, b) => Number(b.productId === c.productId) - Number(a.productId === c.productId))
+                  .map((p) => ({ id: p.id, name: p.name, price: p.price }))}
               />
               <ul className="divide-y divide-line px-5">
                 {invoices.length === 0 && <li className="py-4 text-sm text-muted">No invoices for this case.</li>}
