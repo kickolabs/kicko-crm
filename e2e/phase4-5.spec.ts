@@ -67,6 +67,7 @@ test.describe.serial('Phase 4.5 · integrations', () => {
     await l.getByLabel('First name').fill('Arjun');
     await l.getByLabel('Last name').fill('Mehta');
     await l.getByLabel('Phone / WhatsApp').fill('9840099887');
+    await l.getByLabel('Country', { exact: true }).selectOption('CA');
     await l.getByLabel('Visa product').selectOption({ label: 'Canada · Study Permit' });
     await l.getByRole('button', { name: 'Create lead' }).click();
     await staff.waitForURL(/\/leads\//);

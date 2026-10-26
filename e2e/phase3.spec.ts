@@ -35,6 +35,7 @@ test.describe.serial('Phase 3 · client portal', () => {
     await d.getByLabel('Last name').fill('Raman');
     await d.getByLabel('Phone / WhatsApp').fill('9840011223');
     await d.getByLabel('Email').fill(`priya-${run}@example.test`);
+    await d.getByLabel('Country', { exact: true }).selectOption('CA');
     await d.getByLabel('Visa product').selectOption({ label: 'Canada · Study Permit' });
     await d.getByRole('button', { name: 'Create lead' }).click();
     await staff.waitForURL(/\/leads\//);

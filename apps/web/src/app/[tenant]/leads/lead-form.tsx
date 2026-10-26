@@ -91,10 +91,16 @@ function DestinationFields({ lead, products, form, slug }: { lead?: Lead; produc
           {categories.map(([c, label]) => <option key={c} value={c}>{label}</option>)}
         </Select>
       </FormField>
-      <FormField label="Visa product" name="productId" className="sm:col-span-2" hint={country && !options.length ? undefined : 'The visa pathway this lead is most likely to take'}>
-        <Select name="productId" value={productId} onChange={(e) => setProductId(e.target.value)}>
-          <option value="">Decide later</option>
-          {options.map((p) => (
+      <FormField
+        label="Visa product"
+        name="productId"
+        className="sm:col-span-2"
+        hint={!country ? 'Pick the country first; its visa pathways appear here' : !options.length ? undefined : 'The visa pathway this lead is most likely to take'}
+      >
+        {/* Country first, then its pathways: nothing to choose until a country is picked. */}
+        <Select name="productId" value={country ? productId : ''} onChange={(e) => setProductId(e.target.value)} disabled={!country}>
+          <option value="">{country ? 'Decide later' : 'Pick a country first'}</option>
+          {(country ? options : []).map((p) => (
             <option key={p.id} value={p.id}>
               {countryName(p.country)} · {p.name}
             </option>
