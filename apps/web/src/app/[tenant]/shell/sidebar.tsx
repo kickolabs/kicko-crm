@@ -8,6 +8,7 @@ import {
   BarChart3,
   Inbox,
   Phone,
+  Briefcase,
   Building2,
   FileCheck2,
   Receipt,
@@ -35,12 +36,15 @@ export function Sidebar({
   canSettings,
   canBilling,
   agents,
+  organizations,
 }: {
   slug: string;
   tenantName: string;
   counts: Counts;
   canSettings: boolean;
   canBilling: boolean;
+  /** The industry pack's word for organizations ("Employers"), or null when the pack has none. */
+  organizations?: string | null;
   /** AI agents the plan includes; null on plans without AI. */
   agents: AgentStatus[] | null;
 }) {
@@ -55,6 +59,7 @@ export function Sidebar({
     { href: `${base}/leads`, label: 'Leads', icon: Users, count: counts.leads },
     { href: `${base}/clients`, label: 'Clients', icon: UserRound },
     { href: `${base}/cases`, label: 'Cases', icon: FolderKanban, count: counts.cases },
+    ...(organizations ? [{ href: `${base}/organizations`, label: organizations, icon: Briefcase }] : []),
     { href: `${base}/documents`, label: 'Documents', icon: FileCheck2, count: counts.docs, hot: counts.docs > 0 },
     { href: `${base}/tasks`, label: 'Tasks', icon: CheckSquare, count: counts.tasks, hot: counts.tasks > 0 },
     { href: `${base}/calendar`, label: 'Calendar', icon: CalendarDays },

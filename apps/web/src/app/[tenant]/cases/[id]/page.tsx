@@ -221,6 +221,34 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
           </Card>
         </div>
         <div className="flex flex-col gap-5">
+          {(c.organization || c.jobOffer) && (
+            <Card>
+              <CardHeader title="Employer & job offer" />
+              <dl className="grid grid-cols-2 gap-3 px-5 pb-5 text-[13px]">
+                {c.organization && (
+                  <div className="col-span-2">
+                    <dt className="text-xs text-muted">Employer</dt>
+                    <dd><Link href={`/${slug}/organizations/${c.organization.id}`} className="font-semibold hover:underline">{c.organization.name}</Link></dd>
+                  </div>
+                )}
+                {c.opening && (
+                  <div className="col-span-2">
+                    <dt className="text-xs text-muted">Vacancy</dt>
+                    <dd><Link href={`/${slug}/organizations/openings/${c.opening.id}`} className="font-semibold hover:underline">{c.opening.title}</Link></dd>
+                  </div>
+                )}
+                {(() => {
+                  const o = (c.jobOffer ?? {}) as { salaryMin?: number; salaryMax?: number; currency?: string; at?: string };
+                  return o.salaryMin ? (
+                    <div>
+                      <dt className="text-xs text-muted">Salary</dt>
+                      <dd className="font-semibold">{o.currency} {o.salaryMin.toLocaleString('en-IN')}{o.salaryMax ? `–${o.salaryMax.toLocaleString('en-IN')}` : ''}</dd>
+                    </div>
+                  ) : null;
+                })()}
+              </dl>
+            </Card>
+          )}
           <NextActionCard slug={slug} caseId={c.id} nextAction={c.nextAction} refs={(c.refs as { label: string; value: string }[]) ?? []} blockers={blockers} canEdit={editable} />
           <TracksCard slug={slug} caseId={c.id} tracks={tracks} canEdit={editable} />
           <TasksPanel slug={slug} tasks={c.tasks} tz={tz} links={{ caseId: c.id }} team={team} me={ctx.user.id} />

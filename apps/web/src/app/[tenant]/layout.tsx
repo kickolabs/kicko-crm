@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { dayBounds } from '@/lib/format';
+import { scopeOf } from '@/server/scope';
+import { tenantPack } from '@/server/library';
 import { db, getCtx } from '@/lib/tenant';
 import { can } from '@/lib/permissions';
 import { agentStatus } from '@/server/copilot';
@@ -84,6 +86,7 @@ export default async function TenantLayout({
         canSettings={can(ctx.role, 'settings.manage')}
         canBilling={can(ctx.role, 'billing.read')}
         agents={agents}
+        organizations={(await tenantPack(scopeOf(ctx))).pack.labels.organizations ?? null}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-paper/85 px-4 py-3 backdrop-blur sm:px-7">
