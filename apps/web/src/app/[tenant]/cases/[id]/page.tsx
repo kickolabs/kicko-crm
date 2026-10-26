@@ -86,7 +86,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
   // The journey's route line and the dates still ahead (appointments, estimated decision).
   const college = [...apps].sort((a, b) => COLLEGE_RANK.indexOf(a.status) - COLLEGE_RANK.indexOf(b.status)).find((a) => COLLEGE_RANK.includes(a.status) && a.institution.city);
   const homeBranch = c.branch ?? (await db(ctx, (tx) => tx.branch.findFirst({ orderBy: { createdAt: 'asc' } })));
-  const route = routeFor({ fromCity: homeBranch?.city, toCity: college?.institution.city, toCountry: c.product.country, countryName: countryName(c.product.country) });
+  const route = routeFor({ fromCity: homeBranch?.city, toCity: college?.institution.city ?? (c.organization?.country === c.product.country ? c.organization.city : null), toCountry: c.product.country, countryName: countryName(c.product.country) });
   const ahead: Record<string, string> = {};
   for (const s of stages) {
     const hit = UPCOMING_DATES.find(([re]) => re.test(s.key));

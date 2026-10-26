@@ -1,9 +1,11 @@
 // The case journey's route line: "CHENNAI MAA · 13,420 KM · TORONTO YYZ".
-// A small built-in table of cities agencies send clients from and to. A city
-// that isn't listed just shows its name, with no airport code or distance, so
-// the line is never wrong.
+// Built-in cities agencies send clients from and to, plus every country's main
+// airport (lib/airports.ts). A city that isn't listed just shows its name, with
+// no airport code or distance, so the line is never wrong.
 
-type City = { name: string; code: string; lat: number; lng: number; aliases?: string[] };
+import { COUNTRY_AIRPORTS, hubOf } from './airports';
+
+type City ={ name: string; code: string; lat: number; lng: number; aliases?: string[] };
 
 const CITIES: City[] = [
   // India
@@ -52,16 +54,32 @@ const CITIES: City[] = [
   { name: 'Munich', code: 'MUC', lat: 48.35, lng: 11.79 },
   { name: 'Dublin', code: 'DUB', lat: 53.42, lng: -6.27 },
   { name: 'Paris', code: 'CDG', lat: 49.01, lng: 2.55 },
-  { name: 'Singapore', code: 'SIN', lat: 1.36, lng: 103.99 },
-  { name: 'Dubai', code: 'DXB', lat: 25.25, lng: 55.36 },
+  { name: 'Ottawa', code: 'YOW', lat: 45.32, lng: -75.67 },
+  { name: 'Edmonton', code: 'YEG', lat: 53.31, lng: -113.58 },
+  { name: 'Winnipeg', code: 'YWG', lat: 49.91, lng: -97.24 },
+  { name: 'Edinburgh', code: 'EDI', lat: 55.95, lng: -3.37 },
+  { name: 'Glasgow', code: 'GLA', lat: 55.87, lng: -4.43 },
+  { name: 'Washington', code: 'IAD', lat: 38.95, lng: -77.46, aliases: ['washington dc'] },
+  { name: 'Houston', code: 'IAH', lat: 29.98, lng: -95.34 },
+  { name: 'Seattle', code: 'SEA', lat: 47.45, lng: -122.31 },
+  { name: 'Atlanta', code: 'ATL', lat: 33.64, lng: -84.43 },
+  { name: 'Christchurch', code: 'CHC', lat: -43.49, lng: 172.53 },
+  { name: 'Hamburg', code: 'HAM', lat: 53.63, lng: 9.99 },
+  { name: 'Düsseldorf', code: 'DUS', lat: 51.29, lng: 6.77, aliases: ['dusseldorf'] },
+  { name: 'Milan', code: 'MXP', lat: 45.63, lng: 8.72 },
+  { name: 'Barcelona', code: 'BCN', lat: 41.3, lng: 2.08 },
+  { name: 'Osaka', code: 'KIX', lat: 34.43, lng: 135.24 },
+  // Gulf
+  { name: 'Abu Dhabi', code: 'AUH', lat: 24.43, lng: 54.65 },
+  { name: 'Sharjah', code: 'SHJ', lat: 25.33, lng: 55.52 },
+  { name: 'Jeddah', code: 'JED', lat: 21.68, lng: 39.16 },
+  { name: 'Dammam', code: 'DMM', lat: 26.47, lng: 49.8, aliases: ['al khobar', 'khobar', 'dhahran'] },
+  // Every country's main international airport (Doha, Riyadh, Kuala Lumpur…).
+  ...COUNTRY_AIRPORTS.map((a) => ({ name: a.name, code: a.code, lat: a.lat, lng: a.lng })),
 ];
 
-/** Main arrival city when the case doesn't name one (e.g. no college yet). */
-const COUNTRY_HUB: Record<string, string> = {
-  CA: 'Toronto', AU: 'Sydney', GB: 'London', US: 'New York', NZ: 'Auckland', DE: 'Frankfurt', IE: 'Dublin', FR: 'Paris', SG: 'Singapore', AE: 'Dubai',
-};
-
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+// Accents dropped first, so "São Paulo" and "Sao Paulo" match.
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
 
 export function findCity(raw: string | null | undefined) {
   if (!raw) return null;
@@ -77,11 +95,12 @@ function km(a: City, b: City) {
 
 export type Route = { from: string | null; to: string; km: number | null };
 
-/** From the branch's city to the college's city, else the country's main hub, else the country. */
+/** From the branch's city to the destination city (college or employer), else the country's main airport, else the country. */
 export function routeFor(input: { fromCity?: string | null; toCity?: string | null; toCountry: string; countryName: string }): Route {
   const from = findCity(input.fromCity);
-  // The college's own city when we know it, even if it isn't in the table; the country's hub only without one.
-  const to = input.toCity?.trim() ? findCity(input.toCity) : findCity(COUNTRY_HUB[input.toCountry]);
+  // The destination's own city when we know it, even if it isn't in the table; the country's airport only without one.
+  const hub = hubOf(input.toCountry);
+  const to = input.toCity?.trim() ? findCity(input.toCity) : hub && { name: hub.name, code: hub.code, lat: hub.lat, lng: hub.lng };
   return {
     from: from ? `${from.name} ${from.code}` : input.fromCity?.trim() || null,
     to: to ? `${to.name} ${to.code}` : input.toCity?.trim() || input.countryName,
