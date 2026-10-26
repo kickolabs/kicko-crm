@@ -150,6 +150,21 @@ export default async function SettingsPage({
           formKey={ctx.tenant.settings.formKey}
         />
       )}
+      {tab === 'capture' && (
+        <div className="mt-5">
+          <ConnectionCard
+            slug={slug}
+            tz={ctx.tenant.timezone}
+            capability="lead_ads"
+            title="Facebook & Instagram lead ads"
+            sub="Lead-form submissions arrive as leads (source: Ads) with the campaign, form and ad."
+            providers={providerOptions('lead_ads')}
+            conn={await connectionSummary(ctx.tenant.id, 'lead_ads')}
+            webhookBase={`${base}/api/webhooks/lead_ads`}
+            sandboxNote="Sandbox lead ads: post signed test submissions to the webhook to see them become leads."
+          />
+        </div>
+      )}
 
       {tab === 'fields' && <FieldsTab />}
       {tab === 'templates' && <TemplatesTab slug={slug} ctx={ctx} templateId={sp.template} />}

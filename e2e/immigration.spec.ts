@@ -1,3 +1,6 @@
+import { createDecipheriv, createHash, createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
 import { testMobile, verifyMobile } from './helpers';
@@ -11,6 +14,16 @@ const run = Date.now().toString(36);
 const owner = { name: 'Isha Owner', email: `imm-${run}@example.test`, password: 'kicko-pass-123' };
 const agency = { name: `Gulf Bridge ${run}`, slug: `gulf-${run}` };
 const PATHWAY = 'UAE employer-sponsored work visa';
+
+/** Secrets are encrypted at rest; the test reads them like the app does. */
+function decryptSecret(blob: string) {
+  const env = readFileSync(path.resolve(process.cwd(), '.env'), 'utf8');
+  const raw = env.match(/^ENCRYPTION_KEY="?([^"\n]+)"?/m)?.[1] ?? env.match(/^BETTER_AUTH_SECRET="?([^"\n]+)"?/m)![1]!;
+  const [, iv, tag, data] = blob.split('.');
+  const d = createDecipheriv('aes-256-gcm', createHash('sha256').update(raw).digest(), Buffer.from(iv!, 'base64url'));
+  d.setAuthTag(Buffer.from(tag!, 'base64url'));
+  return Buffer.concat([d.update(Buffer.from(data!, 'base64url')), d.final()]).toString();
+}
 
 test.describe.serial('Immigration pack journey', () => {
   let page: Page;
@@ -229,7 +242,34 @@ test.describe.serial('Immigration pack journey', () => {
     }
   });
 
+  test('a Facebook lead-ad submission (sandbox) becomes a lead once, with its campaign', async ({ request }) => {
+    await page.goto(`/${agency.slug}/settings?tab=capture`);
+    await page.getByRole('button', { name: 'Use sandbox lead ads' }).click();
+    await expect(page.getByLabel('Webhook URL')).toHaveValue(new RegExp(`/api/webhooks/lead_ads/lead-ads-sandbox/${agency.slug}$`));
+    const db = new Pg('postgresql://postgres:postgres@localhost:5433/kicko');
+    await db.connect();
+    try {
+      const { rows } = await db.query(`SELECT c.config FROM "ProviderConnection" c JOIN "Tenant" t ON t.id = c."tenantId" WHERE t.slug = $1 AND c.capability = 'lead_ads'`, [agency.slug]);
+      const secret = decryptSecret(rows[0].config.webhookSecret);
+      const body = JSON.stringify({ id: `fb-${run}`, answers: { full_name: 'Meera Nair', phone_number: '+919840077788', destination_country: 'Germany', what_are_you_looking_for: 'Nursing job' }, campaign: 'Germany nurses Oct' });
+      const sig = createHmac('sha256', secret).update(body).digest('hex');
+      for (let i = 0; i < 2; i++) {
+        const r = await request.post(`/api/webhooks/lead_ads/lead-ads-sandbox/${agency.slug}`, { data: body, headers: { 'content-type': 'application/json', 'x-sandbox-signature': sig } });
+        expect(r.status()).toBe(200);
+      }
+      const forged = await request.post(`/api/webhooks/lead_ads/lead-ads-sandbox/${agency.slug}`, { data: body, headers: { 'content-type': 'application/json', 'x-sandbox-signature': 'forged' } });
+      expect(forged.status()).toBe(401);
+      const leads = await db.query(`SELECT l.source, l."interestCountry", l.utm->>'campaign' AS campaign FROM "Lead" l JOIN "Tenant" t ON t.id = l."tenantId" WHERE t.slug = $1 AND l."firstName" = 'Meera'`, [agency.slug]);
+      expect(leads.rows).toEqual([{ source: 'ADS', interestCountry: 'DE', campaign: 'Germany nurses Oct' }]);
+    } finally {
+      await db.end();
+    }
+  });
+
   test('the client answers the intake questionnaire in Tamil; answers land in the profile', async ({ browser }) => {
+    await page.goto(`/${agency.slug}/clients`);
+    await page.getByRole('link', { name: /Karthik Selvam/ }).first().click();
+    await page.waitForURL(/\/clients\/[a-z0-9]+/);
     await page.getByRole('tab', { name: 'profession' }).click();
     await page.getByRole('button', { name: /Send “Your work and preferences”/ }).click();
     await page.getByRole('tab', { name: 'overview' }).click();

@@ -1,13 +1,14 @@
 // Integration layer: every external service is a capability with swappable providers.
 // Features depend on the capability's port (interface), never on a vendor SDK.
 
-export type Capability = 'storage' | 'email' | 'payments' | 'messaging' | 'llm' | 'stt' | 'tts' | 'telephony' | 'voice_agent';
+export type Capability = 'storage' | 'email' | 'payments' | 'messaging' | 'llm' | 'stt' | 'tts' | 'telephony' | 'voice_agent' | 'lead_ads';
 
 export const CAPABILITY_INFO: Record<Capability, { label: string; description: string; owner: 'platform' | 'tenant' }> = {
   messaging: { label: 'WhatsApp & messaging', description: 'Two-way client messaging', owner: 'tenant' },
   payments: { label: 'Payment links', description: 'Collect fees online', owner: 'tenant' },
   telephony: { label: 'Phone calls', description: 'Numbers, calling, recordings', owner: 'tenant' },
   voice_agent: { label: 'AI voice agent', description: 'AI that answers and makes calls', owner: 'tenant' },
+  lead_ads: { label: 'Lead ads', description: 'Facebook & Instagram lead forms become leads', owner: 'tenant' },
   llm: { label: 'AI model', description: 'Summaries, assistant, checks', owner: 'platform' },
   stt: { label: 'Speech to text', description: 'Call transcription', owner: 'platform' },
   tts: { label: 'Text to speech', description: 'AI voices', owner: 'platform' },

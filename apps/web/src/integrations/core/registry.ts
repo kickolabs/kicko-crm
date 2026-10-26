@@ -8,6 +8,8 @@ import { twilio } from '../telephony/twilio';
 import { bolna } from '../voice/bolna';
 import { retell } from '../voice/retell';
 import { voiceSandbox } from '../voice/sandbox';
+import { leadAdsSandbox } from '../lead-ads/sandbox';
+import { metaLeadAds } from '../lead-ads/meta';
 import type { Capability, ProviderDescriptor } from './types';
 
 // Every agency-connectable provider. Adding a provider = write an adapter file
@@ -24,10 +26,12 @@ export const PROVIDERS: ProviderDescriptor[] = [
   bolna,
   retell,
   voiceSandbox,
+  metaLeadAds,
+  leadAdsSandbox,
 ] as ProviderDescriptor[];
 
 /** Capabilities agencies connect themselves, in display order. */
-export const TENANT_CAPABILITIES: Capability[] = ['messaging', 'payments', 'telephony', 'voice_agent'];
+export const TENANT_CAPABILITIES: Capability[] = ['messaging', 'payments', 'telephony', 'voice_agent', 'lead_ads'];
 
 export const descriptorFor = (capability: string, provider: string) =>
   PROVIDERS.find((p) => p.capability === capability && p.id === provider);

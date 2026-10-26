@@ -121,6 +121,11 @@ export function DocumentsPanel({
           <div className="h-2 w-32 rounded-full bg-paper-2" aria-label={`${pct}% verified`}>
             <div className="h-2 rounded-full bg-ink" style={{ width: `${pct}%` }} />
           </div>
+          {docs.some((d) => d.status === 'UPLOADED' || d.status === 'VERIFIED') && (
+            <a href={`/api/t/${slug}/cases/${caseId}/bundle`} target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-ink-2 underline decoration-ink/25 underline-offset-4 hover:text-ink">
+              One PDF
+            </a>
+          )}
           {canWrite && <RequestDoc slug={slug} caseId={caseId} />}
         </div>
       </div>

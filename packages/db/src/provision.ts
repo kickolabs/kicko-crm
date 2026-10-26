@@ -4,7 +4,7 @@ import { DEFAULT_PACK, getPack, type LibrarySeedItem } from '@kicko/packs';
 
 export const RESERVED_SLUGS = new Set([
   'api', 'app', 'login', 'logout', 'signup', 'invite', 'f', 'embed', 'static', 'assets',
-  'admin', 'account', 'settings', 'terms', 'privacy', 'dpa', 'security', 'legal', 'pricing', 'features', 'blog', 'about', 'contact', 'sitemap', 'robots', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
+  'admin', 'account', 'icon', 'apple-icon', 'manifest', 'settings', 'terms', 'privacy', 'dpa', 'security', 'legal', 'pricing', 'features', 'blog', 'about', 'contact', 'sitemap', 'robots', 'portal', 'partner', 'checkout', 'www', 'help', 'docs', 'status', 'kicko', '_next', 'pay', 'webhooks',
 ]);
 
 export function slugify(input: string): string {

@@ -483,3 +483,42 @@ export async function documentPdf(o: { agency: PdfAgency; title: string; blocks:
   }
   return Buffer.from(await doc.save());
 }
+
+/**
+ * Merge files into one PDF, in the given order: PDFs page by page, JPEG/PNG images one per
+ * A4 page. Other types are listed on a cover page as left out.
+ */
+export async function mergeFiles(files: { name: string; contentType: string; data: Buffer }[], title: string) {
+  const { doc, fonts } = await setup();
+  const cover = doc.addPage([595.28, 841.89]);
+  const w = new Writer(cover, fonts);
+  w.text(title, 56, 780, { size: 18, bold: true });
+  let y = 750;
+  const skipped: string[] = [];
+  for (const f of files) {
+    try {
+      if (f.contentType === 'application/pdf') {
+        const src = await PDFDocument.load(f.data, { ignoreEncryption: true });
+        for (const p of await doc.copyPages(src, src.getPageIndices())) doc.addPage(p);
+      } else if (f.contentType === 'image/jpeg' || f.contentType === 'image/png') {
+        const img = f.contentType === 'image/png' ? await doc.embedPng(f.data) : await doc.embedJpg(f.data);
+        const page = doc.addPage([595.28, 841.89]);
+        const scale = Math.min((595.28 - 72) / img.width, (841.89 - 72) / img.height, 1);
+        page.drawImage(img, { x: (595.28 - img.width * scale) / 2, y: (841.89 - img.height * scale) / 2, width: img.width * scale, height: img.height * scale });
+      } else {
+        skipped.push(f.name);
+        continue;
+      }
+      w.text(`• ${f.name}`, 56, y, { size: 9.5 });
+      y -= 15;
+    } catch {
+      skipped.push(f.name);
+    }
+  }
+  if (skipped.length) {
+    y -= 10;
+    w.text('Not included (open separately):', 56, y, { size: 9, bold: true, color: MUTED });
+    for (const s of skipped) w.text(`• ${s}`, 56, (y -= 14), { size: 9, color: MUTED });
+  }
+  return Buffer.from(await doc.save());
+}

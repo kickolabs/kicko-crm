@@ -5,6 +5,8 @@ import type { MessagingAdapter } from '@/integrations/messaging/port';
 import type { PaymentsAdapter } from '@/integrations/payments/port';
 import type { CallbackEvent, TelephonyAdapter, WebhookInput } from '@/integrations/telephony/port';
 import type { VoiceAgentAdapter } from '@/integrations/voice/port';
+import type { LeadAdsAdapter } from '@/integrations/lead-ads/port';
+import { processAdLeads } from '@/server/lead-ads';
 import { voiceAgent } from '@/server/voice/agent';
 import { processVoiceWebhook } from '@/server/voice/service';
 import { getTenantBySlug } from '@/lib/tenant';
@@ -20,7 +22,7 @@ import { processMessagingEvents } from '@/server/whatsapp/service';
 
 type Params = { params: Promise<{ capability: string; provider: string; tenant: string }> };
 
-const WEBHOOK_CAPABILITIES: Capability[] = ['messaging', 'payments', 'telephony', 'voice_agent'];
+const WEBHOOK_CAPABILITIES: Capability[] = ['messaging', 'payments', 'telephony', 'voice_agent', 'lead_ads'];
 const CALLBACK_EVENTS: CallbackEvent[] = ['inbound', 'status', 'recording', 'dialed'];
 
 async function connection(p: Params['params']) {
@@ -28,7 +30,7 @@ async function connection(p: Params['params']) {
   if (!WEBHOOK_CAPABILITIES.includes(capability as Capability)) return null;
   const tenant = await getTenantBySlug(slug);
   if (!tenant) return null;
-  const r = await resolve<MessagingAdapter | PaymentsAdapter | TelephonyAdapter | VoiceAgentAdapter>(tenant.id, tenant.slug, capability as Capability);
+  const r = await resolve<MessagingAdapter | PaymentsAdapter | TelephonyAdapter | VoiceAgentAdapter | LeadAdsAdapter>(tenant.id, tenant.slug, capability as Capability);
   // The URL names the provider so a stale webhook from a replaced provider is refused.
   if (!r || r.descriptor.id !== provider) return null;
   return { capability: capability as Capability, provider, tenant, adapter: r.adapter };
@@ -55,6 +57,23 @@ async function webhookInput(req: NextRequest): Promise<WebhookInput | null> {
     }
   }
   return { method: req.method, url, raw, headers: req.headers, params };
+}
+
+/** Lead ads: Meta's subscription check (GET) and new lead notifications (POST). */
+async function leadAdsCallback(req: NextRequest, c: NonNullable<Awaited<ReturnType<typeof connection>>>) {
+  const adapter = c.adapter as LeadAdsAdapter;
+  const raw = req.method === 'GET' ? '' : await req.text();
+  let w;
+  try {
+    w = await adapter.parseWebhook({ method: req.method, url: publicUrl(req), raw, headers: req.headers });
+  } catch (err) {
+    console.error('lead ads webhook', c.provider, c.tenant.slug, err);
+    return NextResponse.json({ ok: false }, { status: 502 });
+  }
+  if (w === null) return new NextResponse('Forbidden', { status: 401 });
+  if (w.kind === 'challenge') return new NextResponse(w.body, { status: 200, headers: { 'Content-Type': 'text/plain' } });
+  const created = await processAdLeads(systemScope(c.tenant), w.leads, c.provider);
+  return NextResponse.json({ ok: true, created });
 }
 
 async function voiceCallback(req: NextRequest, c: NonNullable<Awaited<ReturnType<typeof connection>>>) {
@@ -118,6 +137,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const c = await connection(params);
   if (c?.capability === 'telephony') return telephonyCallback(req, c);
   if (c?.capability === 'voice_agent') return voiceCallback(req, c);
+  if (c?.capability === 'lead_ads') return leadAdsCallback(req, c);
   const challenge = c?.capability === 'messaging' ? (c.adapter as MessagingAdapter).handshake(req.nextUrl.searchParams) : null;
   if (challenge === null) return new NextResponse('Forbidden', { status: 403 });
   return new NextResponse(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } });
@@ -128,6 +148,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!c) return new NextResponse(null, { status: 404 });
   if (c.capability === 'telephony') return telephonyCallback(req, c);
   if (c.capability === 'voice_agent') return voiceCallback(req, c);
+  if (c.capability === 'lead_ads') return leadAdsCallback(req, c);
   const raw = await req.text();
   let events;
   try {
