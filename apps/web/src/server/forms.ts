@@ -110,7 +110,7 @@ export async function portalQuestions(p: PortalCtx) {
   return inTenant(p.scope, async (tx) => {
     const c = await tx.client.findUnique({ where: { id: p.client.id } });
     const answers = (c?.formAnswers as Answers) ?? {};
-    const open = await tx.formRequest.findMany({ where: { clientId: p.client.id, status: 'OPEN' }, orderBy: { createdAt: 'asc' } });
+    const open = await tx.formRequest.findMany({ where: { clientId: p.client.id, status: 'OPEN', NOT: { formId: { startsWith: 'intake:' } } }, orderBy: { createdAt: 'asc' } });
     const keys = [...new Set(open.flatMap((r) => r.keys as string[]))].filter(isAnswerKey) as AnswerKey[];
     return {
       forms: [...new Set(open.map((r) => formById(r.formId)?.title ?? r.formId))],

@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import Link from 'next/link';
+import { intakeWaiting } from '@/server/intake';
 import { SignItem } from './sign-item';
 import { countryName } from '@/lib/countries';
 import { fmtDate, fmtDateTime } from '@/lib/format';
@@ -40,6 +41,7 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
   const nextDue = dues.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
   const welcome = p.scope.settings.portal?.welcome;
   const questions = await portalQuestions(p);
+  const intake = await intakeWaiting(p);
 
   return (
     <PortalShell slug={slug} agency={p.tenantName} active="journey" unread={home.unread}>
@@ -102,8 +104,18 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
           {openCases.length > 0 && (
             <>
               <h2 className="text-[26px] font-extrabold tracking-[-0.035em]">
-                {todo.length + toSign.length ? `${todo.length + toSign.length} thing${todo.length + toSign.length === 1 ? '' : 's'} we need from you` : 'Nothing needed from you right now'}
+                {todo.length + toSign.length + intake ? `${todo.length + toSign.length + intake} thing${todo.length + toSign.length + intake === 1 ? '' : 's'} we need from you` : 'Nothing needed from you right now'}
               </h2>
+              {intake > 0 && (
+                <Link href={`/portal/${slug}/profile`} className="flex items-center gap-3 rounded-[16px] bg-card p-4 shadow-[var(--shadow-card)] hover:bg-paper-3">
+                  <span className="grid size-10 place-items-center rounded-[12px] bg-lime text-lg font-extrabold">?</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">Tell us about your work</span>
+                    <span className="text-xs text-muted">A few questions, in your language</span>
+                  </span>
+                  <span className="text-sm font-bold">Answer →</span>
+                </Link>
+              )}
               {toSign.map((d) => <SignItem key={d.id} slug={slug} doc={{ id: d.id, name: d.name, body: d.body! }} />)}
               {todo.map((d) => (
                 <NeedItem key={d.id} slug={slug} doc={{ id: d.id, name: d.name, group: d.group, status: d.status, rejectionReason: d.rejectionReason }} />

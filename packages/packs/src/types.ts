@@ -121,6 +121,23 @@ export type PackManifest = {
   workflowFromLibrary: (item: LibrarySeedItem) => WorkflowTemplate;
   /** Starter document templates (agreements, letters) a workspace gets; agencies edit their copies. */
   documentTemplates?: () => DocumentTemplateSeed[];
+  /** Portal questionnaires and the languages they are offered in (code → name in that language). */
+  questionnaires?: () => QuestionnaireSeed[];
+  languages?: Record<string, string>;
+};
+
+/** Text in several languages, keyed by language code ('en' required). */
+export type Translated = { en: string } & Record<string, string>;
+
+/**
+ * A questionnaire the client fills in the portal, in their language. Each question is one
+ * of the pack's client fields, so answers land in the professional profile directly.
+ */
+export type QuestionnaireSeed = {
+  key: string;
+  title: Translated;
+  intro: Translated;
+  questions: { field: string; label: Translated; hint?: Translated }[];
 };
 
 /** A document template: text with {{merge.fields}} (see the core merge engine). */

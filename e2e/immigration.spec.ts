@@ -209,4 +209,31 @@ test.describe.serial('Immigration pack journey', () => {
       await db.end();
     }
   });
+
+  test('the client answers the intake questionnaire in Tamil; answers land in the profile', async ({ browser }) => {
+    await page.getByRole('tab', { name: 'profession' }).click();
+    await page.getByRole('button', { name: /Send “Your work and preferences”/ }).click();
+    await page.getByRole('tab', { name: 'overview' }).click();
+    await page.getByRole('button', { name: 'Create portal link' }).click();
+    const link = await page.getByLabel('Portal link').inputValue();
+    const ctx = await browser.newContext();
+    const client = await ctx.newPage();
+    try {
+      await client.goto(link);
+      await client.getByRole('button', { name: 'Open my portal' }).click();
+      await client.waitForURL(`**/portal/${agency.slug}`);
+      await client.getByRole('link', { name: /Tell us about your work/ }).click();
+      await client.getByRole('link', { name: 'தமிழ்' }).click();
+      await expect(client.getByRole('heading', { name: 'உங்கள் வேலை மற்றும் விருப்பங்கள்' })).toBeVisible();
+      await client.getByLabel('நீங்கள் விரும்பும் வேலை பற்றி வேறு ஏதேனும்?').fill('Night shifts are fine; shared accommodation');
+      await client.getByLabel('உங்களுக்கு எத்தனை ஆண்டு பணி அனுபவம் உள்ளது?').fill('7');
+      await client.getByRole('button', { name: 'பதில்களை அனுப்பு' }).click();
+      await expect(client.getByText(/^Thank you!/).first()).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
+    await page.getByRole('tab', { name: 'profession' }).click();
+    await expect(page.getByLabel('Work experience (years)')).toHaveValue('7');
+    await expect(page.getByLabel('Job preferences')).toHaveValue('Night shifts are fine; shared accommodation');
+  });
 });

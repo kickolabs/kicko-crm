@@ -35,7 +35,8 @@ import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-p
 import { Timeline } from '../../_components/timeline';
 import { FamilyPanel, OpenCaseButton, ProfileForm, RepeaterEditor } from './client-forms';
 import { EDU_COLUMNS, TEST_COLUMNS, WORK_COLUMNS } from './columns';
-import { ProfessionForm } from './profession-form';
+import { ProfessionForm, SendQuestionnaire } from './profession-form';
+import { questionnaires } from '@/server/intake';
 import { VaultCard } from './vault-card';
 import { listVault } from '@/server/vault';
 import { displayPackValue, type PackValues } from '@/lib/pack-fields';
@@ -70,7 +71,10 @@ export default async function ClientPage({
       const entries = await listVault(scopeOf(ctx), client!.id);
       return (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <Card className="p-5"><ProfessionForm slug={slug} clientId={client!.id} values={values} form={form} /></Card>
+          <div className="flex min-w-0 flex-col gap-3">
+            <SendQuestionnaire slug={slug} clientId={client!.id} items={(await questionnaires(scopeOf(ctx))).list.map((q) => ({ key: q.key, title: q.title.en }))} />
+            <Card className="p-5"><ProfessionForm slug={slug} clientId={client!.id} values={values} form={form} /></Card>
+          </div>
           <div className="flex flex-col gap-5">
             <VaultCard slug={slug} clientId={client!.id} entries={entries.map((e) => ({ ...e, lastRevealedAt: e.lastRevealedAt?.toISOString() ?? null }))} canWrite={writable} canReveal={can(ctx.role, 'vault.reveal')} />
           </div>

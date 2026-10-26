@@ -9,6 +9,8 @@ import { UserError } from '@/server/scope';
 import { portalSaveAnswers } from '@/server/forms';
 import { requestMeta } from '@/server/audit';
 import { signDocument } from '@/server/doc-templates';
+import { savePortalIntake } from '@/server/intake';
+import { packRaw } from '@/lib/pack-fields';
 
 type Prev = ActionResult | null;
 
@@ -92,6 +94,12 @@ export async function portalSignAction(slug: string, documentId: string, _: Prev
     const meta = await requestMeta();
     await signDocument(p.scope, { clientId: p.client.id, documentId, ip: meta.ip ?? null, userAgent: meta.userAgent ?? null, agencyName: p.tenantName }, { name: fd.get('name'), agree: fd.get('agree') === 'on' });
   }, 'Signed. Thank you.');
+  revalidatePath(`/portal/${slug}`, 'layout');
+  return res;
+}
+
+export async function portalIntakeAction(slug: string, _: Prev, fd: FormData) {
+  const res = await run(async () => savePortalIntake(await session(slug), packRaw(fd) ?? {}), 'Thank you');
   revalidatePath(`/portal/${slug}`, 'layout');
   return res;
 }

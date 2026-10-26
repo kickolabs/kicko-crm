@@ -19,6 +19,7 @@ import * as workflows from '@/server/workflows';
 import * as vault from '@/server/vault';
 import * as docTemplates from '@/server/doc-templates';
 import * as lists from '@/server/lists';
+import * as intake from '@/server/intake';
 
 type Prev = ActionResult | null;
 
@@ -510,6 +511,16 @@ export async function setFieldHiddenAction(slug: string, entity: 'leads' | 'clie
     assertCan(ctx, 'settings.manage');
     await lists.setFieldHidden(scopeOf(ctx), entity, key, hidden);
   });
+  refresh(slug);
+  return res;
+}
+
+export async function sendQuestionnaireAction(slug: string, clientId: string, key: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await intake.sendQuestionnaire(scopeOf(ctx), clientId, key);
+  }, 'Sent to the client portal');
   refresh(slug);
   return res;
 }
