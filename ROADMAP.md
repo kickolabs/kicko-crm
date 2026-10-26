@@ -80,6 +80,19 @@ Everything needed before other consultancies can be charged for Kicko.
 - Support channel & help centre, onboarding videos, status page
 - Pilot: 2–3 friendly agencies free/discounted for 2–3 months, then paid launch
 
+## Phase 8: Generic core + Immigration Consultancy pack (done, Oct 2026)
+- **Architecture:** industry-neutral core; industry knowledge comes as packs (`packages/packs`, `@kicko/packs`).
+- **The immigration pack:** the reference library (199 countries, 154 visa pathways, 124 occupations, document types, language tests, each with official sources and verification dates), pack fields, workflow templates, agreement templates and multilingual questionnaires.
+- **Kicko library console:** `/admin/library`. Changes are versioned; agencies adopt items and edit their own copies.
+- **Load or refresh the library:** `npm run library:import -- immigration`.
+- **Cases:** run on a workflow snapshot with conditional steps and documents, stage gates (logged override), side tracks, deadlines and auto-tasks.
+- **Employers & vacancies:** candidate matching, and hiring puts the offer on the case.
+- **Documents:** agreements with portal e-signing; encrypted portal-login vault.
+- **Automations & notifications:** a rules engine (13 triggers, 6 actions, run log); notifications and @mentions.
+- **Capture & delivery:** Facebook/Instagram lead ads; documents as one PDF; installable app.
+- **Appointments:** no past bookings, office and consultant hours with owner/admin override, reschedule.
+- **Next wave:** scheduled report emails, client-level documents, AcroForm PDF filling, Aadhaar eSign, SMS and Messenger leads, calendar sync, booking widget, campaigns, accounting sync, public API and webhooks, official-source change detection, an HR pack.
+
 ## Go-to-market notes
 - Position as **the visa-native CRM** (stages, checklists, commissions, portal ready on day one), not a general CRM like Zoho.
 - Lead the demo with WhatsApp + the client portal; Indian agencies feel those immediately.
