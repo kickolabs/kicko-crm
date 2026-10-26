@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // Phase 4.5: integration foundation. Integrations overview, generic connection
 // cards, sandbox payment gateway end to end (staff link + client portal), usage metering.
@@ -67,7 +67,7 @@ test.describe.serial('Phase 4.5 · integrations', () => {
     await l.getByLabel('First name').fill('Arjun');
     await l.getByLabel('Last name').fill('Mehta');
     await l.getByLabel('Phone / WhatsApp').fill('9840099887');
-    await l.getByLabel('Country', { exact: true }).selectOption('CA');
+    await choose(l, 'Country', 'Canada');
     await l.getByLabel('Visa product').selectOption({ label: 'Canada · Study Permit' });
     await l.getByRole('button', { name: 'Create lead' }).click();
     await staff.waitForURL(/\/leads\//);

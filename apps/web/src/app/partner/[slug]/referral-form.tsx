@@ -1,5 +1,7 @@
 'use client';
 
+import { Combobox } from '@/components/combobox';
+import { aliasesOf } from '@/lib/countries';
 import { useState } from 'react';
 import { ActionForm, FormBanner, FormField, SubmitButton } from '@/components/forms';
 import { Input, Select, Textarea } from '@/components/ui';
@@ -31,7 +33,7 @@ export function ReferralForm({ slug, countries, categories }: { slug: string; co
           <FormField label="Phone (WhatsApp)" name="phone"><Input name="phone" type="tel" placeholder="+91 98765 43210" required /></FormField>
           <FormField label="Email" name="email"><Input name="email" type="email" /></FormField>
           <FormField label="Destination" name="interestCountry">
-            <Select name="interestCountry" defaultValue=""><option value="">Not sure yet</option>{countries.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>
+            <Combobox name="interestCountry" options={countries.map(([key, name]) => ({ key, name, search: aliasesOf(key).join(' ') }))} emptyLabel="Not sure yet" placeholder="Type a country" />
           </FormField>
           <FormField label="Looking to" name="interestCategory">
             <Select name="interestCategory" defaultValue=""><option value="">Not sure yet</option>{categories.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>

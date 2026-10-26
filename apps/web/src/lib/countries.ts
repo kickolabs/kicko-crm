@@ -56,3 +56,9 @@ export function spokenCountry(code: string | null | undefined): string {
   const n = countryName(c);
   return /^(United |Republic |Democratic |Central African|Dominican Republic|Gambia|Maldives|Bahamas|Marshall|Solomon|Comoros|Seychelles)/.test(n) ? `the ${n}` : n;
 }
+
+/** Other names people search a country by ("uae", "dubai" for AE), for type-to-search pickers. */
+export function aliasesOf(code: string): string[] {
+  const c = code.toUpperCase();
+  return Object.entries(ALIASES).filter(([, v]) => v === c).map(([k]) => k);
+}

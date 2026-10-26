@@ -61,7 +61,7 @@ export async function portalIntake(p: PortalCtx, lang: string) {
     languages,
     questions,
     values: (client?.packData as PackValues) ?? {},
-    lookups: Object.fromEntries(Object.entries(lookups).map(([t, l]) => [t, l.map(({ key, name, group }) => ({ key, name, group }))])),
+    lookups: Object.fromEntries(Object.entries(lookups).map(([t, l]) => [t, l.map(({ key, name, group, search }) => ({ key, name, group, search }))])),
     groupLabels: pack.groupLabels ?? {},
   };
 }

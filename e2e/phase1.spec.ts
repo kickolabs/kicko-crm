@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // Full Phase 1 journey: agency signup → lead → duplicate guard → convert → case
 // stages → tasks → public web form → walk-in kiosk → team invite → tenant isolation.
@@ -56,7 +56,7 @@ test.describe.serial('Phase 1', () => {
     await dialog.getByLabel('Last name').fill('Raman');
     await dialog.getByLabel('Phone / WhatsApp').fill('98765 43210');
     await dialog.getByLabel('Interested in').selectOption('STUDY');
-    await dialog.getByLabel('Country').selectOption('CA');
+    await choose(dialog, 'Country', 'Canada');
     await dialog.getByLabel('Visa product').selectOption({ label: 'Canada · Study Permit' });
     await dialog.getByRole('button', { name: 'Create lead' }).click();
     await page.waitForURL(/\/leads\/[a-z0-9]+$/);

@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 // Sign-up now verifies the owner's mobile before the free trial starts. In the OTP
 // sandbox the verify page shows the code, so tests read it from the screen.
@@ -17,4 +17,15 @@ export async function verifyMobile(page: Page) {
   await expect(page.locator('input[name="fp"]')).not.toHaveValue('');
   await page.getByLabel('Code').fill(code);
   await page.getByRole('button', { name: 'Verify & start free trial' }).click();
+}
+
+/**
+ * Pick from a type-to-search box (Country, Occupation…): type, then click the option.
+ * `option` defaults to the typed text; pass it when the option's name differs.
+ */
+export async function choose(scope: Page | Locator, label: string, text: string, option?: string | RegExp) {
+  const box = scope.getByLabel(label, { exact: true }).and(scope.getByRole('combobox')).first();
+  await box.click();
+  await box.fill(text);
+  await scope.getByRole('option', { name: option ?? text, exact: typeof (option ?? text) === 'string' }).first().click();
 }

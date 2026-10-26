@@ -1,5 +1,7 @@
 'use client';
 
+import { Combobox } from '@/components/combobox';
+import { aliasesOf } from '@/lib/countries';
 import { useActionState } from 'react';
 import { FormBanner, SubmitButton } from '@/components/forms';
 import { Field, Input, Select, Textarea } from '@/components/ui';
@@ -32,13 +34,16 @@ export function EnquiryForm({ slug, formKey, countries }: { slug: string; formKe
           </Select>
         </Field>
         <Field label="Country" name="interestCountry">
-          <Select name="interestCountry" defaultValue="">
-            <option value="">Not sure yet</option>
-            {countries.offered.length > 0 && (
-              <optgroup label="Popular">{countries.offered.map(([code, n]) => <option key={code} value={code}>{n}</option>)}</optgroup>
-            )}
-            <optgroup label={countries.offered.length ? 'All countries' : 'Countries'}>{countries.others.map(([code, n]) => <option key={code} value={code}>{n}</option>)}</optgroup>
-          </Select>
+          <Combobox
+            name="interestCountry"
+            emptyLabel="Not sure yet"
+            placeholder="Type a country"
+            groupOrder={['Popular']}
+            options={[
+              ...countries.offered.map(([key, name]) => ({ key, name, group: 'Popular', search: aliasesOf(key).join(' ') })),
+              ...countries.others.map(([key, name]) => ({ key, name, group: countries.offered.length ? 'All countries' : undefined, search: aliasesOf(key).join(' ') })),
+            ]}
+          />
         </Field>
       </div>
       <Field label="Anything we should know?" name="message">

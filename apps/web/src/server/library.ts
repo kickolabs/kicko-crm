@@ -3,13 +3,14 @@ import { prisma, type LibraryItem } from '@kicko/db';
 import { getPack, type PackManifest } from '@kicko/packs';
 import { cache } from 'react';
 import type { Allowed } from '@/lib/pack-fields';
+import { aliasesOf } from '@/lib/countries';
 import { inTenant, type Scope } from './scope';
 
 // The industry pack's reference library, as workspaces see it. The library is global and
 // changes rarely, so lists are cached in memory for a few minutes (the library admin
 // clears the cache on edits).
 
-export type LibraryOption = { key: string; name: string; parentKey: string | null; group?: string; coverage: string | null; unverified: boolean };
+export type LibraryOption = { key: string; name: string; parentKey: string | null; group?: string; search?: string; coverage: string | null; unverified: boolean };
 
 const TTL = 5 * 60_000;
 const lists = new Map<string, { at: number; rows: LibraryOption[] }>();
@@ -17,6 +18,10 @@ const lists = new Map<string, { at: number; rows: LibraryOption[] }>();
 export function clearLibraryCache() {
   lists.clear();
 }
+
+/** Extra words a picker matches: a country's everyday names, an occupation's aliases. */
+const searchOf = (type: string, key: string, data: Record<string, unknown>) =>
+  type === 'country' ? [key, ...aliasesOf(key)].join(' | ') : Array.isArray(data.aliases) ? (data.aliases as string[]).join(' | ') : undefined;
 
 const groupOf = (type: string, data: Record<string, unknown>) =>
   type === 'country' ? (data.region as string | undefined) : type === 'occupation' ? (data.group as string | undefined) : undefined;
@@ -31,7 +36,7 @@ export async function libraryList(packId: string, type: string): Promise<Library
     select: { key: true, name: true, parentKey: true, coverage: true, unverified: true, data: true },
     orderBy: { name: 'asc' },
   });
-  const lean = rows.map((r) => ({ key: r.key, name: r.name, parentKey: r.parentKey, group: groupOf(type, r.data as Record<string, unknown>), coverage: r.coverage, unverified: r.unverified }));
+  const lean = rows.map((r) => ({ key: r.key, name: r.name, parentKey: r.parentKey, group: groupOf(type, r.data as Record<string, unknown>), search: searchOf(type, r.key, r.data as Record<string, unknown>), coverage: r.coverage, unverified: r.unverified }));
   lists.set(id, { at: Date.now(), rows: lean });
   return lean;
 }
@@ -89,7 +94,7 @@ export async function packForm(scope: Scope, entity: 'leads' | 'clients' | 'case
   for (const p of pathways) if (p.parentKey) pathwayCount[p.parentKey] = (pathwayCount[p.parentKey] ?? 0) + 1;
   return {
     fields: visibleFields(pack, settings, entity),
-    lookups: Object.fromEntries(Object.entries(lookups).map(([t, list]) => [t, list.map(({ key, name, group }) => ({ key, name, group }))])),
+    lookups: Object.fromEntries(Object.entries(lookups).map(([t, list]) => [t, list.map(({ key, name, group, search }) => ({ key, name, group, search }))])),
     groupLabels: pack.groupLabels ?? {},
     categories: pack.categories,
     labels: pack.labels,

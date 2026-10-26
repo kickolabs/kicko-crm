@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // Phase 6b: government form answer sheets. Profile → DS-160 sheet in its own date
 // format → staff answers → ask the client → client answers in the portal (a "Yes"
@@ -41,6 +41,7 @@ test.describe.serial('Phase 6b · government form auto-fill', () => {
     await d.getByLabel('First name').fill('Priya');
     await d.getByLabel('Last name').fill('Raman');
     await d.getByLabel('Phone / WhatsApp').fill('9840011223');
+    await choose(d, 'Country', 'Canada');
     await d.getByLabel('Visa product').selectOption({ label: 'Canada · Study Permit' });
     await d.getByRole('button', { name: 'Create lead' }).click();
     await staff.waitForURL(/\/leads\//);

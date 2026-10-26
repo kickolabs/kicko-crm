@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import Link from 'next/link';
 import { countryName } from '@/lib/countries';
 import type { ChecklistItem, Stage } from '@kicko/packs';
-import { Badge, buttonCls, Card, CardHeader, EmptyState, inputCls, PageHeader } from '@/components/ui';
+import { Badge, buttonCls, Card, CardHeader, EmptyState, PageHeader } from '@/components/ui';
 import { CATEGORY_LABEL } from '@/lib/constants';
 import { fmtDate } from '@/lib/format';
 import { can, ROLE_LABEL } from '@/lib/permissions';
@@ -19,6 +19,7 @@ import { ownItems } from '@/server/lists';
 import { libraryList, tenantPack } from '@/server/library';
 import { CORE_FIELDS } from '@/lib/merge';
 import { RuleEditor } from './rules-editor';
+import { Combobox } from '@/components/combobox';
 import { ACTION_LABEL, CONDITION_LABEL, TRIGGERS } from '@/server/rules';
 import { LEAD_SOURCE_LABEL, LEAD_SOURCES, LEAD_STATUS_LABEL, LEAD_STATUSES } from '@/lib/constants';
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
@@ -502,12 +503,13 @@ async function WorkflowsTab({ slug, productId, country, ctx }: { slug: string; p
             <input type="hidden" name="tab" value="workflows" />
             <label className="flex min-w-60 flex-1 flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
               Country
-              <select name="country" defaultValue={pick ?? ''} className={inputCls}>
-                <option value="">Choose a country</option>
-                {countries.map((c) => (
-                  <option key={c.key} value={c.key}>{c.name}{form.pathwayCount[c.key] ? ` (${form.pathwayCount[c.key]})` : ''}</option>
-                ))}
-              </select>
+              <Combobox
+                name="country"
+                id="library-country"
+                defaultValue={pick ?? ''}
+                placeholder="Type a country, e.g. Croatia"
+                options={countries.map((c) => ({ key: c.key, name: form.pathwayCount[c.key] ? `${c.name} (${form.pathwayCount[c.key]})` : c.name, search: c.search }))}
+              />
             </label>
             <button className={buttonCls('secondary')}>Show pathways</button>
           </form>

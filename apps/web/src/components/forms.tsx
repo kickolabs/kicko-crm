@@ -50,12 +50,15 @@ export function useFieldError(name: string) {
 export function FormField({
   label,
   name,
+  id,
   hint,
   className,
   children,
 }: {
   label: string;
   name: string;
+  /** The input's id when it isn't the name (two forms on one page with the same field). */
+  id?: string;
   hint?: ReactNode;
   className?: string;
   children: ReactNode;
@@ -63,7 +66,7 @@ export function FormField({
   const error = useFieldError(name);
   return (
     <div className={clsx('flex min-w-0 flex-col gap-1.5', className)}>
-      <label htmlFor={name} className="text-[13px] font-semibold text-ink-2">
+      <label htmlFor={id ?? name} className="text-[13px] font-semibold text-ink-2">
         {label}
       </label>
       {children}

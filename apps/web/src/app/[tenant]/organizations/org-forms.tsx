@@ -1,5 +1,6 @@
 'use client';
 
+import { Combobox } from '@/components/combobox';
 import { useState } from 'react';
 import { ActionButton, ActionForm, FormBanner, FormField, SubmitButton } from '@/components/forms';
 import { Input, Select, Textarea } from '@/components/ui';
@@ -17,10 +18,7 @@ type Option = { key: string; name: string; group?: string };
 export type OrgValues = { name: string; country: string | null; city: string | null; industry: string | null; contact: Record<string, string | null>; data: Record<string, string | null>; notes: string | null };
 
 const CountrySelect = ({ name, value, countries }: { name: string; value?: string | null; countries: Option[] }) => (
-  <Select name={name} defaultValue={value ?? ''}>
-    <option value="">Not set</option>
-    {countries.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-  </Select>
+  <Combobox name={name} defaultValue={value ?? ''} options={countries} emptyLabel="Not set" placeholder="Type a country" />
 );
 
 export function OrganizationForm({ slug, org, countries, word }: { slug: string; org?: OrgValues & { id: string }; countries: Option[]; word: string }) {
@@ -75,25 +73,15 @@ export function OpeningForm({
   const d = opening?.data ?? {};
   const [country, setCountry] = useState(d.country ?? '');
   const action = opening ? updateOpeningAction.bind(null, slug, opening.id) : createOpeningAction.bind(null, slug, organizationId!);
-  const groups = new Map<string, Option[]>();
-  for (const o of occupations) groups.set(o.group ?? 'Other', [...(groups.get(o.group ?? 'Other') ?? []), o]);
   return (
     <ActionForm action={action} onSuccess={() => setSaved(true)} className="grid gap-3.5 sm:grid-cols-2">
       {saved && <div className="sm:col-span-2"><FormBanner tone="ok">Saved.</FormBanner></div>}
       <FormField label="Role" name="title" className="sm:col-span-2"><Input name="title" defaultValue={opening?.title} placeholder="e.g. Heavy truck driver" required /></FormField>
-      <FormField label="Occupation" name="occupation">
-        <Select name="occupation" defaultValue={d.occupation ?? ''}>
-          <option value="">Not set</option>
-          {[...groups.entries()].map(([g, list]) => (
-            <optgroup key={g} label={g}>{list.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}</optgroup>
-          ))}
-        </Select>
+      <FormField label="Occupation" name="occupation" id="opening-occupation">
+        <Combobox name="occupation" id="opening-occupation" defaultValue={d.occupation ?? ''} options={occupations} emptyLabel="Not set" placeholder="Type an occupation, e.g. driver" />
       </FormField>
-      <FormField label="Country" name="country">
-        <Select name="country" value={country} onChange={(e) => setCountry(e.target.value)}>
-          <option value="">Not set</option>
-          {countries.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-        </Select>
+      <FormField label="Country" name="country" id="opening-country">
+        <Combobox name="country" id="opening-country" value={country} onChange={setCountry} options={countries} emptyLabel="Not set" placeholder="Type a country" />
       </FormField>
       <FormField label="Visa workflow" name="productId" hint="Hiring opens a case on this workflow" className="sm:col-span-2">
         <Select name="productId" defaultValue={d.productId ?? ''}>

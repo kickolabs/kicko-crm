@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { Lead, VisaProduct } from '@kicko/db';
 import { ActionForm, FormBanner, FormField, SubmitButton, useFieldError } from '@/components/forms';
+import { Combobox } from '@/components/combobox';
 import { PackFields } from '@/components/pack-fields';
 import { Input, Select, Textarea } from '@/components/ui';
 import { LEAD_SOURCE_LABEL, LEAD_SOURCES } from '@/lib/constants';
@@ -47,9 +48,6 @@ function DestinationFields({ lead, products, form, slug }: { lead?: Lead; produc
   const [productId, setProductId] = useState<string>(lead?.productId ?? '');
   const offered = new Set(products.map((p) => p.country));
   const countries = form.regionType ? (form.lookups[form.regionType] ?? []) : [];
-  const ours = countries.filter((c) => offered.has(c.key));
-  const regions = new Map<string, typeof countries>();
-  for (const c of countries) if (!offered.has(c.key)) regions.set(c.group ?? 'Other', [...(regions.get(c.group ?? 'Other') ?? []), c]);
   const options = products.filter((p) => (!category || p.category === category) && (!country || p.country === country));
   const selected = products.find((p) => p.id === productId);
   const categories = Object.entries(form.categories);
@@ -57,26 +55,18 @@ function DestinationFields({ lead, products, form, slug }: { lead?: Lead; produc
   return (
     <>
       <FormField label="Country" name="interestCountry">
-        <Select
+        <Combobox
           name="interestCountry"
+          options={countries.map((c) => ({ ...c, group: offered.has(c.key) ? 'Your destinations' : (c.group ?? 'Other') }))}
+          groupOrder={['Your destinations']}
+          emptyLabel="Any"
           value={country}
-          onChange={(e) => {
-            setCountry(e.target.value);
-            if (selected && e.target.value && selected.country !== e.target.value) setProductId('');
+          placeholder="Type a country, e.g. Germany or UAE"
+          onChange={(key) => {
+            setCountry(key);
+            if (selected && key && selected.country !== key) setProductId('');
           }}
-        >
-          <option value="">Any</option>
-          {ours.length > 0 && (
-            <optgroup label="Your destinations">
-              {ours.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-            </optgroup>
-          )}
-          {[...regions.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([region, list]) => (
-            <optgroup key={region} label={region}>
-              {list.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-            </optgroup>
-          ))}
-        </Select>
+        />
       </FormField>
       <FormField label="Interested in" name="interestCategory">
         <Select

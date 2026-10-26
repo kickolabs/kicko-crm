@@ -1,5 +1,7 @@
 'use client';
 
+import { Combobox } from '@/components/combobox';
+import { aliasesOf } from '@/lib/countries';
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { ActionButton, ActionForm, FormBanner, FormField, Modal, SubmitButton } from '@/components/forms';
@@ -42,9 +44,13 @@ export function InstitutionForm({ slug, inst, countries }: { slug: string; inst?
           </Select>
         </FormField>
         <FormField label="Country" name="country">
-          <Select name="country" value={country} onChange={(e) => { setCountry(e.target.value); setCurrency(DEFAULT_CURRENCY[e.target.value] ?? currency); }}>
-            {countries.filter(([c]) => c !== 'EU').map(([c, n]) => <option key={c} value={c}>{n}</option>)}
-          </Select>
+          <Combobox
+            name="country"
+            value={country}
+            onChange={(c) => { setCountry(c); setCurrency(DEFAULT_CURRENCY[c] ?? currency); }}
+            options={countries.filter(([c]) => c !== 'EU').map(([key, name]) => ({ key, name, search: aliasesOf(key).join(' ') }))}
+            placeholder="Type a country"
+          />
         </FormField>
         <FormField label="City" name="city"><Input name="city" defaultValue={inst?.city ?? ''} /></FormField>
         <FormField label="Currency" name="currency">

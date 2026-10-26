@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // Phase 4: WhatsApp in sandbox mode. No Meta account: outbound calls are recorded,
 // inbound arrives as real signed Meta-format webhooks (simulator + direct posts).
@@ -138,7 +138,7 @@ test.describe.serial('Phase 4 · WhatsApp (sandbox)', () => {
     await page.getByRole('link', { name: 'Karthik S' }).click();
     await expect(page.getByText('Here is my passport')).toBeVisible(); // lead page conversation
     await page.getByRole('button', { name: 'Convert to client →' }).click();
-    await page.getByRole('dialog').getByLabel('Open a case for').selectOption({ label: 'Canada · Study Permit' });
+    await choose(page.getByRole('dialog'), 'Open a case for', 'Study Permit', 'Canada · Study Permit');
     await page.getByRole('dialog').getByRole('button', { name: 'Convert' }).click();
     await page.waitForURL(/\/cases\//);
     const caseUrl = page.url();

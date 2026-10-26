@@ -1,5 +1,6 @@
 'use client';
 
+import { Combobox } from '@/components/combobox';
 import clsx from 'clsx';
 import { useState } from 'react';
 import type { Role } from '@kicko/db';
@@ -267,10 +268,7 @@ export function CustomWorkflowForm({ slug, countries, categories, defaultCountry
   return (
     <ActionForm action={createCustomWorkflowAction.bind(null, slug)} className="grid gap-3.5 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
       <FormField label="Country" name="country">
-        <Select name="country" defaultValue={defaultCountry ?? ''} required>
-          <option value="">Choose</option>
-          {countries.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-        </Select>
+        <Combobox name="country" defaultValue={defaultCountry ?? ''} options={countries} placeholder="Type a country" />
       </FormField>
       <FormField label="Visa type" name="category">
         <Select name="category" defaultValue="WORK" required>

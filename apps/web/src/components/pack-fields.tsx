@@ -3,6 +3,7 @@
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import type { PackField } from '@kicko/packs';
+import { Combobox } from '@/components/combobox';
 import { FormField } from '@/components/forms';
 import { Input, Select } from '@/components/ui';
 import { inputName, type PackValues, type RepeaterRow } from '@/lib/pack-fields';
@@ -10,33 +11,12 @@ import { inputName, type PackValues, type RepeaterRow } from '@/lib/pack-fields'
 // Renders an industry pack's fields inside an ActionForm. The server reads them back with
 // readPackForm() and validates them with cleanPackValues().
 
-export type LookupOption = { key: string; name: string; group?: string };
+export type LookupOption = { key: string; name: string; group?: string; search?: string };
 export type Lookups = Record<string, LookupOption[]>;
 
-function grouped(options: LookupOption[], labels?: Record<string, string>) {
-  const groups = new Map<string, LookupOption[]>();
-  for (const o of options) {
-    const g = o.group ? (labels?.[o.group] ?? o.group) : '';
-    groups.set(g, [...(groups.get(g) ?? []), o]);
-  }
-  return [...groups.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
-}
-
-function LookupSelect({ name, id, options, value, labels, placeholder, onChange }: { name: string; id?: string; options: LookupOption[]; value?: string; labels?: Record<string, string>; placeholder: string; onChange?: (v: string) => void }) {
-  const groups = grouped(options, labels);
-  return (
-    <Select name={name} defaultValue={onChange ? undefined : (value ?? '')} value={onChange ? (value ?? '') : undefined} onChange={onChange ? (e) => onChange(e.target.value) : undefined} id={id ?? name}>
-      <option value="">{placeholder}</option>
-      {groups.length === 1 && groups[0]![0] === ''
-        ? groups[0]![1].map((o) => <option key={o.key} value={o.key}>{o.name}</option>)
-        : groups.map(([g, list]) => (
-            <optgroup key={g || 'other'} label={g || 'Other'}>
-              {list.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
-            </optgroup>
-          ))}
-    </Select>
-  );
-}
+/** Options with their group names as people read them (occupation groups are keys in the library). */
+const labelled = (options: LookupOption[], labels?: Record<string, string>) =>
+  options.map((o) => ({ ...o, group: o.group ? (labels?.[o.group] ?? o.group) : undefined }));
 
 /** Pick several items: a select to add, chips to remove. Each chip is a hidden input. */
 function MultiLookup({ field, options, initial, labels }: { field: PackField; options: LookupOption[]; initial: string[]; labels?: Record<string, string> }) {
@@ -60,15 +40,7 @@ function MultiLookup({ field, options, initial, labels }: { field: PackField; op
           ))}
         </div>
       )}
-      <LookupSelect
-        name={`${name}__add`}
-        id={name}
-        options={options.filter((o) => !keys.includes(o.key))}
-        labels={labels}
-        value=""
-        placeholder="Add…"
-        onChange={(v) => v && setKeys([...keys, v])}
-      />
+      <Combobox id={name} options={labelled(options.filter((o) => !keys.includes(o.key)), labels)} placeholder="Type to add…" clearOnSelect onChange={(v) => v && setKeys([...keys, v])} />
     </div>
   );
 }
@@ -122,7 +94,7 @@ export function PackFieldInput({ field, value, lookups, groupLabels }: { field: 
   const input = (() => {
     switch (field.type) {
       case 'lookup':
-        return <LookupSelect name={name} options={options} labels={labels} value={(value as string) ?? ''} placeholder="Not set" />;
+        return <Combobox name={name} options={labelled(options, labels)} defaultValue={(value as string) ?? ''} emptyLabel="Not set" placeholder="Type to search" />;
       case 'multi_lookup':
         return <MultiLookup field={field} options={options} labels={labels} initial={(value as string[]) ?? []} />;
       case 'repeater':

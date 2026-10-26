@@ -1,10 +1,11 @@
 'use client';
 
 import clsx from 'clsx';
+import { Combobox } from '@/components/combobox';
 import { countryName } from '@/lib/countries';
 import type { Lead, LeadStatus } from '@kicko/db';
 import { ActionButton, ActionForm, FormField, Modal, SubmitButton } from '@/components/forms';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input } from '@/components/ui';
 import { LEAD_STATUS_LABEL } from '@/lib/constants';
 import { convertLeadAction, markLostAction, setLeadStatusAction } from '../../actions';
 import { displayPackValue, type PackValues } from '@/lib/pack-fields';
@@ -125,15 +126,32 @@ export function LeadToolbar({
                 <p className="mt-1.5 text-xs text-muted">You can review and change these on the client profile.</p>
               </div>
             )}
-            <FormField label="Open a case for" name="productId">
-              <Select name="productId" defaultValue={lead.productId ?? ''}>
-                <option value="">Don't open a case yet</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {countryName(p.country)} · {p.name}
-                  </option>
-                ))}
-              </Select>
+            <FormField
+              label="Open a case for"
+              name="productId"
+              hint={
+                <>
+                  Your agency&apos;s visa workflows. Need another country?{' '}
+                  <a href={`/${slug}/settings?tab=workflows${lead.interestCountry ? `&country=${lead.interestCountry}` : ''}`} className="font-semibold text-ink underline underline-offset-4">
+                    Add it in Settings
+                  </a>
+                </>
+              }
+            >
+              {/* The lead's destination first, then the rest by country; type to search. */}
+              <Combobox
+                name="productId"
+                defaultValue={lead.productId ?? ''}
+                emptyLabel="Don't open a case yet"
+                placeholder="Type a country or visa"
+                groupOrder={lead.interestCountry ? [`For ${countryName(lead.interestCountry)}`] : []}
+                options={products.map((p) => ({
+                  key: p.id,
+                  name: `${countryName(p.country)} · ${p.name}`,
+                  group: p.country === lead.interestCountry ? `For ${countryName(p.country)}` : countryName(p.country),
+                  search: p.country,
+                }))}
+              />
             </FormField>
             <div className="flex justify-end">
               <SubmitButton>Convert</SubmitButton>

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // The immigration pack end to end: a pathway from the library, a lead with destination →
 // pathway (which resets when the country changes) and occupation, conversion carrying it
@@ -48,7 +48,7 @@ test.describe.serial('Immigration pack journey', () => {
 
   test('adds a pathway from the library, with its official info', async () => {
     await page.goto(`/${agency.slug}/settings?tab=workflows`);
-    await page.getByLabel('Country').first().selectOption('AE');
+    await choose(page, 'Country', 'United Arab Emirates', /^United Arab Emirates/);
     await page.getByRole('button', { name: 'Show pathways' }).click();
     await page.waitForURL(/country=AE/);
     const row = page.getByRole('listitem').filter({ hasText: PATHWAY }).first();
@@ -78,18 +78,18 @@ test.describe.serial('Immigration pack journey', () => {
     await d.getByLabel('First name').fill('Karthik');
     await d.getByLabel('Last name').fill('Selvam');
     await d.getByLabel('Phone / WhatsApp').fill('98400 55667');
-    await d.getByLabel('Country', { exact: true }).selectOption('AE');
+    await choose(d, 'Country', 'United Arab Emirates');
     await d.getByLabel('Interested in', { exact: true }).selectOption('WORK');
     await d.getByLabel('Visa product').selectOption({ label: `United Arab Emirates · ${PATHWAY}` });
     await expect(d.getByLabel('Pathway information')).toBeVisible();
-    await d.getByLabel('Country', { exact: true }).selectOption('DE');
+    await choose(d, 'Country', 'Germany');
     await expect(d.getByLabel('Visa product')).toHaveValue('');
     await expect(d.getByLabel('Visa product').getByRole('option', { name: 'Germany · EU Blue Card' })).toBeAttached();
-    await d.getByLabel('Country', { exact: true }).selectOption('HR');
+    await choose(d, 'Country', 'Croatia');
     await expect(d.getByText(/No visa workflow for Croatia \(Work\) yet/)).toBeVisible();
-    await d.getByLabel('Country', { exact: true }).selectOption('AE');
+    await choose(d, 'Country', 'United Arab Emirates');
     await d.getByLabel('Visa product').selectOption({ label: `United Arab Emirates · ${PATHWAY}` });
-    await d.getByLabel('Occupation').selectOption('truck_driver');
+    await choose(d, 'Occupation', 'truck', 'Heavy truck and lorry driver');
     await d.getByLabel('Work experience (years)').fill('6');
     await d.getByRole('button', { name: 'Create lead' }).click();
     await page.waitForURL(/\/leads\/[a-z0-9]+$/);
@@ -118,7 +118,7 @@ test.describe.serial('Immigration pack journey', () => {
     await page.getByRole('link', { name: 'Karthik Selvam' }).first().click();
     await page.waitForURL(/\/clients\//);
     await page.getByRole('tab', { name: 'profession' }).click();
-    await expect(page.getByLabel('Occupation')).toHaveValue('truck_driver');
+    await expect(page.locator('input[name="pf_occupation"]')).toHaveValue('truck_driver');
     await expect(page.getByLabel('Work experience (years)')).toHaveValue('6');
     await page.getByRole('button', { name: /Add licence/ }).click();
     await page.getByLabel('Licences & registrations 1: Type').selectOption('Driving licence');
@@ -163,15 +163,15 @@ test.describe.serial('Immigration pack journey', () => {
     await page.getByRole('button', { name: 'New employer' }).click();
     let d = page.getByRole('dialog');
     await d.getByLabel('Employer name').fill('Gulf Freight LLC');
-    await d.getByLabel('Country').selectOption('AE');
+    await choose(d, 'Country', 'United Arab Emirates');
     await d.getByRole('button', { name: 'Add employer' }).click();
     await page.waitForURL(/\/organizations\/[a-z0-9]+$/);
 
     await page.getByRole('button', { name: 'New vacancy' }).click();
     d = page.getByRole('dialog');
     await d.getByLabel('Role').fill('Heavy truck driver');
-    await d.getByLabel('Occupation').selectOption('truck_driver');
-    await d.getByLabel('Country').selectOption('AE');
+    await choose(d, 'Occupation', 'truck', 'Heavy truck and lorry driver');
+    await choose(d, 'Country', 'United Arab Emirates');
     await d.getByLabel('Visa workflow').selectOption({ label: `United Arab Emirates · ${PATHWAY}` });
     await d.getByLabel('Positions').fill('2');
     await d.getByLabel('Minimum experience (years)').fill('3');

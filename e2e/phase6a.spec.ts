@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // Phase 6a: sub-agent network. Agency adds a sub-agent → partner signs in with a
 // one-time link → refers a client (duplicates protected) → staff converts and
@@ -68,7 +68,7 @@ test.describe.serial('Phase 6a · sub-agent network', () => {
     await form.getByLabel('First name').fill('Anjali');
     await form.getByLabel('Last name').fill('Menon');
     await form.getByLabel('Phone (WhatsApp)').fill('9840099001');
-    await form.getByLabel('Destination').selectOption('CA');
+    await choose(form, 'Destination', 'Canada');
     await form.getByLabel('Looking to').selectOption('STUDY');
     await form.getByRole('button', { name: 'Refer client' }).click();
     await expect(partner.getByText('Confirm the client agreed to be contacted')).toBeVisible();
@@ -104,7 +104,7 @@ test.describe.serial('Phase 6a · sub-agent network', () => {
     await expect(staff.getByText(/also referred this lead/)).toBeVisible(); // the duplicate attempt is visible to staff
 
     await staff.getByRole('button', { name: 'Convert to client →' }).click();
-    await staff.getByRole('dialog').getByLabel('Open a case for').selectOption({ label: 'Canada · Study Permit' });
+    await choose(staff.getByRole('dialog'), 'Open a case for', 'Study Permit', 'Canada · Study Permit');
     await staff.getByRole('dialog').getByRole('button', { name: 'Convert' }).click();
     await staff.waitForURL(/\/cases\//);
     const caseUrl = staff.url();

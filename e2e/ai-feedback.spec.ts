@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client as Pg } from 'pg';
-import { testMobile, verifyMobile } from './helpers';
+import { testMobile, verifyMobile, choose } from './helpers';
 
 // "Help improve Kicko Yu": off by default (nothing recorded); on, verifying a
 // document Yu flagged stores one anonymised row; off again deletes them.
@@ -47,7 +47,7 @@ test.describe.serial('Kicko Yu feedback (opt-in)', () => {
     await d.getByLabel('First name').fill('Priya');
     await d.getByLabel('Last name').fill('Raman');
     await d.getByLabel('Phone / WhatsApp').fill('9840011224');
-    await d.getByLabel('Country', { exact: true }).selectOption('CA');
+    await choose(d, 'Country', 'Canada');
     await d.getByLabel('Visa product').selectOption({ label: 'Canada · Study Permit' });
     await d.getByRole('button', { name: 'Create lead' }).click();
     await page.waitForURL(/\/leads\//);
