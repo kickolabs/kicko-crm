@@ -16,6 +16,7 @@ import * as checkins from '@/server/checkins';
 import * as team from '@/server/team';
 import * as settings from '@/server/settings';
 import * as workflows from '@/server/workflows';
+import * as vault from '@/server/vault';
 
 type Prev = ActionResult | null;
 
@@ -421,6 +422,36 @@ export async function applyLibraryUpdateAction(slug: string, productId: string, 
     assertCan(ctx, 'settings.manage');
     await workflows.applyLibraryUpdate(scopeOf(ctx), productId, { keepStages });
   }, 'Updated from the library');
+  refresh(slug);
+  return res;
+}
+
+// ─── Portal logins (vault) ──────────────────────────────────────────────────
+
+export async function saveVaultAction(slug: string, clientId: string, id: string | null, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await vault.saveVaultEntry(scopeOf(ctx), clientId, formObject(fd) as never, id ?? undefined);
+  }, 'Saved');
+  refresh(slug);
+  return res;
+}
+
+export async function revealVaultAction(slug: string, id: string) {
+  const ctx = await getCtx(slug);
+  return run(async () => {
+    assertCan(ctx, 'vault.reveal');
+    return vault.revealVaultEntry(scopeOf(ctx), id);
+  });
+}
+
+export async function deleteVaultAction(slug: string, id: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await vault.deleteVaultEntry(scopeOf(ctx), id);
+  });
   refresh(slug);
   return res;
 }

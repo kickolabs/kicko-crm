@@ -36,6 +36,8 @@ import { Timeline } from '../../_components/timeline';
 import { FamilyPanel, OpenCaseButton, ProfileForm, RepeaterEditor } from './client-forms';
 import { EDU_COLUMNS, TEST_COLUMNS, WORK_COLUMNS } from './columns';
 import { ProfessionForm } from './profession-form';
+import { VaultCard } from './vault-card';
+import { listVault } from '@/server/vault';
 import { displayPackValue, type PackValues } from '@/lib/pack-fields';
 import { lookupName, packForm } from '@/server/library';
 
@@ -65,7 +67,15 @@ export default async function ClientPage({
     const form = await packForm(scopeOf(ctx), 'clients');
     const values = (client!.packData as PackValues) ?? {};
     if (writable) {
-      return <Card className="p-5"><ProfessionForm slug={slug} clientId={client!.id} values={values} form={form} /></Card>;
+      const entries = await listVault(scopeOf(ctx), client!.id);
+      return (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <Card className="p-5"><ProfessionForm slug={slug} clientId={client!.id} values={values} form={form} /></Card>
+          <div className="flex flex-col gap-5">
+            <VaultCard slug={slug} clientId={client!.id} entries={entries.map((e) => ({ ...e, lastRevealedAt: e.lastRevealedAt?.toISOString() ?? null }))} canWrite={writable} canReveal={can(ctx.role, 'vault.reveal')} />
+          </div>
+        </div>
+      );
     }
     const nameOf = lookupName(form.lookups);
     return (
@@ -110,9 +120,9 @@ export default async function ClientPage({
         </div>
       )}
 
-      <div role="tablist" aria-label="Client sections" className="flex gap-6 border-b border-line">
+      <div role="tablist" aria-label="Client sections" className="-mx-4 flex gap-6 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0">
         {TABS.filter((t) => t !== 'billing' || can(ctx.role, 'billing.read')).map((t) => (
-          <Link key={t} role="tab" aria-selected={tab === t} href={`?tab=${t}`} className={clsx('-mb-px border-b-[3px] py-2.5 text-sm font-semibold capitalize', tab === t ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink')}>
+          <Link key={t} role="tab" aria-selected={tab === t} href={`?tab=${t}`} className={clsx('-mb-px shrink-0 border-b-[3px] py-2.5 text-sm font-semibold capitalize', tab === t ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink')}>
             {t}
           </Link>
         ))}

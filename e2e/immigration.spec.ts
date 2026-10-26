@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { Client as Pg } from 'pg';
 import { testMobile, verifyMobile } from './helpers';
 
 // The immigration pack end to end: a pathway from the library, a lead with destination →
@@ -93,6 +94,36 @@ test.describe.serial('Immigration pack journey', () => {
     await page.getByLabel('Licences & registrations 1: Valid until').fill('2031-12-31');
     await page.getByRole('button', { name: 'Save profile' }).click();
     await expect(page.getByText('Profile saved.')).toBeVisible();
+  });
+
+  test('portal logins are encrypted, and viewing a password is audited', async () => {
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    const d = page.getByRole('dialog');
+    await d.getByLabel('Portal', { exact: true }).fill('IRCC / GCKey');
+    await d.getByLabel('Username or email').fill('karthik.gckey');
+    await d.getByLabel('Password').fill('S3cret-Pass!');
+    await d.getByRole('button', { name: 'Save' }).click();
+    await expect(d).toBeHidden();
+    const card = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Portal logins' }) });
+    await expect(card.getByText('karthik.gckey')).toBeVisible();
+    await expect(card.getByText('S3cret-Pass!')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Show password' }).click();
+    await expect(card.getByText('S3cret-Pass!')).toBeVisible();
+    const db = new Pg('postgresql://postgres:postgres@localhost:5433/kicko');
+    await db.connect();
+    try {
+      const { rows } = await db.query(
+        `SELECT v.secret, (SELECT count(*)::int FROM "AuditEvent" a WHERE a."tenantId" = v."tenantId" AND a.action = 'document.vault_revealed') AS reveals,
+                (SELECT count(*)::int FROM "AuditEvent" a WHERE a."tenantId" = v."tenantId" AND (a.summary LIKE '%S3cret%' OR a.details::text LIKE '%S3cret%')) AS leaks
+         FROM "CredentialVault" v JOIN "Tenant" t ON t.id = v."tenantId" WHERE t.slug = $1`,
+        [agency.slug],
+      );
+      expect(rows[0].secret).toMatch(/^v1\./);
+      expect(rows[0].secret).not.toContain('S3cret');
+      expect(rows[0]).toMatchObject({ reveals: 1, leaks: 0 });
+    } finally {
+      await db.end();
+    }
   });
 
   test('employer, vacancy, a suggested match, shortlist and hire: the offer lands on the case', async () => {
