@@ -97,6 +97,11 @@ export async function finishUpload(scope: Scope, documentId: string, raw: unknow
       },
     });
     after(() => checkDocumentFile(scope, file.id));
+    after(async () => {
+      const { emit } = await import('./rules');
+      const c = await inTenant(scope, (t) => t.case.findUnique({ where: { id: doc.caseId }, select: { ownerId: true } }));
+      await emit(scope, 'DOC_UPLOADED', { recordType: 'case', recordId: doc.caseId, caseId: doc.caseId, clientId: doc.clientId, ownerId: c?.ownerId, values: {}, words: { document: doc.name } });
+    });
     await tx.document.update({ where: { id: documentId }, data: { status: 'UPLOADED', rejectionReason: null, verifiedAt: null, verifiedBy: null } });
     await logActivity(tx, scope, {
       type: 'DOC_UPLOADED',
@@ -127,6 +132,12 @@ export async function reviewDocument(scope: Scope, documentId: string, raw: unkn
       clientId: doc.clientId,
       caseId: doc.caseId,
       vars: [doc.client.firstName, doc.name, input.reason ?? ''],
+    });
+    const { emit } = await import('./rules');
+    const c = await inTenant(scope, (tx) => tx.case.findUnique({ where: { id: doc.caseId }, select: { ownerId: true } }));
+    await emit(scope, 'DOC_REJECTED', {
+      recordType: 'case', recordId: doc.caseId, caseId: doc.caseId, clientId: doc.clientId, ownerId: c?.ownerId, values: {},
+      words: { firstName: doc.client.firstName, name: [doc.client.firstName, doc.client.lastName].filter(Boolean).join(' '), document: doc.name, reason: input.reason ?? '' },
     });
   }
 }

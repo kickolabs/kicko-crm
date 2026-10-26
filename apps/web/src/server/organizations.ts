@@ -185,9 +185,20 @@ export async function addCandidate(scope: Scope, openingId: string, clientId: st
  * the client's open case for the vacancy's workflow, opening one if there isn't one.
  */
 export async function setCandidateStage(scope: Scope, candidateId: string, stage: CandidateStage, opts: { interviewAt?: Date | null; notes?: string | null } = {}) {
+  const res = await setCandidateStageTx(scope, candidateId, stage, opts);
+  const { emit } = await import('./rules');
+  await emit(scope, 'CANDIDATE_STAGE', { recordType: 'candidate', recordId: candidateId, clientId: res.clientId, caseId: res.caseId, ownerId: res.ownerId, values: { status: stage }, words: { name: res.name, stage, title: res.title } });
+  if (res.openedCase) {
+    const { emitCaseOpened } = await import('./cases');
+    await emitCaseOpened(scope, res.caseId!);
+  }
+  return { caseId: res.caseId };
+}
+
+function setCandidateStageTx(scope: Scope, candidateId: string, stage: CandidateStage, opts: { interviewAt?: Date | null; notes?: string | null }) {
   if (!CANDIDATE_STAGES.includes(stage)) throw new UserError('Unknown stage');
   return inTenant(scope, async (tx) => {
-    const cand = await tx.openingCandidate.findUnique({ where: { id: candidateId }, include: { opening: { include: { organization: true } } } });
+    const cand = await tx.openingCandidate.findUnique({ where: { id: candidateId }, include: { opening: { include: { organization: true } }, client: true } });
     if (!cand) throw new UserError('Not found');
     await tx.openingCandidate.update({
       where: { id: candidateId },
@@ -196,9 +207,11 @@ export async function setCandidateStage(scope: Scope, candidateId: string, stage
     const { opening } = cand;
     const d = opening.data as OpeningData;
     await logActivity(tx, scope, { type: 'CANDIDATE_STAGE', summary: `${opening.title} at ${opening.organization.name}: ${stage}`, clientId: cand.clientId, data: { openingId: opening.id, stage } });
-    if (stage !== 'hired') return { caseId: null };
+    const base = { clientId: cand.clientId, ownerId: cand.client.ownerId, name: [cand.client.firstName, cand.client.lastName].filter(Boolean).join(' '), title: opening.title };
+    if (stage !== 'hired') return { ...base, caseId: null as string | null, openedCase: false };
     const offer = { title: opening.title, employer: opening.organization.name, salaryMin: d.salaryMin, salaryMax: d.salaryMax, currency: d.currency, at: new Date().toISOString() };
     let c = await tx.case.findFirst({ where: { clientId: cand.clientId, status: { not: 'CLOSED' }, ...(d.productId ? { productId: d.productId } : {}) }, orderBy: { createdAt: 'desc' } });
+    const openedCase = !c && !!d.productId;
     if (!c && d.productId) c = await openCaseTx(tx, scope, { clientId: cand.clientId, productId: d.productId });
     if (c) {
       await tx.case.update({ where: { id: c.id }, data: { organizationId: opening.organizationId, openingId: opening.id, jobOffer: offer as Prisma.InputJsonValue } });
@@ -206,7 +219,7 @@ export async function setCandidateStage(scope: Scope, candidateId: string, stage
     }
     const hired = await tx.openingCandidate.count({ where: { openingId: opening.id, stage: 'hired' } });
     if (d.positions && hired >= d.positions) await tx.opening.update({ where: { id: opening.id }, data: { status: 'filled' } });
-    return { caseId: c?.id ?? null };
+    return { ...base, caseId: c?.id ?? null, openedCase };
   });
 }
 

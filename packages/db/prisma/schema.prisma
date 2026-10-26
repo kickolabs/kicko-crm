@@ -1397,6 +1397,60 @@ model Automation {
   @@index([tenantId, trigger])
 }
 
+// "When <trigger> and <conditions>, do <actions>": the generic rules engine.
+model Rule {
+  id         String          @id @default(cuid())
+  tenantId   String
+  name       String
+  // LEAD_CREATED | LEAD_STATUS | CASE_OPENED | CASE_STAGE | DOC_UPLOADED | DOC_REJECTED | DOC_EXPIRING |
+  // APPOINTMENT_BOOKED | APPOINTMENT_MISSED | TASK_OVERDUE | INVOICE_OVERDUE | CANDIDATE_STAGE | CASE_STAGE_OVERDUE
+  trigger    String
+  // { stageKey?, status?, source?, country?, category?, branchId?, productId? }
+  conditions Json            @default("{}")
+  // [{ type: create_task | assign_owner | notify | whatsapp | email | set_field | move_stage, ... }]
+  actions    Json            @default("[]")
+  active     Boolean         @default(true)
+  createdBy  String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  runs       AutomationRun[]
+
+  @@index([tenantId, trigger, active])
+}
+
+// Every time a rule runs: what it did, and why it failed if it did.
+model AutomationRun {
+  id         String   @id @default(cuid())
+  tenantId   String
+  ruleId     String
+  rule       Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  trigger    String
+  recordType String // lead | client | case | appointment | task | invoice | candidate
+  recordId   String
+  status     String // ok | failed | partial
+  attempts   Int      @default(1)
+  // [{ type, ok, detail }]
+  results    Json     @default("[]")
+  at         DateTime @default(now())
+
+  @@index([tenantId, at])
+  @@index([ruleId, at])
+}
+
+// In-app notifications (the bell): mentions, assignments, rules, reminders.
+model Notification {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  kind      String // mention | assigned | rule | reminder | gate | sla
+  text      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, userId, readAt, createdAt])
+}
+
 // One-time login links. Only a SHA-256 hash of the token is stored.
 model PortalToken {
   id        String    @id @default(cuid())

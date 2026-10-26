@@ -134,6 +134,16 @@ async function validSlot(
 }
 
 export async function createAppointment(scope: Scope, raw: unknown, rights: BookingRights = { outsideHours: false }) {
+  const appt = await createAppointmentTx(scope, raw, rights);
+  const { emit } = await import('./rules');
+  await emit(scope, 'APPOINTMENT_BOOKED', {
+    recordType: 'appointment', recordId: appt.id, leadId: appt.leadId, clientId: appt.clientId, caseId: appt.caseId, ownerId: appt.staffId, values: {},
+    words: { title: appt.title },
+  });
+  return appt;
+}
+
+function createAppointmentTx(scope: Scope, raw: unknown, rights: BookingRights) {
   const input = appointmentInput.parse(raw);
   return inTenant(scope, async (tx) => {
     const links = await resolveLinks(tx, input);
@@ -183,6 +193,11 @@ export async function setAppointmentStatus(
     if (!a) throw new UserError('Appointment not found');
     // Status only: no time checks, so a past appointment can still be marked done or no-show.
     await tx.appointment.update({ where: { id }, data: { status } });
+    return a;
+  }).then(async (a) => {
+    if (status !== 'NO_SHOW' || a.status === 'NO_SHOW') return;
+    const { emit } = await import('./rules');
+    await emit(scope, 'APPOINTMENT_MISSED', { recordType: 'appointment', recordId: a.id, leadId: a.leadId, clientId: a.clientId, caseId: a.caseId, ownerId: a.staffId, values: {}, words: { title: a.title } });
   });
 }
 
@@ -235,5 +250,8 @@ export async function addNote(scope: Scope, raw: unknown) {
       summary: input.body.length > 140 ? `${input.body.slice(0, 140)}…` : input.body,
       ...links,
     });
+    const { notifyMentions } = await import('./notifications');
+    const href = links.caseId ? `/${scope.slug}/cases/${links.caseId}` : links.leadId ? `/${scope.slug}/leads/${links.leadId}` : links.clientId ? `/${scope.slug}/clients/${links.clientId}` : null;
+    await notifyMentions(tx, scope, input.body, href);
   });
 }

@@ -83,7 +83,43 @@ async function remindTenant(scope: Scope) {
     const { fireAutomation } = await import('./whatsapp/automations');
     for (const n of overdueNotices) await fireAutomation(scope, 'PAYMENT_OVERDUE', n);
   }
+  await dailyTriggers(scope, overdueNotices);
   return created;
+}
+
+/**
+ * Time-based automations and escalations, each fired once, on the day it happens: a task
+ * that became overdue, a document now 30 days from expiry, an overdue instalment, and a
+ * case stage that just passed its expected time (the owner and admins are notified).
+ */
+async function dailyTriggers(scope: Scope, overdueNotices: { clientId: string; caseId: string | null; vars: string[] }[]) {
+  const { emit, notifyTx } = await import('./rules');
+  const { stagesOf, overdueDays } = await import('@/lib/workflow');
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - DAY);
+  const data = await withTenant(scope.tenantId, async (tx) => {
+    // Expired documents are marked as such (verified ones only; history is kept).
+    await tx.document.updateMany({ where: { status: 'VERIFIED', expiresAt: { lt: now } }, data: { status: 'EXPIRED' } });
+    const tasks = await tx.task.findMany({ where: { done: false, dueAt: { gte: yesterday, lt: now } } });
+    const docs = await tx.document.findMany({
+      where: { status: 'VERIFIED', expiresAt: { gte: new Date(now.getTime() + 29 * DAY), lt: new Date(now.getTime() + 30 * DAY) } },
+      include: { case: true, client: true },
+    });
+    const cases = await tx.case.findMany({ where: { status: 'OPEN' }, include: { product: true, client: true } });
+    const late = cases.filter((c) => overdueDays(stagesOf(c).find((s) => s.key === c.stageKey), c.stageSince, now) === 1);
+    if (late.length) {
+      const admins = (await tx.membership.findMany({ where: { active: true, role: { in: ['OWNER', 'ADMIN'] } }, select: { userId: true } })).map((m) => m.userId);
+      for (const c of late) {
+        const stage = stagesOf(c).find((s) => s.key === c.stageKey);
+        await notifyTx(tx, scope, [c.ownerId, ...admins], { kind: 'sla', text: `${c.ref} (${fullName(c.client)}) is past the expected time for ${stage?.name}`, href: `/${scope.slug}/cases/${c.id}` });
+      }
+    }
+    return { tasks, docs, late };
+  });
+  for (const t of data.tasks) await emit(scope, 'TASK_OVERDUE', { recordType: 'task', recordId: t.id, leadId: t.leadId, clientId: t.clientId, caseId: t.caseId, ownerId: t.assigneeId, values: {}, words: { title: t.title } });
+  for (const d of data.docs) await emit(scope, 'DOC_EXPIRING', { recordType: 'case', recordId: d.caseId, caseId: d.caseId, clientId: d.clientId, ownerId: d.case.ownerId, values: {}, words: { name: fullName(d.client), firstName: d.client.firstName, document: d.name } });
+  for (const n of overdueNotices) await emit(scope, 'INVOICE_OVERDUE', { recordType: 'invoice', recordId: n.caseId ?? n.clientId, clientId: n.clientId, caseId: n.caseId, values: {}, words: { firstName: n.vars[0], amount: n.vars[1], due: n.vars[2] } });
+  for (const c of data.late) await emit(scope, 'CASE_STAGE_OVERDUE', { recordType: 'case', recordId: c.id, caseId: c.id, clientId: c.clientId, ownerId: c.ownerId, values: { stageKey: c.stageKey, productId: c.productId }, words: { name: fullName(c.client), ref: c.ref, workflow: c.product.name } });
 }
 
 export async function runDailyReminders() {

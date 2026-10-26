@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { dayBounds } from '@/lib/format';
+import { NotificationBell } from './shell/notification-bell';
+import { myNotifications } from '@/server/notifications';
 import { scopeOf } from '@/server/scope';
 import { tenantPack } from '@/server/library';
 import { db, getCtx } from '@/lib/tenant';
@@ -91,6 +93,7 @@ export default async function TenantLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-paper/85 px-4 py-3 backdrop-blur sm:px-7">
           <CommandBar slug={slug} ai={Boolean(agents)} />
+          <NotificationBell slug={slug} {...await myNotifications(scopeOf(ctx), ctx.user.id).then((n) => ({ unread: n.unread, items: n.items.map((i) => ({ ...i, readAt: i.readAt?.toISOString() ?? null, createdAt: i.createdAt.toISOString() })) }))} />
           <UserMenu slug={slug} name={ctx.user.name} email={ctx.user.email} role={ctx.role} />
         </div>
         <PlanBanner slug={slug} sub={ctx.subscription} tz={ctx.tenant.timezone} canManage={canManage} trial={trial} />

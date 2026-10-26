@@ -83,8 +83,22 @@ export async function openCaseTx(
   return c;
 }
 
-export function openCase(scope: Scope, input: { clientId: string; productId: string; ownerId?: string | null }) {
-  return inTenant(scope, (tx) => openCaseTx(tx, scope, input));
+export async function openCase(scope: Scope, input: { clientId: string; productId: string; ownerId?: string | null }) {
+  const c = await inTenant(scope, (tx) => openCaseTx(tx, scope, input));
+  await emitCaseOpened(scope, c.id);
+  return c;
+}
+
+/** Run CASE_OPENED automations (after the case has committed). */
+export async function emitCaseOpened(scope: Scope, caseId: string) {
+  const c = await inTenant(scope, (tx) => tx.case.findUnique({ where: { id: caseId }, include: { client: true, product: true } }));
+  if (!c) return;
+  const { emit } = await import('./rules');
+  await emit(scope, 'CASE_OPENED', {
+    recordType: 'case', recordId: c.id, caseId: c.id, clientId: c.clientId, ownerId: c.ownerId,
+    values: { country: c.product.country, category: c.product.category, productId: c.productId },
+    words: { name: [c.client.firstName, c.client.lastName].filter(Boolean).join(' '), firstName: c.client.firstName, workflow: c.product.name, ref: c.ref },
+  });
 }
 
 /**
@@ -101,6 +115,12 @@ export async function moveStage(scope: Scope, caseId: string, toKey: string, opt
       caseId,
       stageKey: res.moved.stageKey,
       vars: [res.moved.firstName, res.moved.stageName, res.moved.product],
+    });
+    const { emit } = await import('./rules');
+    await emit(scope, 'CASE_STAGE', {
+      recordType: 'case', recordId: caseId, caseId, clientId: res.moved.clientId, ownerId: res.updated.ownerId,
+      values: { stageKey: res.moved.stageKey, productId: res.updated.productId, country: res.moved.country },
+      words: { name: res.moved.name, firstName: res.moved.firstName, stage: res.moved.stageName, workflow: res.moved.product },
     });
   }
   return res.updated;
@@ -168,7 +188,7 @@ function moveStageTx(scope: Scope, caseId: string, toKey: string, opts: { overri
     await stageTasksTx(tx, scope, c, to);
     return {
       updated,
-      moved: { clientId: c.clientId, firstName: c.client.firstName, stageKey: to.key, stageName: to.name, product: c.product.name },
+      moved: { clientId: c.clientId, firstName: c.client.firstName, name: [c.client.firstName, c.client.lastName].filter(Boolean).join(' '), stageKey: to.key, stageName: to.name, product: c.product.name, country: c.product.country },
     };
   });
 }

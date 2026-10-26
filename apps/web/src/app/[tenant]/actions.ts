@@ -20,6 +20,8 @@ import * as vault from '@/server/vault';
 import * as docTemplates from '@/server/doc-templates';
 import * as lists from '@/server/lists';
 import * as intake from '@/server/intake';
+import * as notifications from '@/server/notifications';
+import * as rules from '@/server/rules';
 
 type Prev = ActionResult | null;
 
@@ -521,6 +523,44 @@ export async function sendQuestionnaireAction(slug: string, clientId: string, ke
     assertCan(ctx, 'client.write');
     await intake.sendQuestionnaire(scopeOf(ctx), clientId, key);
   }, 'Sent to the client portal');
+  refresh(slug);
+  return res;
+}
+
+export async function markNotificationsReadAction(slug: string, id?: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(() => notifications.markRead(scopeOf(ctx), ctx.user.id, id));
+  refresh(slug);
+  return res;
+}
+
+// ─── Automations (rules engine) ─────────────────────────────────────────────
+
+export async function saveRuleAction(slug: string, id: string | null, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const raw = formObject(fd);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    let actions: unknown;
+    let conditions: unknown;
+    try {
+      actions = JSON.parse(raw.actions ?? '[]');
+      conditions = JSON.parse(raw.conditions ?? '{}');
+    } catch {
+      throw new UserError('Could not read the rule');
+    }
+    return rules.saveRule(scopeOf(ctx), id, { name: raw.name, trigger: raw.trigger, conditions, actions, active: raw.active === 'on' } as never);
+  }, 'Automation saved');
+  refresh(slug);
+  return res;
+}
+
+export async function deleteRuleAction(slug: string, id: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await rules.deleteRule(scopeOf(ctx), id);
+  });
   refresh(slug);
   return res;
 }

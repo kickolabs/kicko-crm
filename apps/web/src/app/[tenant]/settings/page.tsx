@@ -18,6 +18,9 @@ import { listTemplates } from '@/server/doc-templates';
 import { ownItems } from '@/server/lists';
 import { libraryList, tenantPack } from '@/server/library';
 import { CORE_FIELDS } from '@/lib/merge';
+import { RuleEditor } from './rules-editor';
+import { ACTION_LABEL, CONDITION_LABEL, TRIGGERS } from '@/server/rules';
+import { LEAD_SOURCE_LABEL, LEAD_SOURCES, LEAD_STATUS_LABEL, LEAD_STATUSES } from '@/lib/constants';
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
 import { ConnectionCard } from './connection-card';
 import { UpgradeCard } from '@/components/upgrade';
@@ -74,6 +77,7 @@ const TABS = [
   ['capture', 'Lead capture'],
   ['workflows', 'Visa workflows'],
   ['templates', 'Agreements & letters'],
+  ['automations', 'Automations'],
   ['lists', 'Lists & fields'],
 ] as const;
 
@@ -82,7 +86,7 @@ export default async function SettingsPage({
   searchParams,
 }: {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ tab?: string; product?: string; country?: string; template?: string; list?: string; paid?: string; group?: string; person?: string; before?: string }>;
+  searchParams: Promise<{ tab?: string; product?: string; country?: string; template?: string; list?: string; rule?: string; paid?: string; group?: string; person?: string; before?: string }>;
 }) {
   const { tenant: slug } = await params;
   const sp = await searchParams;
@@ -149,6 +153,7 @@ export default async function SettingsPage({
 
       {tab === 'fields' && <FieldsTab />}
       {tab === 'templates' && <TemplatesTab slug={slug} ctx={ctx} templateId={sp.template} />}
+      {tab === 'automations' && <AutomationsTab slug={slug} ctx={ctx} ruleId={sp.rule} />}
       {tab === 'lists' && <ListsTab slug={slug} ctx={ctx} list={sp.list} />}
 
       {tab === 'security' && <SecurityTab ctx={ctx} sp={sp} />}
@@ -625,6 +630,81 @@ async function ListsTab({ slug, ctx, list }: { slug: string; ctx: Awaited<Return
                 {o.group && <span className="ml-2 text-xs text-muted">{groupLabels?.[o.group] ?? o.group}</span>}
               </span>
               <HideToggle slug={slug} type={type} itemKey={o.key} hidden={hidden.has(o.key)} />
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+async function AutomationsTab({ slug, ctx, ruleId }: { slug: string; ctx: Awaited<ReturnType<typeof getCtx>>; ruleId?: string }) {
+  const scope = scopeOf(ctx);
+  const [rows, runs, team, products, form] = await Promise.all([
+    db(ctx, (tx) => tx.rule.findMany({ orderBy: { createdAt: 'asc' }, include: { _count: { select: { runs: true } } } })),
+    db(ctx, (tx) => tx.automationRun.findMany({ orderBy: { at: 'desc' }, take: 25, include: { rule: { select: { name: true } } } })),
+    getTeam(ctx),
+    listProducts(ctx),
+    packForm(scope, 'leads'),
+  ]);
+  const triggers = Object.entries(TRIGGERS).map(([key, t]) => ({ key, label: t.label, conditions: [...t.conditions] }));
+  const countries = form.regionType ? (form.lookups[form.regionType] ?? []) : [];
+  const choices: Record<string, [string, string][]> = {
+    status: LEAD_STATUSES.map((x) => [x, LEAD_STATUS_LABEL[x]]),
+    source: LEAD_SOURCES.map((x) => [x, LEAD_SOURCE_LABEL[x]]),
+    country: countries.map((c) => [c.key, c.name]),
+    category: Object.entries(form.categories),
+    productId: products.map((p) => [p.id, `${countryName(p.country)} · ${p.name}`]),
+  };
+  const editorProps = { slug, triggers, actionTypes: Object.entries(ACTION_LABEL) as [string, string][], conditionLabels: CONDITION_LABEL, choices, team: team.map((m) => [m.userId, m.name] as [string, string]) };
+  const selected = ruleId === 'new' ? null : rows.find((r) => r.id === ruleId);
+  if (selected || ruleId === 'new') {
+    return (
+      <Card>
+        <CardHeader title={selected?.name ?? 'New automation'} action={<Link href="?tab=automations" className="text-[13px] font-semibold text-muted hover:text-ink">← All automations</Link>} />
+        <div className="p-5">
+          <RuleEditor
+            {...editorProps}
+            rule={selected ? { id: selected.id, name: selected.name, trigger: selected.trigger, conditions: selected.conditions as Record<string, string>, actions: selected.actions as never, active: selected.active } : undefined}
+          />
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader
+          title="Automations"
+          sub="When something happens, Kicko creates tasks, assigns owners, notifies people or messages the client. Runs after the change is saved; each action is tried up to 3 times."
+          action={<Link href="?tab=automations&rule=new" className={buttonCls('primary', 'sm')}>+ Automation</Link>}
+        />
+        <ul className="divide-y divide-line">
+          {rows.length === 0 && <li className="px-5 py-4 text-sm text-muted">No automations yet. Examples: assign Gulf work-visa leads to your Gulf desk, or create a medical booking task when a case reaches Medical.</li>}
+          {rows.map((r) => (
+            <li key={r.id}>
+              <Link href={`?tab=automations&rule=${r.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-paper-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{r.name}</span>
+                  <span className="text-xs text-muted">{TRIGGERS[r.trigger as keyof typeof TRIGGERS]?.label ?? r.trigger} · {(r.actions as { type: keyof typeof ACTION_LABEL }[]).map((a) => ACTION_LABEL[a.type]).join(', ')}</span>
+                </span>
+                <span className="text-xs text-muted">{r._count.runs} runs</span>
+                {!r.active && <Badge>Off</Badge>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      <Card>
+        <CardHeader title="Recent runs" />
+        <ul className="divide-y divide-line">
+          {runs.length === 0 && <li className="px-5 py-4 text-sm text-muted">Nothing has run yet.</li>}
+          {runs.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
+              <Badge tone={r.status === 'ok' ? 'ok' : r.status === 'partial' ? 'warn' : 'danger'}>{r.status}</Badge>
+              <span className="min-w-0 flex-1 font-semibold">{r.rule.name}</span>
+              <span className="text-xs text-muted">{(r.results as { detail: string }[]).map((x) => x.detail).join(' · ')}</span>
+              <span className="text-xs text-faint">{fmtDate(r.at, ctx.tenant.timezone)}</span>
             </li>
           ))}
         </ul>

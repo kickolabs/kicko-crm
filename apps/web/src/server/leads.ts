@@ -189,6 +189,14 @@ export async function createLead(
   }).then(async (res) => {
     // New enquiries can get an instant AI qualification call (Settings → AI voice agent).
     if (res.status === 'created') {
+      // Automations first (e.g. assign by country), then the voice agent.
+      const { emit, leadWords } = await import('./rules');
+      await emit(scope, 'LEAD_CREATED', {
+        recordType: 'lead', recordId: res.leadId, leadId: res.leadId,
+        ownerId: (await inTenant(scope, (tx) => tx.lead.findUnique({ where: { id: res.leadId }, select: { ownerId: true } })))?.ownerId,
+        values: { source: input.source, country: input.interestCountry, category: input.interestCategory },
+        words: leadWords({ firstName: input.firstName, lastName: input.lastName, interestCountry: input.interestCountry }),
+      });
       const { onLeadCreated } = await import('./voice/service');
       await onLeadCreated(scope, res.leadId, input.source);
     }
@@ -212,7 +220,18 @@ export async function setLeadStatus(scope: Scope, leadId: string, status: LeadSt
       summary: `${LEAD_STATUS_LABEL[lead.status]} → ${LEAD_STATUS_LABEL[status]}${status === 'LOST' && lostReason ? ` · ${lostReason}` : ''}`,
       leadId,
     });
-    return updated;
+    return { updated, changed: true };
+  }).then(async (r) => {
+    if ('changed' in r) {
+      const { emit, leadWords } = await import('./rules');
+      await emit(scope, 'LEAD_STATUS', {
+        recordType: 'lead', recordId: leadId, leadId, ownerId: r.updated.ownerId,
+        values: { status, country: r.updated.interestCountry },
+        words: { ...leadWords(r.updated), status: LEAD_STATUS_LABEL[status] },
+      });
+      return r.updated;
+    }
+    return r;
   });
 }
 
@@ -262,6 +281,15 @@ export function assignLead(scope: Scope, leadId: string, ownerId: string | null)
 
 /** Convert a lead into a client, optionally opening a case straight away. */
 export async function convertLead(scope: Scope, leadId: string, opts: { productId?: string | null }) {
+  const res = await convertLeadTx(scope, leadId, opts);
+  if (res.caseId) {
+    const { emitCaseOpened } = await import('./cases');
+    await emitCaseOpened(scope, res.caseId);
+  }
+  return res;
+}
+
+async function convertLeadTx(scope: Scope, leadId: string, opts: { productId?: string | null }) {
   const { pack, settings } = await tenantPack(scope);
   const leadFields = visibleFields(pack, settings, 'leads');
   const clientFields = visibleFields(pack, settings, 'clients');

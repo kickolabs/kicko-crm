@@ -44,6 +44,20 @@ test.describe.serial('Immigration pack journey', () => {
     await expect(row.getByRole('link', { name: 'Added · Edit' })).toBeVisible();
   });
 
+  test('an automation: new UAE leads get a call-back task and a notification', async () => {
+    await page.goto(`/${agency.slug}/settings?tab=automations`);
+    await page.getByRole('link', { name: '+ Automation' }).click();
+    await page.getByLabel('Name', { exact: true }).fill('Gulf desk call-back');
+    await page.getByLabel('When').selectOption('LEAD_CREATED');
+    await page.getByLabel('Country').selectOption('AE');
+    await page.getByLabel('Task title').fill('Call {{name}} about the Gulf');
+    await page.getByRole('button', { name: 'Add an action' }).click();
+    await page.getByLabel('Action 2', { exact: true }).selectOption('notify');
+    await page.getByLabel('Message').fill('New Gulf lead: {{name}}');
+    await page.getByRole('button', { name: 'Save automation' }).click();
+    await expect(page.getByText('Automation saved.')).toBeVisible();
+  });
+
   test('lead: country → pathway; changing the country clears a pathway that no longer fits', async () => {
     await page.goto(`/${agency.slug}/leads`);
     await page.getByRole('button', { name: 'New lead' }).click();
@@ -67,6 +81,11 @@ test.describe.serial('Immigration pack journey', () => {
     await d.getByRole('button', { name: 'Create lead' }).click();
     await page.waitForURL(/\/leads\/[a-z0-9]+$/);
     await expect(page.getByText('Heavy truck and lorry driver')).toBeVisible();
+    // The automation ran after the lead was saved.
+    await expect.poll(async () => {
+      await page.reload();
+      return page.getByText('Call Karthik Selvam about the Gulf').count();
+    }).toBeGreaterThan(0);
   });
 
   test('conversion carries the destination and profile over, and opens the case', async () => {
