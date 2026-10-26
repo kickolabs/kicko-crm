@@ -49,7 +49,7 @@ import { platformStatus } from '@/integrations/core/platform';
 import { connectionSummary, providerOptions } from '@/integrations/core/connections';
 import { PortalSettings } from './portal-settings';
 import { AutomationsCard, SimulatorCard, TemplatesCard } from './whatsapp-settings';
-import { SANDBOX_TEMPLATES } from '@/server/whatsapp/service';
+import { emailFallbackOn, SANDBOX_TEMPLATES } from '@/server/whatsapp/service';
 import { TRIGGER_INFO } from '@/server/whatsapp/automations';
 import { db } from '@/lib/tenant';
 import { emailEnabled } from '@/server/email';
@@ -213,6 +213,7 @@ export default async function SettingsPage({
             <AutomationsCard
               slug={slug}
               templates={tpl.filter((t) => t.status === 'APPROVED')}
+              emailFallback={emailFallbackOn(ctx.tenant.settings)}
               stages={[...stageMap.entries()].map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name))}
               triggers={Object.entries(TRIGGER_INFO).map(([value, i]) => ({ value, label: i.label, vars: i.vars }))}
               rules={rules.map((r) => ({

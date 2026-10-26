@@ -141,6 +141,25 @@ export async function portalSendMessage(p: PortalCtx, raw: unknown) {
   );
 }
 
+// ── WhatsApp updates ────────────────────────────────────────────────────────
+
+/** Whether the client gets WhatsApp updates; null when the agency has no WhatsApp or no phone is on file. */
+export async function portalWhatsApp(p: PortalCtx) {
+  const { messagingStatus } = await import('./whatsapp/service');
+  if (!(await messagingStatus(p.scope))) return null;
+  const c = await run(p, (tx) => tx.client.findUnique({ where: { id: p.client.id }, select: { phone: true, phoneNormalized: true, waOptIn: true } }));
+  return c?.phoneNormalized ? { on: c.waOptIn, phone: c.phone ?? c.phoneNormalized } : null;
+}
+
+/** The client turns WhatsApp updates on or off themselves; the consent is logged and audited. */
+export async function portalSetWhatsApp(p: PortalCtx, on: boolean) {
+  await run(p, async (tx) => {
+    await tx.client.update({ where: { id: p.client.id }, data: { waOptIn: on, waOptInAt: on ? new Date() : null } });
+    await logActivity(tx, { ...p.scope, actorId: null }, { type: 'WHATSAPP', summary: on ? 'Client turned on WhatsApp updates in the portal' : 'Client turned off WhatsApp updates in the portal', clientId: p.client.id });
+  });
+  await audit({ tenantId: p.scope.tenantId, actorId: null }, 'client.whatsapp_consent', `${p.client.ref}: WhatsApp updates ${on ? 'on' : 'off'} (portal)`, { clientId: p.client.id, on }); // with the request's IP and browser
+}
+
 // ── Payments ────────────────────────────────────────────────────────────────
 
 export async function portalPayLink(p: PortalCtx, invoiceId: string) {

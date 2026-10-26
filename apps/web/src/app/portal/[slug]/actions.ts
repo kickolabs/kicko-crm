@@ -98,6 +98,13 @@ export async function portalSignAction(slug: string, documentId: string, _: Prev
   return res;
 }
 
+/** A real form, so the switch works before the page's JavaScript loads. */
+export async function portalWhatsAppAction(slug: string, on: boolean, _: Prev, _fd: FormData) {
+  const res = await run(async () => portal.portalSetWhatsApp(await session(slug), on), on ? 'WhatsApp updates are on' : 'WhatsApp updates are off');
+  revalidatePath(`/portal/${slug}`);
+  return res;
+}
+
 export async function portalIntakeAction(slug: string, _: Prev, fd: FormData) {
   const res = await run(async () => savePortalIntake(await session(slug), packRaw(fd) ?? {}), 'Thank you');
   revalidatePath(`/portal/${slug}`, 'layout');

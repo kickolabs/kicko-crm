@@ -122,10 +122,10 @@ async function runAction(tx: Tx, scope: Scope, a: Action, e: Event): Promise<str
 async function sendOutside(scope: Scope, a: Action, e: Event): Promise<string> {
   if (!e.clientId && !e.leadId) return 'No contact to message';
   if (a.type === 'whatsapp') {
-    const { sendTemplate } = await import('./whatsapp/service');
+    const { sendUpdate } = await import('./whatsapp/service');
     const contact = e.clientId ? { kind: 'client' as const, id: e.clientId } : { kind: 'lead' as const, id: e.leadId! };
-    await sendTemplate(scope, contact, a.template, [e.words?.firstName ?? '', e.words?.stage ?? e.words?.document ?? '', e.words?.workflow ?? ''], { language: a.language, authorId: null, caseId: e.caseId });
-    return `WhatsApp "${a.template}"`;
+    const via = await sendUpdate(scope, contact, a.template, [e.words?.firstName ?? '', e.words?.stage ?? e.words?.document ?? '', e.words?.workflow ?? ''], { language: a.language, caseId: e.caseId });
+    return via === 'email' ? `"${a.template}" emailed (no WhatsApp opt-in)` : `WhatsApp "${a.template}"`;
   }
   if (a.type === 'email') {
     const { sendEmail, textToHtml } = await import('./email');

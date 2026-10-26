@@ -45,6 +45,16 @@ export function ProfileForm({ slug, client, team }: { slug: string; client: Clie
         <FormField label="Address" name="address" className="sm:col-span-2 lg:col-span-3">
           <Textarea name="address" defaultValue={client.address ?? ''} className="min-h-16" />
         </FormField>
+        <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
+          <input type="hidden" name="waOptInShown" value="1" />
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="waOptIn" defaultChecked={client.waOptIn} className="h-4 w-4 accent-[#121417]" />
+            They agreed to receive WhatsApp updates
+          </label>
+          <span className="pl-6 text-xs text-muted">
+            {client.waOptIn && client.waOptInAt ? `Opted in on ${client.waOptInAt.toISOString().slice(0, 10)}. ` : ''}Tick only when the client said yes. Untick if they ask you to stop.
+          </span>
+        </div>
       </div>
       <div className="flex justify-end"><SubmitButton>Save profile</SubmitButton></div>
     </ActionForm>

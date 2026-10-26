@@ -205,6 +205,64 @@ test.describe.serial('Phase 4 · WhatsApp (sandbox)', () => {
     await expect(page.getByText('Template · portal_link')).toBeVisible();
   });
 
+  test('no opt-in: the stage update goes by email; the client turns WhatsApp on in the portal', async ({ browser }) => {
+    // Staff record that the client asked to stop, and add an email address.
+    await page.goto(`/${slug}/cases`);
+    await page.getByRole('link', { name: 'Karthik S' }).click();
+    await page.waitForURL(/\/cases\//);
+    const caseUrl = page.url();
+    await page.getByRole('link', { name: 'Karthik S' }).first().click();
+    await page.waitForURL(/\/clients\//);
+    const clientUrl = page.url().split('?')[0]!;
+    await page.goto(`${clientUrl}?tab=profile`);
+    const box = page.getByLabel('They agreed to receive WhatsApp updates');
+    await expect(box).toBeChecked(); // messaging first counted as opt-in
+    await box.uncheck();
+    await page.getByLabel('Email').fill(`karthik-${run}@example.test`);
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByText('Profile saved.')).toBeVisible();
+
+    // The stage automation emails the same words instead (WhatsApp window closed too).
+    await page.goto(caseUrl);
+    await page.getByRole('button', { name: /Advance to/ }).click();
+    await expect(page.getByText(/"case_update" (emailed|recorded as email).*no WhatsApp opt-in/)).toBeVisible();
+
+    // The client switches WhatsApp updates on in the portal.
+    await page.goto(clientUrl);
+    await page.getByRole('button', { name: 'Create portal link' }).click();
+    const link = await page.getByLabel('Portal link').inputValue();
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    try {
+      await p.goto(link);
+      await p.getByRole('button', { name: 'Open my portal' }).click();
+      await p.waitForURL(`**/portal/${slug}`);
+      await p.getByRole('button', { name: 'Turn on WhatsApp updates' }).click();
+      await expect(p.getByRole('button', { name: 'Turn off WhatsApp updates' })).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
+    const db = new Pg(DB);
+    await db.connect();
+    try {
+      const { rows } = await db.query(
+        `SELECT c."waOptIn", (SELECT count(*)::int FROM "AuditEvent" a WHERE a."tenantId" = c."tenantId" AND a.action = 'client.whatsapp_consent') AS audited
+         FROM "Client" c WHERE c."phoneNormalized" = $1`,
+        [phone],
+      );
+      expect(rows[0]).toMatchObject({ waOptIn: true, audited: 1 });
+    } finally {
+      await db.end();
+    }
+    await page.goto(`${clientUrl}?tab=profile`);
+    await expect(page.getByLabel('They agreed to receive WhatsApp updates')).toBeChecked();
+
+    // The agency can turn the email fallback off.
+    await page.goto(`/${slug}/settings?tab=whatsapp`);
+    await page.getByRole('button', { name: 'Email fallback: On' }).click();
+    await expect(page.getByRole('button', { name: 'Email fallback: Off' })).toBeVisible();
+  });
+
   test('no browser console errors across the WhatsApp screens', () => {
     expect(consoleErrors).toEqual([]);
   });

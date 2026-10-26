@@ -99,7 +99,7 @@ export async function updateClientAction(slug: string, clientId: string, _: Prev
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'client.write');
-    await clients.updateClientProfile(scopeOf(ctx), clientId, formObject(fd));
+    await clients.updateClientProfile(scopeOf(ctx), clientId, formObject(fd), fd.has('waOptInShown'));
   }, 'Profile saved');
   refresh(slug);
   return res;

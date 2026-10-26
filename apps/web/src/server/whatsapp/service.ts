@@ -187,6 +187,45 @@ export async function sendTemplate(
   });
 }
 
+/** Settings → WhatsApp: email automatic updates to contacts who haven't opted in (on unless turned off). */
+export const emailFallbackOn = (settings: Scope['settings']) => settings.messaging?.emailFallback !== false;
+
+/**
+ * An automatic update (automations and rules): WhatsApp when the contact opted in or
+ * the 24-hour window is open; otherwise, if the agency allows it and there's an
+ * email address, the same words by email. Throws when neither can go.
+ */
+export async function sendUpdate(
+  scope: Scope,
+  contact: Contact,
+  name: string,
+  params: string[],
+  opts: { language?: string; caseId?: string | null } = {},
+): Promise<'whatsapp' | 'email'> {
+  const { row, tpl, tenant } = await inTenant(scope, async (tx) => ({
+    row: await loadContact(tx, contact),
+    tpl: await tx.whatsAppTemplate.findFirst({ where: { name, ...(opts.language ? { language: opts.language } : {}), status: 'APPROVED' } }),
+    tenant: await tx.tenant.findUnique({ where: { id: scope.tenantId }, select: { name: true } }),
+  }));
+  const canWhatsApp = Boolean(row.phoneNormalized) && (row.waOptIn || windowOpen(row.waLastInbound));
+  if (canWhatsApp || !tpl || !row.email || !emailFallbackOn(scope.settings)) {
+    await sendTemplate(scope, contact, name, params, { language: opts.language, authorId: null, caseId: opts.caseId });
+    return 'whatsapp';
+  }
+  const agency = scope.settings.billing?.legalName || tenant?.name || 'Your agency';
+  const { sendEmail } = await import('../email');
+  const r = await sendEmail({ to: row.email, subject: `An update from ${agency}`, text: `${renderTemplate(tpl.body, params.slice(0, tpl.variables))}\n\n${agency}` }, scope.tenantId);
+  await inTenant(scope, (tx) =>
+    logActivity(tx, scope, {
+      type: 'EMAIL',
+      summary: `"${tpl.name}" ${r.sent ? 'emailed' : 'recorded as email (sending not set up)'}: no WhatsApp opt-in`,
+      ...link(contact),
+      caseId: opts.caseId ?? undefined,
+    }),
+  );
+  return 'email';
+}
+
 export async function setOptIn(scope: Scope, contact: Contact, optIn: boolean) {
   return inTenant(scope, async (tx) => {
     const data = { waOptIn: optIn, waOptInAt: optIn ? new Date() : null };

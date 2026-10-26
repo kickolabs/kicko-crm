@@ -57,6 +57,8 @@ export type TenantSettings = {
     end: string;
     booking: boolean;
   };
+  /** WhatsApp: email automatic updates to contacts without a WhatsApp opt-in (default on). */
+  messaging?: { emailFallback?: boolean };
   /** AI voice agent: qualification calls and inbound receptionist. */
   voiceAgent?: {
     name: string;

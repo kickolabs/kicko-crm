@@ -3,9 +3,9 @@
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
-import { Spinner } from '@/components/forms';
+import { ActionForm, Spinner, SubmitButton } from '@/components/forms';
 import { buttonCls } from '@/components/ui';
-import { portalCancelAction, portalFinishUploadAction, portalPayAction, portalStartUploadAction } from './actions';
+import { portalCancelAction, portalFinishUploadAction, portalPayAction, portalStartUploadAction, portalWhatsAppAction } from './actions';
 
 const EXT: Record<string, string> = {
   pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic',
@@ -150,5 +150,23 @@ export function CancelAppointment({ slug, id }: { slug: string; id: string }) {
       </button>
       {error && <span role="alert" className="text-[11px] text-danger">{error}</span>}
     </span>
+  );
+}
+
+/** The client's own switch for WhatsApp updates (their consent, recorded with time and IP). */
+export function WhatsAppUpdates({ slug, on, phone, agency }: { slug: string; on: boolean; phone: string; agency: string }) {
+  return (
+    <section aria-label="WhatsApp updates" className="card flex flex-col gap-3 p-5">
+      <span className="eyebrow">WhatsApp updates</span>
+      <p className="text-sm text-ink-2">
+        {on
+          ? `You get updates about your application from ${agency} on WhatsApp at ${phone}.`
+          : `Get a WhatsApp message at ${phone} when your application moves forward, a document is needed or a payment is due.`}
+      </p>
+      <ActionForm action={portalWhatsAppAction.bind(null, slug, !on)}>
+        <SubmitButton variant={on ? 'ghost' : 'primary'} className="w-full">{on ? 'Turn off WhatsApp updates' : 'Turn on WhatsApp updates'}</SubmitButton>
+      </ActionForm>
+      {on && <span className="text-xs text-muted">You can also reply STOP to any message.</span>}
+    </section>
   );
 }

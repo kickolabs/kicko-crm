@@ -7,6 +7,7 @@ import {
   deleteAutomationAction,
   sandboxOutboxAction,
   saveAutomationAction,
+  setEmailFallbackAction,
   simulateInboundAction,
   syncTemplatesAction,
   toggleAutomationAction,
@@ -73,18 +74,28 @@ export function AutomationsCard({
   triggers,
   stages,
   templates,
+  emailFallback,
 }: {
   slug: string;
   rules: Rule[];
   triggers: { value: string; label: string; vars: string[] }[];
   stages: { key: string; name: string }[];
   templates: Tpl[];
+  emailFallback: boolean;
 }) {
   const [trigger, setTrigger] = useState(triggers[0]!.value);
   const info = triggers.find((t) => t.value === trigger)!;
   return (
     <Card>
-      <CardHeader title="Automations" sub="Send a WhatsApp template automatically when something happens. Only to clients who opted in." />
+      <CardHeader title="Automations" sub="Send a WhatsApp template automatically when something happens. WhatsApp goes only to clients who opted in." />
+      <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3 text-sm">
+        <span className="min-w-0 flex-1">
+          <strong>No WhatsApp opt-in?</strong> Email the same update instead (when the client has an email address).
+        </span>
+        <ActionButton action={() => setEmailFallbackAction(slug, !emailFallback)} variant={emailFallback ? 'secondary' : 'ghost'}>
+          <span className="sr-only">Email fallback: </span>{emailFallback ? 'On' : 'Off'}
+        </ActionButton>
+      </div>
       <ul className="divide-y divide-line">
         {rules.length === 0 && <li className="px-5 py-4 text-sm text-muted">No automations yet.</li>}
         {rules.map((r) => (

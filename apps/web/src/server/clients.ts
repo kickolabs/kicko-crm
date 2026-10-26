@@ -33,6 +33,8 @@ export const clientProfileInput = z.object({
   maritalStatus: opt,
   address: opt,
   ownerId: opt,
+  // A checkbox: present ("on") when ticked. Left out entirely, the opt-in is unchanged.
+  waOptIn: z.string().optional(),
 });
 
 const scoreLike = z.string().trim().max(20).optional().default('');
@@ -69,8 +71,10 @@ export const workInput = z.array(
   }),
 );
 
-export async function updateClientProfile(scope: Scope, clientId: string, raw: unknown) {
+/** `waOptInShown`: the form had the WhatsApp checkbox, so an unticked box means opted out. */
+export async function updateClientProfile(scope: Scope, clientId: string, raw: unknown, waOptInShown = false) {
   const input = clientProfileInput.parse(raw);
+  const optIn = waOptInShown ? input.waOptIn === 'on' : undefined;
   const phoneNormalized = normalizePhone(input.phone, scope.country);
   const email = normalizeEmail(input.email);
   return inTenant(scope, async (tx) => {
@@ -95,9 +99,13 @@ export async function updateClientProfile(scope: Scope, clientId: string, raw: u
         maritalStatus: input.maritalStatus,
         address: input.address,
         ownerId: input.ownerId,
+        ...(optIn !== undefined && optIn !== client.waOptIn ? { waOptIn: optIn, waOptInAt: optIn ? new Date() : null } : {}),
       },
     });
     await logActivity(tx, scope, { type: 'PROFILE_UPDATED', summary: 'Profile updated', clientId });
+    if (optIn !== undefined && optIn !== client.waOptIn) {
+      await logActivity(tx, scope, { type: 'WHATSAPP', summary: optIn ? 'WhatsApp opt-in recorded (client agreed)' : 'WhatsApp opt-out recorded', clientId });
+    }
   });
 }
 

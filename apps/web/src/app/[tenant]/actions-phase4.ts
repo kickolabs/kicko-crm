@@ -77,6 +77,18 @@ export async function toggleAutomationAction(slug: string, id: string, active: b
   return res;
 }
 
+export async function setEmailFallbackAction(slug: string, on: boolean) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    const { prisma } = await import('@kicko/db');
+    await prisma.tenant.update({ where: { id: ctx.tenant.id }, data: { settings: { ...ctx.tenant.settings, messaging: { ...ctx.tenant.settings.messaging, emailFallback: on } } } });
+    await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id }, 'settings.messaging', on ? 'Email updates to clients without a WhatsApp opt-in: on' : 'Email updates to clients without a WhatsApp opt-in: off');
+  });
+  refresh(slug);
+  return res;
+}
+
 export async function deleteAutomationAction(slug: string, id: string) {
   const ctx = await getCtx(slug);
   const res = await run(async () => {

@@ -1,7 +1,7 @@
 import 'server-only';
 import type { AutomationTrigger } from '@kicko/db';
 import { logActivity, inTenant, type Scope } from '../scope';
-import { messagingStatus, sendTemplate } from './service';
+import { messagingStatus, sendUpdate } from './service';
 
 // "When X happens, send WhatsApp template Y." Called after the triggering change
 // has committed. Never throws: a failed WhatsApp send must not undo business data.
@@ -29,11 +29,8 @@ export async function fireAutomation(
     let sent = 0;
     for (const rule of rules) {
       try {
-        await sendTemplate(scope, { kind: 'client', id: ctx.clientId }, rule.templateName, ctx.vars, {
-          language: rule.language,
-          authorId: null, // automation
-          caseId: ctx.caseId,
-        });
+        // WhatsApp, or email when the client hasn't opted in (if the agency allows it).
+        await sendUpdate(scope, { kind: 'client', id: ctx.clientId }, rule.templateName, ctx.vars, { language: rule.language, caseId: ctx.caseId });
         sent++;
       } catch (err) {
         await inTenant(scope, (tx) =>

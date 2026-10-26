@@ -6,12 +6,12 @@ import { countryName } from '@/lib/countries';
 import { fmtDate, fmtDateTime } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { stagesOf } from '@/server/cases';
-import { getPortalHome } from '@/server/portal';
+import { getPortalHome, portalWhatsApp } from '@/server/portal';
 import { requirePortal } from '@/server/portal-auth';
 import { connectionSummary } from '@/integrations/core/connections';
 import { PortalShell } from './portal-shell';
 import { portalQuestions } from '@/server/forms';
-import { CancelAppointment, CopyText, NeedItem, PayButton } from './portal-widgets';
+import { CancelAppointment, CopyText, NeedItem, PayButton, WhatsAppUpdates } from './portal-widgets';
 
 export const metadata = { title: 'Your visa journey', robots: { index: false } };
 
@@ -42,6 +42,7 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
   const welcome = p.scope.settings.portal?.welcome;
   const questions = await portalQuestions(p);
   const intake = await intakeWaiting(p);
+  const whatsapp = await portalWhatsApp(p);
 
   return (
     <PortalShell slug={slug} agency={p.tenantName} active="journey" unread={home.unread}>
@@ -184,6 +185,8 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
               <Link href={`/portal/${slug}/book`} className="flex h-10 flex-1 items-center justify-center rounded-[11px] bg-ink font-semibold text-paper">Book a meeting</Link>
             </div>
           </section>
+
+          {whatsapp && <WhatsAppUpdates slug={slug} on={whatsapp.on} phone={whatsapp.phone} agency={p.tenantName} />}
 
           {home.appointments.length > 0 && (
             <section aria-label="Upcoming meetings" className="card flex flex-col gap-2 p-5">
