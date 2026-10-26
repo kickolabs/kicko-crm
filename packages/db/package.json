@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./visa-catalog": "./src/visa-catalog.ts",
-    "./provision": "./src/provision.ts"
+    "./provision": "./src/provision.ts",
+    "./library": "./src/library.ts"
   },
   "scripts": {
     "start": "node scripts/dev-db.mjs",

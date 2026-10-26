@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import * as lib from '@/server/admin-library';
 import { z } from 'zod';
 import { formObject, run, type ActionResult } from '@/lib/action';
 import { addNote, extendTrial, resolveTrialReview, grantCredits, reactivateAgency, requireAdmin, setDiscount, setManualPlan, suspendAgency } from '@/server/admin';
@@ -63,4 +65,51 @@ export async function reactivateAction(tenantId: string, prev: ActionResult | nu
 
 export async function noteAction(tenantId: string, prev: ActionResult | null, fd: FormData) {
   return act((a, i) => addNote(a, tenantId, z.string().max(2000).parse(i.note ?? '')), 'Note saved')(prev, fd);
+}
+
+// ─── Reference library ──────────────────────────────────────────────────────
+
+export async function saveLibraryItemAction(id: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const raw = formObject(fd);
+  return run(async () => {
+    const changed = await lib.saveLibraryItem(id, { ...raw, unverified: raw.unverified === 'on' } as never);
+    revalidatePath('/admin/library', 'layout');
+    return changed;
+  }, 'Saved as a new version');
+}
+
+export async function markVerifiedAction(id: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  return run(async () => {
+    await lib.markVerified(id, String(fd.get('note') ?? '').trim() || undefined);
+    revalidatePath('/admin/library', 'layout');
+  }, 'Marked as verified today');
+}
+
+export async function setLibraryStatusAction(id: string, status: 'published' | 'archived') {
+  await requireAdmin();
+  return run(async () => {
+    await lib.setLibraryStatus(id, status);
+    revalidatePath('/admin/library', 'layout');
+  });
+}
+
+export async function createLibraryItemAction(_: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const res = await run(async () => (await lib.createLibraryItem(formObject(fd) as never)).id);
+  if (res.ok && res.data) redirect(`/admin/library/${res.data}`);
+  return res;
+}
+
+export async function importLibraryAction(packId: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const file = fd.get('file');
+  if (!(file instanceof File) || !file.size) return { ok: false, error: 'Choose a library.json file' };
+  if (file.size > 20 * 1024 * 1024) return { ok: false, error: 'That file is over 20 MB' };
+  return run(async () => {
+    const r = await lib.importLibraryJson(packId, await file.text());
+    revalidatePath('/admin/library', 'layout');
+    return r;
+  });
 }

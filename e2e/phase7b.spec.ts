@@ -198,6 +198,46 @@ test.describe.serial('Phase 7b · super-admin console', () => {
     expect(row!.status).toBe('trialing');
   });
 
+  test('reference library: add, edit (new version), verify and archive an item', async () => {
+    const key = `e2e_${run}`;
+    try {
+      await admin.goto('/admin/library');
+      await expect(admin.getByRole('heading', { name: /Reference library/ })).toBeVisible();
+      await expect(admin.getByText('Countries').first()).toBeVisible();
+      await admin.getByLabel('Type').selectOption('occupation');
+      await admin.getByLabel('Key', { exact: true }).fill(key);
+      await admin.getByLabel('Name', { exact: true }).fill('E2E welder');
+      await admin.getByRole('button', { name: 'Add', exact: true }).click();
+      await admin.waitForURL(/\/admin\/library\/[a-z0-9]+$/);
+      await expect(admin.getByText(/version 1/)).toBeVisible();
+
+      await admin.getByLabel('Data (JSON)').fill('{ "group": "construction_trades", "iscoCode": "7212" }');
+      await admin.getByLabel('Sources (JSON)').fill('[{ "url": "https://www.ilo.org/public/english/bureau/stat/isco/isco08/", "title": "ISCO-08", "official": true, "verifiedAt": "2026-10-26" }]');
+      await admin.getByRole('button', { name: 'Save new version' }).click();
+      await expect(admin.getByText(/Saved as a new version/)).toBeVisible();
+      await admin.reload();
+      await expect(admin.getByText(/version 2/)).toBeVisible();
+
+      await admin.getByLabel('Sources (JSON)').fill('not json');
+      await admin.getByRole('button', { name: 'Save new version' }).click();
+      await expect(admin.getByText('Sources is not valid JSON').first()).toBeVisible();
+
+      await admin.getByLabel('What did you check?').fill('ISCO code');
+      await admin.getByRole('button', { name: 'Mark verified' }).click();
+      await expect(admin.getByText('Marked as verified today.')).toBeVisible();
+      admin.once('dialog', (d) => void d.accept());
+      await admin.getByRole('button', { name: 'Archive' }).click();
+      await expect(admin.getByRole('button', { name: 'Publish again' })).toBeVisible();
+      const [row] = await q<{ version: number; status: string; changes: number }>(
+        `SELECT i.version, i.status, (SELECT count(*)::int FROM "LibraryChange" c WHERE c."itemId" = i.id) AS changes FROM "LibraryItem" i WHERE i.key = $1`,
+        [key],
+      );
+      expect(row).toEqual({ version: 3, status: 'archived', changes: 4 });
+    } finally {
+      await q(`DELETE FROM "LibraryItem" WHERE key = $1`, [key]);
+    }
+  });
+
   test('no browser console errors', async () => {
     expect(consoleErrors).toEqual([]);
   });

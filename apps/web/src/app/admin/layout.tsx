@@ -17,6 +17,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <span className="font-bold">Kicko</span>
           <span className="rounded bg-lime px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-ink">ADMIN</span>
         </Link>
+        <nav className="ml-4 flex gap-1 text-xs font-semibold">
+          <Link href="/admin" className="rounded-[9px] px-2.5 py-1 text-paper/80 hover:bg-paper/10 hover:text-paper">Agencies</Link>
+          <Link href="/admin/library" className="rounded-[9px] px-2.5 py-1 text-paper/80 hover:bg-paper/10 hover:text-paper">Library</Link>
+        </nav>
         <span className="ml-auto text-xs text-paper/60">{admin.email}</span>
         <form action={signOutAction}>
           <button type="submit" className="rounded-[9px] px-2.5 py-1 text-xs font-semibold text-paper/80 hover:bg-paper/10 hover:text-paper">Sign out</button>
