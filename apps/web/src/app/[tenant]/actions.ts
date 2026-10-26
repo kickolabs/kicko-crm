@@ -17,6 +17,8 @@ import * as team from '@/server/team';
 import * as settings from '@/server/settings';
 import * as workflows from '@/server/workflows';
 import * as vault from '@/server/vault';
+import * as docTemplates from '@/server/doc-templates';
+import * as lists from '@/server/lists';
 
 type Prev = ActionResult | null;
 
@@ -451,6 +453,62 @@ export async function deleteVaultAction(slug: string, id: string) {
   const res = await run(async () => {
     assertCan(ctx, 'client.write');
     await vault.deleteVaultEntry(scopeOf(ctx), id);
+  });
+  refresh(slug);
+  return res;
+}
+
+// ─── Document templates ─────────────────────────────────────────────────────
+
+export async function generateDocumentAction(slug: string, caseId: string, templateId: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'document.write');
+    const r = await docTemplates.generateDocument(scopeOf(ctx), caseId, templateId, ctx.tenant.name);
+    return r.missing;
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function saveTemplateAction(slug: string, id: string | null, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const raw = formObject(fd);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await docTemplates.saveTemplate(scopeOf(ctx), id, { ...raw, signature: raw.signature === 'on', active: raw.active === 'on' } as never);
+  }, 'Template saved');
+  refresh(slug);
+  return res;
+}
+
+// ─── Lists & pack fields ────────────────────────────────────────────────────
+
+export async function addOwnItemAction(slug: string, type: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await lists.addOwnItem(scopeOf(ctx), { ...formObject(fd), type } as never);
+  }, 'Added');
+  refresh(slug);
+  return res;
+}
+
+export async function setLibraryHiddenAction(slug: string, type: string, key: string, hidden: boolean) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await lists.setLibraryHidden(scopeOf(ctx), type, key, hidden);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function setFieldHiddenAction(slug: string, entity: 'leads' | 'clients' | 'cases', key: string, hidden: boolean) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await lists.setFieldHidden(scopeOf(ctx), entity, key, hidden);
   });
   refresh(slug);
   return res;

@@ -1,5 +1,6 @@
 import type { ChecklistItem, LibrarySeedItem, PackManifest, Stage, WorkflowTemplate } from '../types';
 import { CATEGORY_LABEL, VISA_CATALOG } from './catalog';
+import { DOCUMENT_TEMPLATES } from './templates';
 
 // The Immigration Consultancy pack: every destination country, visa pathways with
 // eligibility, steps, documents and official sources, occupations, and the applicant
@@ -150,6 +151,7 @@ export const immigrationPack: PackManifest = {
   ],
   starterWorkflows: () =>
     VISA_CATALOG.map((p) => ({ ...p, stages: p.stages.map((s) => (s.key === 'lodged' ? { ...s, lodged: true } : s)) })),
+  documentTemplates: () => DOCUMENT_TEMPLATES,
   genericWorkflows: () =>
     Object.entries(GENERIC).map(([category, g]) => ({ code: `GENERIC_${category}`, country: '', category, name: g.name, stages: g.stages, checklist: g.checklist })),
   workflowFromLibrary(item) {

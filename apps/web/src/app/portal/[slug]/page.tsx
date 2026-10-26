@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import Link from 'next/link';
+import { SignItem } from './sign-item';
 import { countryName } from '@/lib/countries';
 import { fmtDate, fmtDateTime } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
@@ -27,7 +28,10 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
       .filter((d) => d.status === 'PENDING' || d.status === 'REJECTED' || d.status === 'UPLOADED')
       .map((d) => ({ ...d, caseRef: c.ref })),
   );
-  const todo = needs.filter((d) => d.status !== 'UPLOADED' && d.required);
+  // Documents the agency sent for signature are signed here, not uploaded.
+  const toSign = needs.filter((d) => d.body && (d.signature as { signedAt?: string } | null) && !(d.signature as { signedAt?: string }).signedAt);
+  const signIds = new Set(toSign.map((d) => d.id));
+  const todo = needs.filter((d) => d.status !== 'UPLOADED' && d.required && !signIds.has(d.id));
   const optional = needs.filter((d) => d.status !== 'UPLOADED' && !d.required);
   const checking = needs.filter((d) => d.status === 'UPLOADED');
   const dues = home.invoices.flatMap((inv) =>
@@ -98,8 +102,9 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
           {openCases.length > 0 && (
             <>
               <h2 className="text-[26px] font-extrabold tracking-[-0.035em]">
-                {todo.length ? `${todo.length} thing${todo.length === 1 ? '' : 's'} we need from you` : 'Nothing needed from you right now'}
+                {todo.length + toSign.length ? `${todo.length + toSign.length} thing${todo.length + toSign.length === 1 ? '' : 's'} we need from you` : 'Nothing needed from you right now'}
               </h2>
+              {toSign.map((d) => <SignItem key={d.id} slug={slug} doc={{ id: d.id, name: d.name, body: d.body! }} />)}
               {todo.map((d) => (
                 <NeedItem key={d.id} slug={slug} doc={{ id: d.id, name: d.name, group: d.group, status: d.status, rejectionReason: d.rejectionReason }} />
               ))}

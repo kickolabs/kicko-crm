@@ -580,6 +580,11 @@ model Document {
   verifiedBy      String?
   verifiedAt      DateTime?
   sortOrder       Int            @default(0)
+  // Generated from a template: the text as sent (kept, so later template edits don't change it)
+  templateId      String?
+  body            String?
+  // Signing: { requestedAt, signedAt?, name?, ip?, userAgent?, hash? } (hash = SHA-256 of body)
+  signature       Json?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   files           DocumentFile[]
@@ -1233,6 +1238,23 @@ model FormRequest {
   completedAt DateTime?
 
   @@index([tenantId, clientId, status])
+}
+
+// Agreements, letters and forms with {{merge.fields}}; packs ship starters, agencies edit.
+model DocTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  packId    String?
+  key       String?
+  name      String
+  kind      String   @default("letter") // agreement | letter | form
+  signature Boolean  @default(false)
+  body      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, active])
 }
 
 // ─── Phase 6a: sub-agent network ────────────────────────────────────────────

@@ -7,6 +7,8 @@ import * as portal from '@/server/portal';
 import { endPortalSession, getPortal, redeemLoginToken, requestLoginLink, requestLoginLinkByPhone } from '@/server/portal-auth';
 import { UserError } from '@/server/scope';
 import { portalSaveAnswers } from '@/server/forms';
+import { requestMeta } from '@/server/audit';
+import { signDocument } from '@/server/doc-templates';
 
 type Prev = ActionResult | null;
 
@@ -81,5 +83,15 @@ export async function portalBookAction(slug: string, _: Prev, fd: FormData): Pro
 export async function portalCancelAction(slug: string, appointmentId: string) {
   const res = await run(async () => portal.portalCancelAppointment(await session(slug), appointmentId));
   revalidatePath(`/portal/${slug}`);
+  return res;
+}
+
+export async function portalSignAction(slug: string, documentId: string, _: Prev, fd: FormData) {
+  const res = await run(async () => {
+    const p = await session(slug);
+    const meta = await requestMeta();
+    await signDocument(p.scope, { clientId: p.client.id, documentId, ip: meta.ip ?? null, userAgent: meta.userAgent ?? null, agencyName: p.tenantName }, { name: fd.get('name'), agree: fd.get('agree') === 'on' });
+  }, 'Signed. Thank you.');
+  revalidatePath(`/portal/${slug}`, 'layout');
   return res;
 }

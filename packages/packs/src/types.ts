@@ -119,4 +119,16 @@ export type PackManifest = {
   genericWorkflows: () => WorkflowTemplate[];
   /** Build a workflow template from a library pathway item. */
   workflowFromLibrary: (item: LibrarySeedItem) => WorkflowTemplate;
+  /** Starter document templates (agreements, letters) a workspace gets; agencies edit their copies. */
+  documentTemplates?: () => DocumentTemplateSeed[];
+};
+
+/** A document template: text with {{merge.fields}} (see the core merge engine). */
+export type DocumentTemplateSeed = {
+  key: string;
+  name: string;
+  kind: 'agreement' | 'letter' | 'form';
+  /** The client signs it in the portal. */
+  signature: boolean;
+  body: string;
 };

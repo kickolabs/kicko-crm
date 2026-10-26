@@ -162,4 +162,51 @@ test.describe.serial('Immigration pack journey', () => {
     await expect(page.getByRole('link', { name: 'Gulf Freight LLC' })).toBeVisible();
     await expect(page.getByText('AED 4,000').first()).toBeVisible();
   });
+
+  test('a retainer agreement is created from the case and signed by the client in the portal', async ({ browser }) => {
+    await page.goto(caseUrl);
+    const card = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Agreements & letters' }) });
+    await card.getByRole('listitem').filter({ hasText: 'Retainer agreement' }).getByRole('button', { name: 'Send to sign' }).click();
+    await expect(card.getByText(/Retainer agreement created/)).toBeVisible();
+
+    await page.getByRole('link', { name: 'Karthik Selvam' }).first().click();
+    await page.waitForURL(/\/clients\//);
+    await page.getByRole('button', { name: 'Create portal link' }).click();
+    const link = await page.getByLabel('Portal link').inputValue();
+
+    const ctx = await browser.newContext();
+    const client = await ctx.newPage();
+    try {
+      await client.goto(link);
+      await client.getByRole('button', { name: 'Open my portal' }).click();
+      await client.waitForURL(`**/portal/${agency.slug}`);
+      await client.getByRole('button', { name: 'Read & sign' }).click();
+      const d = client.getByRole('dialog');
+      await expect(d.getByRole('heading', { name: 'Retainer agreement' }).first()).toBeVisible();
+      await expect(d.getByText(agency.name).first()).toBeVisible();
+      await d.getByLabel('Type your full name to sign').fill('Karthik Selvam');
+      await d.getByRole('button', { name: 'Sign' }).click();
+      await expect(d.getByText('Tick the box to confirm').first()).toBeVisible(); // the checkbox is required
+      await d.getByLabel(/I have read this document/).check();
+      await d.getByRole('button', { name: 'Sign' }).click();
+      await expect(d).toBeHidden();
+      await expect(client.getByRole('button', { name: 'Read & sign' })).toHaveCount(0);
+    } finally {
+      await ctx.close();
+    }
+    const db = new Pg('postgresql://postgres:postgres@localhost:5433/kicko');
+    await db.connect();
+    try {
+      const { rows } = await db.query(
+        `SELECT d.signature, (SELECT count(*)::int FROM "DocumentFile" f WHERE f."documentId" = d.id) AS files,
+                (SELECT count(*)::int FROM "AuditEvent" a WHERE a."tenantId" = d."tenantId" AND a.action = 'document.signed') AS audited
+         FROM "Document" d JOIN "Tenant" t ON t.id = d."tenantId" WHERE t.slug = $1 AND d.name = 'Retainer agreement'`,
+        [agency.slug],
+      );
+      expect(rows[0].signature).toMatchObject({ name: 'Karthik Selvam', hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      expect(rows[0]).toMatchObject({ files: 2, audited: 1 });
+    } finally {
+      await db.end();
+    }
+  });
 });

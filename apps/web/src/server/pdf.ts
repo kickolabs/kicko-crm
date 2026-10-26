@@ -412,3 +412,74 @@ export async function renderPlatformInvoicePdf(input: {
   footer(w, page, { name: input.seller.legalName });
   return Buffer.from(await doc.save());
 }
+
+// ─── Generated documents (agreements, letters) ─────────────────────────────
+
+export type PdfSignature = { name: string; at: string; ip?: string | null; hash: string };
+
+/**
+ * A template-generated document as an A4 PDF: the agency's letterhead, the blocks of the
+ * rendered template, and, once signed, the signature block with its audit details.
+ */
+export async function documentPdf(o: { agency: PdfAgency; title: string; blocks: { kind: string; text: string }[]; signature?: PdfSignature | null; tz: string }) {
+  const { doc, fonts } = await setup();
+  const W = 595.28;
+  const H = 841.89;
+  const M = 56;
+  let page = doc.addPage([W, H]);
+  let w = new Writer(page, fonts);
+  let y = H - M;
+  const header = () => {
+    page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: LIME });
+    w.text(o.agency.legalName ?? o.agency.name, M, y, { size: 11, bold: true });
+    if (o.agency.address) w.text(o.agency.address.split('\n')[0]!, M, y - 14, { size: 8, color: MUTED });
+    y -= 44;
+  };
+  const need = (h: number) => {
+    if (y - h > M) return;
+    page = doc.addPage([W, H]);
+    w = new Writer(page, fonts);
+    y = H - M;
+    header();
+  };
+  header();
+  const clean = (s: string) => s.replace(/\*\*/g, '');
+  for (const b of o.blocks) {
+    if (b.kind === 'h1') {
+      need(40);
+      w.text(clean(b.text), M, y, { size: 18, bold: true });
+      y -= 30;
+    } else if (b.kind === 'h2') {
+      need(30);
+      y -= 6;
+      w.text(clean(b.text), M, y, { size: 11, bold: true });
+      y -= 18;
+    } else if (b.kind === 'li') {
+      need(20);
+      w.text('•', M + 2, y, { size: 9.5 });
+      y = w.para(clean(b.text), M + 14, y, W - 2 * M - 14, { size: 9.5 }) - 2;
+    } else if (b.kind === 'hr') {
+      need(16);
+      page.drawLine({ start: { x: M, y: y + 4 }, end: { x: W - M, y: y + 4 }, thickness: 0.6, color: LINE });
+      y -= 14;
+    } else if (b.kind === 'sign') {
+      need(110);
+      y -= 8;
+      if (o.signature) {
+        page.drawRectangle({ x: M, y: y - 74, width: W - 2 * M, height: 84, color: PAPER });
+        w.text('Signed electronically', M + 12, y - 8, { size: 8, bold: true, color: MUTED });
+        w.text(o.signature.name, M + 12, y - 30, { size: 16, bold: true });
+        w.text(`${fmtD(new Date(o.signature.at), o.tz)} · ${new Date(o.signature.at).toISOString().replace('T', ' ').slice(0, 19)} UTC${o.signature.ip ? ` · IP ${o.signature.ip}` : ''}`, M + 12, y - 48, { size: 8, color: MUTED });
+        w.text(`Document fingerprint (SHA-256): ${o.signature.hash}`, M + 12, y - 62, { size: 6.5, color: MUTED });
+      } else {
+        page.drawLine({ start: { x: M, y: y - 40 }, end: { x: M + 220, y: y - 40 }, thickness: 0.6, color: INK });
+        w.text('Client signature and date', M, y - 54, { size: 8, color: MUTED });
+      }
+      y -= 96;
+    } else {
+      need(28);
+      y = w.para(clean(b.text), M, y, W - 2 * M, { size: 9.5 }) - 6;
+    }
+  }
+  return Buffer.from(await doc.save());
+}

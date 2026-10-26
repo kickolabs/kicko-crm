@@ -8,7 +8,7 @@ import { tenantsForUser } from '@kicko/db/provision';
 
 export type AuditMeta = { ip?: string | null; userAgent?: string | null };
 
-async function requestMeta(): Promise<AuditMeta> {
+export async function requestMeta(): Promise<AuditMeta> {
   try {
     const h = await headers();
     return { ip: h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip'), userAgent: h.get('user-agent') };

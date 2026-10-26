@@ -13,6 +13,11 @@ import { libraryPathways, libraryUpdates } from '@/server/workflows';
 import { packForm } from '@/server/library';
 import { checklistToText, stagesToText } from '@/lib/workflow-text';
 import { PathwayInfo } from '../leads/pathway-info';
+import { FieldToggle, HideToggle, OwnItemForm, TemplateEditor } from './pack-settings';
+import { listTemplates } from '@/server/doc-templates';
+import { ownItems } from '@/server/lists';
+import { libraryList, tenantPack } from '@/server/library';
+import { CORE_FIELDS } from '@/lib/merge';
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
 import { ConnectionCard } from './connection-card';
 import { UpgradeCard } from '@/components/upgrade';
@@ -68,6 +73,8 @@ const TABS = [
   ['security', 'Security'],
   ['capture', 'Lead capture'],
   ['workflows', 'Visa workflows'],
+  ['templates', 'Agreements & letters'],
+  ['lists', 'Lists & fields'],
 ] as const;
 
 export default async function SettingsPage({
@@ -75,7 +82,7 @@ export default async function SettingsPage({
   searchParams,
 }: {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ tab?: string; product?: string; country?: string; paid?: string; group?: string; person?: string; before?: string }>;
+  searchParams: Promise<{ tab?: string; product?: string; country?: string; template?: string; list?: string; paid?: string; group?: string; person?: string; before?: string }>;
 }) {
   const { tenant: slug } = await params;
   const sp = await searchParams;
@@ -141,6 +148,8 @@ export default async function SettingsPage({
       )}
 
       {tab === 'fields' && <FieldsTab />}
+      {tab === 'templates' && <TemplatesTab slug={slug} ctx={ctx} templateId={sp.template} />}
+      {tab === 'lists' && <ListsTab slug={slug} ctx={ctx} list={sp.list} />}
 
       {tab === 'security' && <SecurityTab ctx={ctx} sp={sp} />}
 
@@ -525,6 +534,97 @@ async function WorkflowsTab({ slug, productId, country, ctx }: { slug: string; p
                 {updates.has(p.id) && <Badge tone="info">Update available</Badge>}
                 {!p.active && <Badge>Hidden</Badge>}
               </Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+async function TemplatesTab({ slug, ctx, templateId }: { slug: string; ctx: Awaited<ReturnType<typeof getCtx>>; templateId?: string }) {
+  const templates = await listTemplates(scopeOf(ctx));
+  const selected = templateId === 'new' ? null : templates.find((t) => t.id === templateId);
+  if (selected || templateId === 'new') {
+    return (
+      <Card>
+        <CardHeader title={selected?.name ?? 'New template'} action={<Link href="?tab=templates" className="text-[13px] font-semibold text-muted hover:text-ink">← All templates</Link>} />
+        <div className="p-5"><TemplateEditor slug={slug} template={selected ?? undefined} fields={CORE_FIELDS} /></div>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader
+        title="Agreements & letters"
+        sub="Created on a case from its details; agreements are signed by the client in the portal. Starting points only: have your lawyer review them."
+        action={<Link href="?tab=templates&template=new" className={buttonCls('primary', 'sm')}>+ Template</Link>}
+      />
+      <ul className="divide-y divide-line">
+        {templates.map((t) => (
+          <li key={t.id}>
+            <Link href={`?tab=templates&template=${t.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-paper-3">
+              <span className="w-24 text-xs font-bold text-muted uppercase">{t.kind}</span>
+              <span className="min-w-0 flex-1 font-semibold">{t.name}</span>
+              {t.signature && <Badge tone="info">Signed by client</Badge>}
+              {!t.active && <Badge>Not in use</Badge>}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+async function ListsTab({ slug, ctx, list }: { slug: string; ctx: Awaited<ReturnType<typeof getCtx>>; list?: string }) {
+  const scope = scopeOf(ctx);
+  const { pack, settings } = await tenantPack(scope);
+  const types = Object.entries(pack.libraryTypes).filter(([t]) => t !== pack.workflowType);
+  const type = types.some(([t]) => t === list) ? list! : (types.find(([t]) => t === 'occupation')?.[0] ?? types[0]![0]);
+  const [lib, own] = await Promise.all([libraryList(pack.id, type), ownItems(scope, pack.id, type)]);
+  const hidden = new Set(own.filter((o) => o.hidden).map((o) => o.key));
+  const mine = own.filter((o) => o.key.startsWith('own_'));
+  const groupLabels = pack.groupLabels?.[type];
+  const hiddenFields = new Set(settings.hiddenFields ?? []);
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader title="Fields on your forms" sub={`Added by the ${pack.name} pack. Hide the ones you don't use; saved values are kept.`} />
+        <ul className="divide-y divide-line">
+          {pack.fields.map((f) => {
+            const off = hiddenFields.has(`${f.entity}.${f.key}`);
+            return (
+              <li key={`${f.entity}.${f.key}`} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+                <span className="w-20 text-xs font-bold text-muted uppercase">{f.entity}</span>
+                <span className={clsx('min-w-0 flex-1 text-sm font-semibold', off && 'text-muted line-through')}>{f.label}</span>
+                <FieldToggle slug={slug} entity={f.entity} fieldKey={f.key} hidden={off} />
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+      <Card>
+        <CardHeader title="Lists" sub="From the Kicko library. Add your own entries or hide ones you never use." />
+        <div className="flex flex-wrap gap-2 px-5 pt-1">
+          {types.map(([t, def]) => (
+            <Link key={t} href={`?tab=lists&list=${t}`} className={clsx('rounded-full px-3 py-1.5 text-xs font-semibold', t === type ? 'bg-ink text-paper' : 'bg-paper-2 text-ink-2 hover:bg-paper-3')}>{def.plural}</Link>
+          ))}
+        </div>
+        <div className="p-5"><OwnItemForm slug={slug} type={type} groups={groupLabels ? Object.entries(groupLabels) : undefined} /></div>
+        <ul className="divide-y divide-line border-t border-line">
+          {mine.map((o) => (
+            <li key={o.key} className="flex items-center gap-3 px-5 py-2">
+              <span className="min-w-0 flex-1 text-sm font-semibold">{o.name} <Badge className="ml-1">Yours</Badge></span>
+              <HideToggle slug={slug} type={type} itemKey={o.key} hidden={false} />
+            </li>
+          ))}
+          {lib.map((o) => (
+            <li key={o.key} className="flex items-center gap-3 px-5 py-2">
+              <span className={clsx('min-w-0 flex-1 text-sm', hidden.has(o.key) && 'text-muted line-through')}>
+                {o.name}
+                {o.group && <span className="ml-2 text-xs text-muted">{groupLabels?.[o.group] ?? o.group}</span>}
+              </span>
+              <HideToggle slug={slug} type={type} itemKey={o.key} hidden={hidden.has(o.key)} />
             </li>
           ))}
         </ul>

@@ -22,6 +22,9 @@ import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-p
 import { Timeline } from '../../_components/timeline';
 import { DetailsForm, Journey, StatusControls } from './case-controls';
 import { NextActionCard, TracksCard } from './case-extras';
+import { TemplatesCard } from './templates-card';
+import { listTemplates } from '@/server/doc-templates';
+import { scopeOf } from '@/server/scope';
 import { gateProblems, mainStages, overdueDays, trackStages } from '@/lib/workflow';
 import { PathwayInfo } from '../../leads/pathway-info';
 
@@ -248,6 +251,9 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
                 })()}
               </dl>
             </Card>
+          )}
+          {can(ctx.role, 'document.write') && (
+            <TemplatesCard slug={slug} caseId={c.id} templates={(await listTemplates(scopeOf(ctx))).filter((t) => t.active).map(({ id, name, signature }) => ({ id, name, signature }))} />
           )}
           <NextActionCard slug={slug} caseId={c.id} nextAction={c.nextAction} refs={(c.refs as { label: string; value: string }[]) ?? []} blockers={blockers} canEdit={editable} />
           <TracksCard slug={slug} caseId={c.id} tracks={tracks} canEdit={editable} />
