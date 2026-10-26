@@ -1,10 +1,13 @@
 import 'server-only';
 import { accrueOnConversion } from './sub-agents';
-import { nextRef, type LeadSource, type LeadStatus, type Tx, type VisaCategory } from '@kicko/db';
+import { nextRef, type LeadSource, type LeadStatus, type Prisma, type Tx, type VisaCategory } from '@kicko/db';
 import { z } from 'zod';
 import { fullName } from '@/lib/format';
 import { normalizeEmail, normalizePhone } from '@/lib/phone';
 import { LEAD_STATUS_LABEL } from '@/lib/constants';
+import { countryCode, countryName } from '@/lib/countries';
+import { carryOver, cleanPackValues, type PackValues } from '@/lib/pack-fields';
+import { allowedKeys, tenantPack, visibleFields } from './library';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 import { openCaseTx } from './cases';
 import { defaultBranch } from './branches';
@@ -28,8 +31,9 @@ export const leadInput = z
       .transform((v) => (v ? v : undefined))
       .pipe(z.email('Enter a valid email').optional()),
     phone: optional,
-    interestCountry: optional,
-    interestCategory: z.enum(['STUDY', 'PR', 'WORK', 'VISIT', 'FAMILY']).optional().or(z.literal('').transform(() => undefined)),
+    // A code or a name ("CA", "Canada"); stored as the ISO code when we recognise it.
+    interestCountry: optional.transform((v) => (v ? (countryCode(v) ?? v) : undefined)),
+    interestCategory: z.enum(['STUDY', 'PR', 'WORK', 'VISIT', 'FAMILY', 'OTHER']).optional().or(z.literal('').transform(() => undefined)),
     productId: optional,
     ownerId: optional,
     message: z.string().trim().max(4000).optional(),
@@ -39,6 +43,30 @@ export const leadInput = z
   .refine((v) => v.email || v.phone, { message: 'Add a phone number or email', path: ['phone'] });
 
 export type LeadInput = z.input<typeof leadInput>;
+
+/** Raw pack-field values from a form (see readPackForm). */
+export type PackRaw = Record<string, string | string[]>;
+
+/** Validate pack fields for leads against the workspace's pack and library. */
+async function cleanLeadPack(scope: Scope, raw: PackRaw | undefined, prev: PackValues = {}) {
+  if (!raw) return null;
+  const { pack, settings } = await tenantPack(scope);
+  return cleanPackValues(visibleFields(pack, settings, 'leads'), raw, await allowedKeys(scope, pack), prev);
+}
+
+/**
+ * The chosen workflow must be for the chosen destination: changing the country makes
+ * an old pathway invalid. With a workflow and no country, the country is the workflow's.
+ */
+async function checkPathway(tx: Tx, productId: string | undefined, country: string | undefined) {
+  if (!productId) return country ?? null;
+  const product = await tx.visaProduct.findUnique({ where: { id: productId } });
+  if (!product) throw new UserError('Unknown visa product', 'productId');
+  if (country && product.country !== country) {
+    throw new UserError(`That visa product is for ${countryName(product.country)}. Pick one for ${countryName(country)}, or change the country.`, 'productId');
+  }
+  return product.country;
+}
 
 export type DuplicateMatch = {
   kind: 'lead' | 'client';
@@ -97,9 +125,10 @@ export type CreateLeadResult =
 export async function createLead(
   scope: Scope,
   raw: LeadInput,
-  opts: { allowDuplicate?: boolean; mergeDuplicates?: boolean; utm?: Record<string, string> } = {},
+  opts: { allowDuplicate?: boolean; mergeDuplicates?: boolean; utm?: Record<string, string>; pack?: PackRaw } = {},
 ): Promise<CreateLeadResult> {
   const input = leadInput.parse(raw);
+  const packData = await cleanLeadPack(scope, opts.pack);
   const phoneNormalized = normalizePhone(input.phone, scope.country);
   const email = normalizeEmail(input.email);
 
@@ -118,10 +147,7 @@ export async function createLead(
     }
     if (matches.length && !opts.allowDuplicate) return { status: 'duplicate', matches };
 
-    if (input.productId) {
-      const product = await tx.visaProduct.findUnique({ where: { id: input.productId } });
-      if (!product) throw new UserError('Unknown visa product');
-    }
+    const interestCountry = await checkPathway(tx, input.productId, input.interestCountry);
     let ownerId = input.ownerId ?? null;
     if (ownerId) {
       const m = await tx.membership.findUnique({ where: { tenantId_userId: { tenantId: scope.tenantId, userId: ownerId } } });
@@ -143,9 +169,10 @@ export async function createLead(
         phone: input.phone ?? null,
         phoneNormalized,
         source: input.source as LeadSource,
-        interestCountry: input.interestCountry ?? null,
+        interestCountry,
         interestCategory: (input.interestCategory as VisaCategory | undefined) ?? null,
         productId: input.productId ?? null,
+        ...(packData ? { packData: packData as Prisma.InputJsonValue } : {}),
         ownerId,
         message: input.message ?? null,
         utm: opts.utm,
@@ -189,11 +216,14 @@ export async function setLeadStatus(scope: Scope, leadId: string, status: LeadSt
   });
 }
 
-export async function updateLead(scope: Scope, leadId: string, raw: LeadInput) {
+export async function updateLead(scope: Scope, leadId: string, raw: LeadInput, pack?: PackRaw) {
   const input = leadInput.parse(raw);
+  const before = pack ? await inTenant(scope, (tx) => tx.lead.findUnique({ where: { id: leadId }, select: { packData: true } })) : null;
+  const packData = await cleanLeadPack(scope, pack, (before?.packData as PackValues) ?? {});
   return inTenant(scope, async (tx) => {
     const lead = await tx.lead.findUnique({ where: { id: leadId } });
     if (!lead) throw new UserError('Lead not found');
+    const interestCountry = await checkPathway(tx, input.productId, input.interestCountry);
     const updated = await tx.lead.update({
       where: { id: leadId },
       data: {
@@ -203,10 +233,11 @@ export async function updateLead(scope: Scope, leadId: string, raw: LeadInput) {
         phone: input.phone ?? null,
         phoneNormalized: normalizePhone(input.phone, scope.country),
         source: input.source as LeadSource,
-        interestCountry: input.interestCountry ?? null,
+        interestCountry,
         interestCategory: (input.interestCategory as VisaCategory | undefined) ?? null,
         productId: input.productId ?? null,
         message: input.message ?? lead.message,
+        ...(packData ? { packData: packData as Prisma.InputJsonValue } : {}),
       },
     });
     if (lead.ownerId !== (input.ownerId ?? null)) {
@@ -231,6 +262,10 @@ export function assignLead(scope: Scope, leadId: string, ownerId: string | null)
 
 /** Convert a lead into a client, optionally opening a case straight away. */
 export async function convertLead(scope: Scope, leadId: string, opts: { productId?: string | null }) {
+  const { pack, settings } = await tenantPack(scope);
+  const leadFields = visibleFields(pack, settings, 'leads');
+  const clientFields = visibleFields(pack, settings, 'clients');
+  const clientCustom = await inTenant(scope, (tx) => tx.customField.findMany({ where: { entity: 'clients', archived: false }, select: { key: true } }));
   return inTenant(scope, async (tx) => {
     const lead = await tx.lead.findUnique({ where: { id: leadId } });
     if (!lead) throw new UserError('Lead not found');
@@ -264,10 +299,29 @@ export async function convertLead(scope: Scope, leadId: string, opts: { productI
     if (existing && lead.subAgentId && !existing.subAgentId) await tx.client.update({ where: { id: client.id }, data: { subAgentId: lead.subAgentId } });
     await accrueOnConversion(tx, scope, client.id, existing?.subAgentId ?? lead.subAgentId);
 
+    // Carry what the lead told us onto the client so nobody types it twice. Existing client
+    // values win; the destination joins the client's preferred countries.
+    const carried: PackValues = carryOver(leadFields, clientFields, lead.packData as PackValues);
+    const prefKey = clientFields.find((f) => f.type === 'multi_lookup' && f.library === pack.regionType && /prefer/i.test(f.key))?.key;
+    if (prefKey && lead.interestCountry) {
+      carried[prefKey] = [...new Set([lead.interestCountry, ...((carried[prefKey] as string[]) ?? [])])];
+    }
+    const sameCustom = new Set(clientCustom.map((f) => f.key));
+    const custom = Object.fromEntries(Object.entries(lead.customFields as Record<string, unknown>).filter(([k]) => sameCustom.has(k)));
+    await tx.client.update({
+      where: { id: client.id },
+      data: {
+        packData: { ...carried, ...(client.packData as PackValues) } as Prisma.InputJsonValue,
+        customFields: { ...custom, ...(client.customFields as Record<string, unknown>) } as Prisma.InputJsonValue,
+      },
+    });
+
     await tx.lead.update({ where: { id: lead.id }, data: { clientId: client.id, status: 'WON' } });
     // Carry the lead's open work and WhatsApp conversation over to the client.
     await tx.task.updateMany({ where: { leadId: lead.id, done: false }, data: { clientId: client.id } });
     await tx.note.updateMany({ where: { leadId: lead.id }, data: { clientId: client.id } });
+    // The lead's history shows on the client's timeline too (it stays on the lead as well).
+    await tx.activity.updateMany({ where: { leadId: lead.id, clientId: null }, data: { clientId: client.id } });
     await tx.message.updateMany({ where: { leadId: lead.id }, data: { clientId: client.id, leadId: null } });
     await tx.call.updateMany({ where: { leadId: lead.id }, data: { clientId: client.id, leadId: null } });
     const lastInbound = [lead.waLastInbound, client.waLastInbound].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null;

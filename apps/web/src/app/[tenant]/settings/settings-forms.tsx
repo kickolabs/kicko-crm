@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import { useState } from 'react';
 import type { Role } from '@kicko/db';
 import { ActionButton, ActionForm, CopyField, FormBanner, FormField, Modal, SubmitButton } from '@/components/forms';
@@ -15,7 +16,11 @@ import {
   updateGeneralAction,
   updateMemberAction,
   updateProductAction,
+  adoptPathwayAction,
+  createCustomWorkflowAction,
+  applyLibraryUpdateAction,
 } from '../actions';
+import { parseChecklist, parseStages, WorkflowTextError } from '@/lib/workflow-text';
 
 const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Kathmandu', 'Asia/Dhaka', 'Asia/Colombo', 'Asia/Karachi', 'Asia/Singapore', 'Europe/London', 'America/Toronto', 'Australia/Sydney', 'Pacific/Auckland'];
 
@@ -190,11 +195,22 @@ export function LeadCapture({ slug, formUrl, kioskUrl, apiUrl, formKey }: { slug
   );
 }
 
-export function ProductEditor({ slug, id, name, active, stages, checklist }: { slug: string; id: string; name: string; active: boolean; stages: string; checklist: string }) {
+/** Edits a workflow as text: one stage or document per line, with optional [flags]. */
+export function ProductEditor({ slug, id, name, active, stages, checklist, groups }: { slug: string; id: string; name: string; active: boolean; stages: string; checklist: string; groups: [string, string][] }) {
   const [saved, setSaved] = useState(false);
+  const [stageText, setStageText] = useState(stages);
+  const [docText, setDocText] = useState(checklist);
+  const preview = (() => {
+    try {
+      const docs = parseChecklist(docText);
+      return { stages: parseStages(stageText, docs), docs, error: null };
+    } catch (e) {
+      return { stages: [], docs: [], error: e instanceof WorkflowTextError ? e.message : 'Check the lines' };
+    }
+  })();
   return (
     <ActionForm action={updateProductAction.bind(null, slug, id)} onSuccess={() => setSaved(true)} className="flex flex-col gap-4">
-      {saved && <FormBanner tone="ok">Workflow saved.</FormBanner>}
+      {saved && <FormBanner tone="ok">Workflow saved. New cases use it; open cases keep theirs.</FormBanner>}
       <div className="flex flex-wrap items-end gap-4">
         <FormField label="Name" name="name" className="min-w-64 flex-1"><Input name="name" defaultValue={name} required /></FormField>
         <label className="flex h-10 items-center gap-2 text-sm font-semibold">
@@ -202,14 +218,80 @@ export function ProductEditor({ slug, id, name, active, stages, checklist }: { s
         </label>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <FormField label="Stages, in order" name="stages" hint="One per line.">
-          <Textarea name="stages" defaultValue={stages} className="min-h-80 font-mono text-[13px]" />
+        <FormField label="Stages, in order" name="stages" hint="One per line. Optional flags: [lodged] [optional] [track] [10d] [requires: Passport, follow-up] [task: Book medical +3d] [when: drivers]">
+          <Textarea name="stages" value={stageText} onChange={(e) => setStageText(e.target.value)} className="min-h-80 font-mono text-[13px]" />
         </FormField>
-        <FormField label="Document checklist" name="checklist" hint="One per line as “Group: Document”. Add (optional) at the end for non-required items.">
-          <Textarea name="checklist" defaultValue={checklist} className="min-h-80 font-mono text-[13px]" />
+        <FormField label="Document checklist" name="checklist" hint="One per line as “Group: Document”. Add (optional), [expires], [when: healthcare] as needed.">
+          <Textarea name="checklist" value={docText} onChange={(e) => setDocText(e.target.value)} className="min-h-80 font-mono text-[13px]" />
         </FormField>
       </div>
+      {groups.length > 0 && (
+        <p className="text-xs text-muted">
+          Occupation groups for [when: …]: {groups.map(([k, v]) => <span key={k} className="mr-2 whitespace-nowrap"><code className="font-mono text-ink-2">{k}</code> {v}</span>)}
+        </p>
+      )}
+      <section aria-label="Preview" className="rounded-[14px] bg-paper-2 p-4 text-sm">
+        <h3 className="eyebrow mb-2">Preview</h3>
+        {preview.error ? (
+          <p className="font-semibold text-danger">{preview.error}</p>
+        ) : (
+          <ol className="flex flex-wrap gap-1.5">
+            {preview.stages.map((st) => (
+              <li key={st.key} className={clsx('rounded-full px-2.5 py-1 text-xs font-semibold', st.track ? 'bg-info-bg text-info' : st.lodged ? 'bg-lime text-ink' : 'bg-card text-ink-2')}>
+                {st.name}
+                {st.optional && ' · optional'}
+                {st.deadlineDays ? ` · ${st.deadlineDays}d` : ''}
+                {st.requires ? ' · gate' : ''}
+                {st.tasks?.length ? ` · ${st.tasks.length} task${st.tasks.length > 1 ? 's' : ''}` : ''}
+                {st.when?.occupationGroups?.length ? ` · only ${st.when.occupationGroups.join(', ')}` : ''}
+              </li>
+            ))}
+          </ol>
+        )}
+        {!preview.error && <p className="mt-2 text-xs text-muted">{preview.docs.length} documents, {preview.docs.filter((d) => d.when).length} only for some occupations.</p>}
+      </section>
       <div className="flex justify-end"><SubmitButton>Save workflow</SubmitButton></div>
     </ActionForm>
+  );
+}
+
+export function AdoptButton({ slug, pathKey, name }: { slug: string; pathKey: string; name: string }) {
+  return (
+    <ActionButton action={() => adoptPathwayAction(slug, pathKey)} size="sm" variant="primary">
+      <span className="sr-only">{name}: </span>Add
+    </ActionButton>
+  );
+}
+
+export function CustomWorkflowForm({ slug, countries, categories, defaultCountry }: { slug: string; countries: { key: string; name: string }[]; categories: [string, string][]; defaultCountry?: string }) {
+  return (
+    <ActionForm action={createCustomWorkflowAction.bind(null, slug)} className="grid gap-3.5 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+      <FormField label="Country" name="country">
+        <Select name="country" defaultValue={defaultCountry ?? ''} required>
+          <option value="">Choose</option>
+          {countries.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+        </Select>
+      </FormField>
+      <FormField label="Visa type" name="category">
+        <Select name="category" defaultValue="WORK" required>
+          {categories.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </Select>
+      </FormField>
+      <FormField label="Name" name="name"><Input name="name" placeholder="e.g. Work permit (construction)" required /></FormField>
+      <SubmitButton>Create</SubmitButton>
+    </ActionForm>
+  );
+}
+
+/** The library has a newer version of this workflow's pathway. */
+export function LibraryUpdateBanner({ slug, productId, from, to }: { slug: string; productId: string; from: number; to: number }) {
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-3 rounded-[16px] bg-info-bg px-5 py-3.5 text-sm text-info">
+      <span className="min-w-0 flex-1 font-semibold">The Kicko library has an update for this pathway (v{from} → v{to}). Open cases are not affected.</span>
+      <ActionButton action={() => applyLibraryUpdateAction(slug, productId, true)} size="sm">Update info only</ActionButton>
+      <ActionButton action={() => applyLibraryUpdateAction(slug, productId, false)} size="sm" variant="primary" confirm="Replace this workflow's stages and checklist with the library's? Your edits to them will be lost. Open cases keep theirs.">
+        Take stages &amp; checklist too
+      </ActionButton>
+    </div>
   );
 }

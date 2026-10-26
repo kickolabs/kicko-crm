@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { CaseOutcome, CaseStatus, LeadStatus, Role } from '@kicko/db';
 import { formObject, run, type ActionResult } from '@/lib/action';
+import { packRaw } from '@/lib/pack-fields';
 import { can } from '@/lib/permissions';
 import { assertCan, getCtx } from '@/lib/tenant';
 import { scopeOf, UserError } from '@/server/scope';
@@ -14,6 +15,7 @@ import * as work from '@/server/work';
 import * as checkins from '@/server/checkins';
 import * as team from '@/server/team';
 import * as settings from '@/server/settings';
+import * as workflows from '@/server/workflows';
 
 type Prev = ActionResult | null;
 
@@ -27,7 +29,7 @@ export async function createLeadAction(slug: string, _: Prev, fd: FormData): Pro
   const res = await run(async () => {
     assertCan(ctx, 'lead.write');
     const input = { ...raw, waOptIn: raw.waOptIn === 'on' } as unknown as leads.LeadInput;
-    return leads.createLead(scopeOf(ctx), input, { allowDuplicate: raw.allowDuplicate === '1' });
+    return leads.createLead(scopeOf(ctx), input, { allowDuplicate: raw.allowDuplicate === '1', pack: packRaw(fd) });
   });
   if (res.ok && res.data?.status === 'duplicate') {
     const m = res.data.matches[0]!;
@@ -49,7 +51,7 @@ export async function updateLeadAction(slug: string, leadId: string, _: Prev, fd
   const res = await run(async () => {
     assertCan(ctx, 'lead.write');
     const { waOptIn: _ignored, ...raw } = formObject(fd);
-    await leads.updateLead(scopeOf(ctx), leadId, raw as unknown as leads.LeadInput);
+    await leads.updateLead(scopeOf(ctx), leadId, raw as unknown as leads.LeadInput, packRaw(fd));
   }, 'Saved');
   refresh(slug);
   return res;
@@ -145,21 +147,27 @@ export async function openCaseAction(slug: string, clientId: string, _: Prev, fd
   return res;
 }
 
-export async function moveStageAction(slug: string, caseId: string, toKey: string) {
+export async function moveStageAction(slug: string, caseId: string, toKey: string, override?: string) {
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'case.write');
-    await cases.moveStage(scopeOf(ctx), caseId, toKey);
+    await cases.moveStage(scopeOf(ctx), caseId, toKey, { override, canOverride: can(ctx.role, 'settings.manage') });
   });
   refresh(slug);
   return res;
 }
 
-export async function setCaseStatusAction(slug: string, caseId: string, status: CaseStatus, outcome?: CaseOutcome) {
+export async function setCaseStatusAction(
+  slug: string,
+  caseId: string,
+  status: CaseStatus,
+  outcome?: CaseOutcome,
+  closing?: { reason?: string; rating?: number; comment?: string },
+) {
   const ctx = await getCtx(slug);
   const res = await run(async () => {
     assertCan(ctx, 'case.write');
-    await cases.setCaseStatus(scopeOf(ctx), caseId, status, outcome);
+    await cases.setCaseStatus(scopeOf(ctx), caseId, status, outcome, closing);
   });
   refresh(slug);
   return res;
@@ -350,6 +358,69 @@ export async function updateProductAction(slug: string, productId: string, _: Pr
     assertCan(ctx, 'settings.manage');
     await settings.updateProduct(scopeOf(ctx), productId, { ...raw, active: raw.active === 'on' } as never);
   }, 'Workflow saved');
+  refresh(slug);
+  return res;
+}
+
+export async function updateCaseExtrasAction(slug: string, caseId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'case.write');
+    await cases.updateCaseExtras(scopeOf(ctx), caseId, formObject(fd));
+  }, 'Saved');
+  refresh(slug);
+  return res;
+}
+
+export async function setTrackAction(slug: string, caseId: string, key: string, status: (typeof cases.TRACK_STATUSES)[number]) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'case.write');
+    await cases.setTrack(scopeOf(ctx), caseId, key, status);
+  });
+  refresh(slug);
+  return res;
+}
+
+export async function updateClientPackAction(slug: string, clientId: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'client.write');
+    await clients.updateClientPack(scopeOf(ctx), clientId, packRaw(fd) ?? {});
+  }, 'Profile saved');
+  refresh(slug);
+  return res;
+}
+
+// ─── Workflow library ───────────────────────────────────────────────────────
+
+export async function adoptPathwayAction(slug: string, key: string) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await workflows.adoptPathway(scopeOf(ctx), key);
+  }, 'Workflow added');
+  refresh(slug);
+  return res;
+}
+
+export async function createCustomWorkflowAction(slug: string, _: Prev, fd: FormData) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    return (await workflows.createCustomWorkflow(scopeOf(ctx), formObject(fd) as never)).id;
+  });
+  refresh(slug);
+  if (res.ok && res.data) redirect(`/${slug}/settings?tab=workflows&product=${res.data}`);
+  return res;
+}
+
+export async function applyLibraryUpdateAction(slug: string, productId: string, keepStages: boolean) {
+  const ctx = await getCtx(slug);
+  const res = await run(async () => {
+    assertCan(ctx, 'settings.manage');
+    await workflows.applyLibraryUpdate(scopeOf(ctx), productId, { keepStages });
+  }, 'Updated from the library');
   refresh(slug);
   return res;
 }

@@ -4,9 +4,9 @@ import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import type { CaseOutcome, CaseStatus } from '@kicko/db';
-import type { Stage } from '@kicko/db/visa-catalog';
+import type { Stage } from '@kicko/packs';
 import { ActionButton, ActionForm, FormBanner, FormField, Modal, SubmitButton } from '@/components/forms';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input, Select, Textarea } from '@/components/ui';
 import { moveStageAction, setCaseStatusAction, updateCaseDetailsAction } from '../../actions';
 
 // ── Journey: the client's route as a flight path ─────────────────────────────
@@ -26,7 +26,8 @@ const along = (from: number, to: number) =>
     .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
     .join(' ');
 /** Lodged and Decision matter most to the client: bigger dots, bolder labels. */
-const MILESTONE = /lodged|submitted|petition_filed|decision/;
+const MILESTONE_KEY = /lodged|submitted|petition_filed|decision/;
+const isMilestone = (s: Stage) => !!(s.milestone || s.lodged) || MILESTONE_KEY.test(s.key);
 
 type JourneyRoute = { from: string | null; to: string; km: number | null };
 
@@ -43,6 +44,7 @@ export function Journey({
   ahead,
   route,
   editable,
+  canOverride,
 }: {
   slug: string;
   caseId: string;
@@ -54,22 +56,30 @@ export function Journey({
   ahead: Record<string, string>;
   route: JourneyRoute;
   editable: boolean;
+  /** Owners and admins can move past a stage requirement, giving a reason. */
+  canOverride?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(null);
   const idx = Math.max(0, stages.findIndex((s) => s.key === current));
   const next = stages[idx + 1];
   const n = stages.length;
   const t = (i: number) => (n > 1 ? i / (n - 1) : 0.5);
   const crowded = n > 8;
 
-  const go = (key: string) =>
+  const go = (key: string, override?: string) =>
     start(async () => {
-      const res = await moveStageAction(slug, caseId, key);
+      const res = await moveStageAction(slug, caseId, key, override);
       setError(res.ok ? null : res.error);
+      setBlocked(!res.ok && res.error.startsWith('Not ready to move on') ? key : null);
       router.refresh();
     });
+  const moveAnyway = () => {
+    const reason = window.prompt('Why move on without these? This is noted on the case.');
+    if (blocked && reason?.trim()) go(blocked, reason.trim());
+  };
   const pick = (s: Stage) => {
     if (window.confirm(`Move this case to "${s.name}"?`)) go(s.key);
   };
@@ -80,7 +90,7 @@ export function Journey({
 
   const dot = (s: Stage, i: number, size: 'arc' | 'list') => {
     const st = state(i);
-    const big = size === 'arc' && MILESTONE.test(s.key);
+    const big = size === 'arc' && isMilestone(s);
     return (
       <button
         type="button"
@@ -94,7 +104,7 @@ export function Journey({
           st === 'done' && 'bg-lime',
           // A border, not a ring: the pulse animation is a box-shadow and would hide a ring.
           st === 'now' && 'live-dot border-[3px] border-lime bg-ink',
-          st === 'todo' && (MILESTONE.test(s.key) ? 'bg-ink ring-2 ring-white/60' : 'bg-ink ring-2 ring-white/35'),
+          st === 'todo' && (isMilestone(s) ? 'bg-ink ring-2 ring-white/60' : 'bg-ink ring-2 ring-white/35'),
         )}
       >
         {st === 'done' && (
@@ -107,7 +117,7 @@ export function Journey({
   };
   const label = (s: Stage, i: number) => {
     const st = state(i);
-    return clsx(MILESTONE.test(s.key) ? 'font-extrabold' : 'font-semibold', st === 'now' ? 'text-lime' : st === 'done' ? 'text-[#C4CAD2]' : 'text-[#A9AFB7]');
+    return clsx(isMilestone(s) ? 'font-extrabold' : 'font-semibold', st === 'now' ? 'text-lime' : st === 'done' ? 'text-[#C4CAD2]' : 'text-[#A9AFB7]');
   };
 
   return (
@@ -136,7 +146,16 @@ export function Journey({
       <p className="sr-only">
         {route.from ? `${route.from} to ${route.to}` : `To ${route.to}`}: {idx} of {n} steps complete, now at {stages[idx]?.name}.
       </p>
-      {error && <p role="alert" className="mt-3 rounded-[10px] bg-danger/20 px-3 py-2 text-sm text-[#FFB4AB]">{error}</p>}
+      {error && (
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-[10px] bg-danger/20 px-3 py-2 text-sm text-[#FFB4AB]">
+          <span className="min-w-0 flex-1">{error}</span>
+          {blocked && canOverride && (
+            <button type="button" onClick={moveAnyway} disabled={pending} className="rounded-[8px] bg-paper/10 px-2.5 py-1 text-xs font-bold text-paper hover:bg-paper/20">
+              Move anyway…
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Wider screens: the arc */}
       <div className="relative mt-2 hidden w-full sm:block" style={{ aspectRatio: `${W} / ${H}` }}>
@@ -210,6 +229,9 @@ const OUTCOMES: { v: CaseOutcome; label: string }[] = [
 
 export function StatusControls({ slug, caseId, status }: { slug: string; caseId: string; status: CaseStatus }) {
   const [outcome, setOutcome] = useState<CaseOutcome>('APPROVED');
+  const [reason, setReason] = useState('');
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
   if (status === 'CLOSED' || status === 'ON_HOLD') {
     return (
       <ActionButton action={() => setCaseStatusAction(slug, caseId, 'OPEN')} size="md">
@@ -234,10 +256,25 @@ export function StatusControls({ slug, caseId, status }: { slug: string; caseId:
                 </label>
               ))}
             </fieldset>
+            <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+              {outcome === 'APPROVED' ? 'Notes (optional)' : outcome === 'REFUSED' ? 'Refusal reason' : 'Why it was withdrawn'}
+              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} className="min-h-16" placeholder={outcome === 'REFUSED' ? 'As stated in the refusal letter' : ''} />
+            </label>
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="text-[13px] font-semibold text-ink-2">Client feedback (optional)</legend>
+              <div className="flex gap-1" role="radiogroup" aria-label="Client rating">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} type="button" role="radio" aria-checked={rating === n} aria-label={`${n} of 5`} onClick={() => setRating(rating === n ? 0 : n)} className={clsx('size-9 rounded-[10px] text-sm font-bold', n <= rating ? 'bg-lime text-ink' : 'shadow-[inset_0_0_0_1px_var(--color-line-2)] text-muted')}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="What the client said" aria-label="Client comment" />
+            </fieldset>
             <div className="flex justify-end">
               <ActionButton
                 action={async () => {
-                  const res = await setCaseStatusAction(slug, caseId, 'CLOSED', outcome);
+                  const res = await setCaseStatusAction(slug, caseId, 'CLOSED', outcome, { reason, rating: rating || undefined, comment });
                   if (res.ok) close();
                   return res;
                 }}

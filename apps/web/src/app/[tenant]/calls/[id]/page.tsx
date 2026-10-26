@@ -1,10 +1,11 @@
 import clsx from 'clsx';
 import { AI_SHORT } from '@/lib/brand';
+import { countryName } from '@/lib/countries';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PhoneIncoming, PhoneOutgoing, Sparkles } from 'lucide-react';
 import { Badge, Card, CardHeader } from '@/components/ui';
-import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
+import { CATEGORY_LABEL } from '@/lib/constants';
 import { fmtDateTime, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
@@ -41,7 +42,7 @@ export default async function CallPage({ params }: { params: Promise<{ tenant: s
   const Icon = call.direction === 'INBOUND' ? PhoneIncoming : PhoneOutgoing;
   const facts = ai
     ? ([
-        ['Destination', ai.fields.interestCountry && (COUNTRIES[ai.fields.interestCountry] ?? ai.fields.interestCountry)],
+        ['Destination', ai.fields.interestCountry && (countryName(ai.fields.interestCountry))],
         ['Visa type', ai.fields.interestCategory && CATEGORY_LABEL[ai.fields.interestCategory]],
         ['Intake', ai.fields.intake],
         ['English test', ai.fields.englishTest],

@@ -1,12 +1,44 @@
 import 'server-only';
-import { nextRef, type CaseOutcome, type CaseStatus, type Tx } from '@kicko/db';
-import type { Stage } from '@kicko/db/visa-catalog';
+import { nextRef, prisma, type CaseOutcome, type CaseStatus, type Prisma, type Tx } from '@kicko/db';
+import type { Stage } from '@kicko/packs';
+import type { PackValues } from '@/lib/pack-fields';
+import { gateProblems, lodgedBy, mainStages, snapshotFor, stagesOf, type RuleContext } from '@/lib/workflow';
+import { z } from 'zod';
+import { tenantPack } from './library';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 import { syncChecklistTx } from './documents';
 import { defaultBranch } from './branches';
 
-export function stagesOf(product: { stages: unknown }): Stage[] {
-  return Array.isArray(product.stages) ? (product.stages as Stage[]) : [];
+export { lodgedBy, stagesOf };
+
+/** What a workflow's conditions are judged against: the applicant's profile. */
+async function ruleContext(tx: Tx, scope: Scope, clientId: string, organizationId?: string | null): Promise<RuleContext> {
+  const client = await tx.client.findUnique({ where: { id: clientId }, select: { packData: true, family: { where: { included: true }, select: { id: true } } } });
+  const fields = (client?.packData as PackValues) ?? {};
+  let occupationGroup: string | null = null;
+  if (typeof fields.occupation === 'string') {
+    const { pack } = await tenantPack(scope);
+    const own = await tx.tenantLibraryItem.findFirst({ where: { packId: pack.id, type: 'occupation', key: fields.occupation } });
+    const lib = own ? null : await prisma.libraryItem.findUnique({ where: { packId_type_key: { packId: pack.id, type: 'occupation', key: fields.occupation } } });
+    occupationGroup = (((own ?? lib)?.data as { group?: string } | undefined)?.group) ?? null;
+  }
+  return { occupationGroup, hasDependants: (client?.family.length ?? 0) > 0, hasEmployer: !!organizationId, fields };
+}
+
+/** Tasks a stage creates when a case enters it, assigned to the case owner. */
+async function stageTasksTx(tx: Tx, scope: Scope, c: { id: string; clientId: string; ownerId: string | null }, stage: Stage) {
+  if (!stage.tasks?.length) return;
+  await tx.task.createMany({
+    data: stage.tasks.map((t) => ({
+      tenantId: scope.tenantId,
+      title: t.title,
+      dueAt: t.dueDays != null ? new Date(Date.now() + t.dueDays * 86_400_000) : null,
+      assigneeId: c.ownerId,
+      createdBy: scope.actorId,
+      caseId: c.id,
+      clientId: c.clientId,
+    })),
+  });
 }
 
 export async function openCaseTx(
@@ -16,10 +48,12 @@ export async function openCaseTx(
 ) {
   const product = await tx.visaProduct.findUnique({ where: { id: input.productId } });
   if (!product) throw new UserError('Unknown visa product');
-  const first = stagesOf(product)[0];
-  if (!first) throw new UserError('This visa product has no stages configured');
   const client = await tx.client.findUnique({ where: { id: input.clientId } });
   if (!client) throw new UserError('Client not found');
+  // The case keeps the workflow as it is today, with only the steps that apply to this applicant.
+  const workflow = snapshotFor(product, await ruleContext(tx, scope, client.id));
+  const first = mainStages(workflow.stages)[0];
+  if (!first) throw new UserError('This visa product has no stages configured');
 
   const ref = await nextRef(tx, scope.tenantId, `case_${product.country}`, `KCK-${product.country}`);
   const ownerId = input.ownerId ?? client.ownerId ?? scope.actorId;
@@ -32,8 +66,10 @@ export async function openCaseTx(
       productId: product.id,
       stageKey: first.key,
       ownerId,
+      workflow: workflow as unknown as Prisma.InputJsonValue,
     },
   });
+  await stageTasksTx(tx, scope, c, first);
   await tx.stageHistory.create({
     data: { tenantId: scope.tenantId, caseId: c.id, fromKey: null, toKey: first.key, byUserId: scope.actorId },
   });
@@ -51,8 +87,13 @@ export function openCase(scope: Scope, input: { clientId: string; productId: str
   return inTenant(scope, (tx) => openCaseTx(tx, scope, input));
 }
 
-export async function moveStage(scope: Scope, caseId: string, toKey: string) {
-  const res = await moveStageTx(scope, caseId, toKey);
+/**
+ * Move a case to another stage. Moving forward past a stage with a gate (documents that
+ * must be verified, fields that must be filled, a follow-up) is refused with what's
+ * missing; owners and admins may override with a reason, which is logged.
+ */
+export async function moveStage(scope: Scope, caseId: string, toKey: string, opts: { override?: string; canOverride?: boolean } = {}) {
+  const res = await moveStageTx(scope, caseId, toKey, opts);
   if (res.moved) {
     const { fireAutomation } = await import('./whatsapp/automations');
     await fireAutomation(scope, 'CASE_STAGE', {
@@ -65,25 +106,45 @@ export async function moveStage(scope: Scope, caseId: string, toKey: string) {
   return res.updated;
 }
 
-const LODGED = /lodged|submitted|petition_filed/;
-
-/** Is `key` the product's lodged stage or any stage after it? */
-export function lodgedBy(stages: { key: string }[], key: string) {
-  const at = stages.findIndex((s) => LODGED.test(s.key));
-  const idx = stages.findIndex((s) => s.key === key);
-  return at >= 0 && idx >= at;
+export class GateError extends UserError {
+  constructor(readonly problems: string[], readonly canOverride: boolean) {
+    super(`Not ready to move on: ${problems.join('; ')}.`);
+  }
 }
 
-function moveStageTx(scope: Scope, caseId: string, toKey: string) {
+function moveStageTx(scope: Scope, caseId: string, toKey: string, opts: { override?: string; canOverride?: boolean }) {
   return inTenant(scope, async (tx) => {
     const c = await tx.case.findUnique({ where: { id: caseId }, include: { product: true, client: true } });
     if (!c) throw new UserError('Case not found');
     if (c.status === 'CLOSED') throw new UserError('Reopen the case before changing its stage');
-    const stages = stagesOf(c.product);
+    const stages = stagesOf(c);
     const from = stages.find((s) => s.key === c.stageKey);
     const to = stages.find((s) => s.key === toKey);
     if (!to) throw new UserError('Unknown stage');
     if (to.key === c.stageKey) return { updated: c, moved: null };
+
+    // Gates: every stage being left behind (moving forward) must have what it requires.
+    const fromIdx = stages.findIndex((s) => s.key === c.stageKey);
+    const toIdx = stages.findIndex((s) => s.key === to.key);
+    const passing = toIdx > fromIdx ? stages.slice(Math.max(0, fromIdx), toIdx).filter((s) => !s.track) : [];
+    const gated = passing.filter((s) => s.requires);
+    if (gated.length) {
+      const docs = await tx.document.findMany({ where: { caseId }, select: { checklistKey: true, name: true, status: true } });
+      const followUp = await tx.task.count({ where: { caseId, done: false, dueAt: { gt: new Date() } } });
+      const problems = gated.flatMap((s) =>
+        gateProblems(s, {
+          docs: Object.fromEntries(docs.filter((d) => d.checklistKey).map((d) => [d.checklistKey!, d.status])),
+          fields: { ...(c.client.packData as PackValues), ...(c.packData as PackValues) },
+          hasFollowUp: followUp > 0,
+          docName: (k) => docs.find((d) => d.checklistKey === k)?.name ?? k,
+        }),
+      );
+      if (problems.length) {
+        const reason = opts.override?.trim();
+        if (!reason || !opts.canOverride) throw new GateError(problems, !!opts.canOverride);
+        await logActivity(tx, scope, { type: 'STAGE_OVERRIDE', summary: `Moved past a stage requirement: ${reason}`, caseId, clientId: c.clientId, data: { problems, reason } });
+      }
+    }
 
     const now = new Date();
     const updated = await tx.case.update({
@@ -104,6 +165,7 @@ function moveStageTx(scope: Scope, caseId: string, toKey: string) {
       caseId,
       clientId: c.clientId,
     });
+    await stageTasksTx(tx, scope, c, to);
     return {
       updated,
       moved: { clientId: c.clientId, firstName: c.client.firstName, stageKey: to.key, stageName: to.name, product: c.product.name },
@@ -116,6 +178,7 @@ export async function setCaseStatus(
   caseId: string,
   status: CaseStatus,
   outcome?: CaseOutcome | null,
+  closing: { reason?: string; rating?: number; comment?: string } = {},
 ) {
   return inTenant(scope, async (tx) => {
     const c = await tx.case.findUnique({ where: { id: caseId } });
@@ -127,10 +190,18 @@ export async function setCaseStatus(
         status,
         outcome: status === 'CLOSED' ? outcome : null,
         decisionAt: status === 'CLOSED' && outcome !== 'WITHDRAWN' ? (c.decisionAt ?? new Date()) : status === 'OPEN' ? null : c.decisionAt,
+        ...(status === 'CLOSED'
+          ? {
+              closureReason: closing.reason?.trim().slice(0, 500) || null,
+              feedback: closing.rating || closing.comment?.trim()
+                ? { rating: closing.rating && closing.rating >= 1 && closing.rating <= 5 ? Math.round(closing.rating) : null, comment: closing.comment?.trim().slice(0, 1000) || null, at: new Date().toISOString() }
+                : undefined,
+            }
+          : {}),
       },
     });
     const label =
-      status === 'CLOSED' ? `Closed · ${outcome!.toLowerCase()}` : status === 'ON_HOLD' ? 'Put on hold' : 'Reopened';
+      status === 'CLOSED' ? `Closed · ${outcome!.toLowerCase()}${closing.reason?.trim() ? ` · ${closing.reason.trim()}` : ''}` : status === 'ON_HOLD' ? 'Put on hold' : 'Reopened';
     await logActivity(tx, scope, { type: 'CASE_STATUS', summary: label, caseId, clientId: c.clientId });
   });
 }
@@ -155,5 +226,56 @@ export async function updateCaseDetails(
     if (c.ownerId !== input.ownerId) {
       await logActivity(tx, scope, { type: 'ASSIGNED', summary: 'Case owner changed', caseId, clientId: c.clientId });
     }
+  });
+}
+
+export const extrasInput = z.object({
+  nextAction: z.string().trim().max(300).optional().transform((v) => v || null),
+  // [{ label, value }] as JSON, e.g. application number, UCI, file number
+  refs: z
+    .string()
+    .optional()
+    .transform((v, ctx) => {
+      if (!v) return [];
+      try {
+        const rows = JSON.parse(v) as { label?: string; value?: string }[];
+        return rows
+          .map((r) => ({ label: String(r.label ?? '').trim().slice(0, 60), value: String(r.value ?? '').trim().slice(0, 120) }))
+          .filter((r) => r.label && r.value)
+          .slice(0, 20);
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Could not read the reference numbers' });
+        return z.NEVER;
+      }
+    }),
+});
+
+/** Next action and reference numbers (application, file and government numbers). */
+export async function updateCaseExtras(scope: Scope, caseId: string, raw: z.input<typeof extrasInput>) {
+  const input = extrasInput.parse(raw);
+  return inTenant(scope, async (tx) => {
+    const c = await tx.case.findUnique({ where: { id: caseId } });
+    if (!c) throw new UserError('Case not found');
+    await tx.case.update({ where: { id: caseId }, data: { nextAction: input.nextAction, refs: input.refs } });
+    const before = JSON.stringify(c.refs);
+    if (before !== JSON.stringify(input.refs)) {
+      await logActivity(tx, scope, { type: 'CASE_UPDATED', summary: 'Reference numbers updated', caseId, clientId: c.clientId, data: { refs: input.refs } });
+    }
+  });
+}
+
+export const TRACK_STATUSES = ['todo', 'in_progress', 'done', 'not_needed'] as const;
+
+/** Status of a side track (medical, police clearance, loan…) beside the main stages. */
+export async function setTrack(scope: Scope, caseId: string, key: string, status: (typeof TRACK_STATUSES)[number]) {
+  if (!TRACK_STATUSES.includes(status)) throw new UserError('Unknown status');
+  return inTenant(scope, async (tx) => {
+    const c = await tx.case.findUnique({ where: { id: caseId }, include: { product: true } });
+    if (!c) throw new UserError('Case not found');
+    const stage = stagesOf(c).find((s) => s.key === key && s.track);
+    if (!stage) throw new UserError('Unknown track');
+    const tracks = { ...(c.tracks as Record<string, unknown>), [key]: { status, at: new Date().toISOString() } };
+    await tx.case.update({ where: { id: caseId }, data: { tracks: tracks as Prisma.InputJsonValue } });
+    await logActivity(tx, scope, { type: 'STAGE_CHANGED', summary: `${stage.name}: ${status.replace('_', ' ')}`, caseId, clientId: c.clientId });
   });
 }

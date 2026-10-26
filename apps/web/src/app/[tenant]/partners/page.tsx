@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Badge, Card, EmptyState, LinkButton, PageHeader, Stat } from '@/components/ui';
-import { COUNTRIES } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
+
 import { formatMoney } from '@/lib/money';
 import { can } from '@/lib/permissions';
 import { getCtx } from '@/lib/tenant';
@@ -54,7 +55,7 @@ export default async function PartnersPage({ params }: { params: Promise<{ tenan
         [...byCountry.entries()].map(([country, list]) => (
           <Card key={country}>
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
-              <h2 className="text-sm font-bold">{COUNTRIES[country] ?? country}</h2>
+              <h2 className="text-sm font-bold">{countryName(country)}</h2>
               <span className="text-xs font-semibold text-muted">{list.length}</span>
             </div>
             <ul className="divide-y divide-line">

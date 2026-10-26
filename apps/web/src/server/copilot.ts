@@ -176,7 +176,7 @@ export async function gatherSignals(ctx: Ctx, now = new Date()): Promise<Signal[
 
     if (stuck.length) {
       const c = stuck[0]!;
-      const stage = stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey;
+      const stage = stagesOf(c).find((s) => s.key === c.stageKey)?.name ?? c.stageKey;
       const days = Math.floor((now.getTime() - c.stageSince.getTime()) / DAY);
       out.push({
         id: `stuck:${stuck.map((s) => s.id).sort().join(',')}`,

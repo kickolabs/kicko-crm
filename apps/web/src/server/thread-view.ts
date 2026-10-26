@@ -1,5 +1,6 @@
 import 'server-only';
-import { CATEGORY_LABEL, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from '@/lib/constants';
+import { CATEGORY_LABEL, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
 import { fmtDate, fmtDateTime, fullName } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { can } from '@/lib/permissions';
@@ -125,7 +126,7 @@ export async function buildContactContext(ctx: Ctx, contact: Contact) {
     if (!row) return null;
     const ownerId = row.ownerId;
     const owner = ownerId ? (await staffNames([ownerId]))[ownerId] ?? null : null;
-    const interest = lead ? [lead.interestCountry && (COUNTRIES[lead.interestCountry] ?? lead.interestCountry), lead.interestCategory && CATEGORY_LABEL[lead.interestCategory]].filter(Boolean).join(' · ') : null;
+    const interest = lead ? [lead.interestCountry && (countryName(lead.interestCountry)), lead.interestCategory && CATEGORY_LABEL[lead.interestCategory]].filter(Boolean).join(' · ') : null;
     const due = client && Array.isArray(client.invoices) ? client.invoices.reduce((a, i) => a + i.total - i.amountPaid, 0) : 0;
     const check = client && Array.isArray(client.eligibility) ? client.eligibility[0] : undefined;
 
@@ -139,7 +140,7 @@ export async function buildContactContext(ctx: Ctx, contact: Contact) {
         id: c.id,
         ref: c.ref,
         product: c.product.name,
-        stage: stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey,
+        stage: stagesOf(c).find((s) => s.key === c.stageKey)?.name ?? c.stageKey,
         href: `/${slug}/cases/${c.id}`,
       })),
       nextAppointment: appointment ? `${fmtDateTime(appointment.startsAt, tz)} · ${appointment.title}` : null,

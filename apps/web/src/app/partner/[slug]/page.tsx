@@ -1,7 +1,8 @@
 import clsx from 'clsx';
 import { LogoMark } from '@/components/logo';
 import { Badge, Card, CardHeader } from '@/components/ui';
-import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
+import { CATEGORY_LABEL } from '@/lib/constants';
+import { countryChoices } from '@/server/library';
 import { fmtDate } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { getPartnerHome } from '@/server/partner';
@@ -70,7 +71,7 @@ export default async function PartnerHome({ params }: { params: Promise<{ slug: 
             <Card>
               <CardHeader title="Refer a client" />
               <div className="p-5">
-                <ReferralForm slug={slug} countries={Object.entries(COUNTRIES)} categories={Object.entries(CATEGORY_LABEL)} />
+                <ReferralForm slug={slug} countries={await countryChoices(p.scope).then((c) => [...c.offered, ...c.others])} categories={Object.entries(CATEGORY_LABEL)} />
               </div>
             </Card>
             <Card>

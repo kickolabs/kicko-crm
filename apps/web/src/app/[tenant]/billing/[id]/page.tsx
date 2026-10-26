@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Card, CardHeader } from '@/components/ui';
-import { COUNTRIES } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
 import { fmtDate, fullName, toLocalInput } from '@/lib/format';
 import { computeInvoice, formatMoney } from '@/lib/money';
 import { can } from '@/lib/permissions';
@@ -45,7 +45,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ tenant
           </div>
           <div className="flex flex-wrap gap-x-2 text-[13px] font-medium text-muted">
             <Link href={`/${slug}/clients/${inv.clientId}`} className="font-semibold text-ink hover:underline">{fullName(inv.client)}</Link>
-            {inv.case && <><span>·</span><Link href={`/${slug}/cases/${inv.case.id}`} className="hover:text-ink">{inv.case.ref} · {COUNTRIES[inv.case.product.country]} {inv.case.product.name}</Link></>}
+            {inv.case && <><span>·</span><Link href={`/${slug}/cases/${inv.case.id}`} className="hover:text-ink">{inv.case.ref} · {countryName(inv.case.product.country)} {inv.case.product.name}</Link></>}
             <span>·</span><span>{fmtDate(inv.issueDate, tz)}</span>
           </div>
         </div>

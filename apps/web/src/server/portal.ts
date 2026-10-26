@@ -59,7 +59,7 @@ export async function getPortalHome(p: PortalCtx) {
   // Client-safe timeline: stage moves, document decisions, payments. No internal notes.
   const events: TimelineEvent[] = [];
   for (const c of data.cases) {
-    const stages = stagesOf(c.product);
+    const stages = stagesOf(c);
     events.push({ at: c.createdAt, kind: 'case', text: `${c.product.name} case opened` });
     for (const h of c.history) {
       if (!h.fromKey) continue;

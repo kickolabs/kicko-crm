@@ -61,6 +61,7 @@ jobs:
           node scripts/ci-db-setup.mjs
           npm run deploy --workspace @kicko/db
           npm run generate --workspace @kicko/db
+          npm run library:import -- immigration
 
       - name: Typecheck
         run: npm run typecheck

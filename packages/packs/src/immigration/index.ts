@@ -14,7 +14,13 @@ const OCCUPATION_GROUPS = [
   'factory_logistics', 'agriculture', 'it', 'engineering', 'finance', 'other_professional',
 ];
 
-const CATEGORY = { ...CATEGORY_LABEL, OTHER: 'Other' } as Record<string, string>;
+const CATEGORY = { ...CATEGORY_LABEL } as Record<string, string>;
+
+const OCCUPATION_GROUP_LABEL_MAP: Record<string, string> = {
+  drivers: 'Drivers', education: 'Education', healthcare: 'Healthcare', care: 'Care & support', hospitality: 'Hospitality',
+  construction_trades: 'Construction & trades', factory_logistics: 'Factory & logistics', agriculture: 'Agriculture',
+  it: 'IT', engineering: 'Engineering', finance: 'Finance & accounting', other_professional: 'Other professional',
+};
 
 /** Starter checklist for a pathway with no researched document list. */
 const BASE_DOCS: ChecklistItem[] = [
@@ -98,6 +104,7 @@ export const immigrationPack: PackManifest = {
     document_type: { label: 'Document type', plural: 'Document types' },
     test_type: { label: 'Language test', plural: 'Language tests' },
   },
+  groupLabels: { occupation: OCCUPATION_GROUP_LABEL_MAP },
   workflowType: 'pathway',
   regionType: 'country',
   categories: CATEGORY,
@@ -106,7 +113,7 @@ export const immigrationPack: PackManifest = {
     { entity: 'leads', key: 'occupation', label: 'Occupation', type: 'lookup', library: 'occupation', carry: true, section: 'Applicant' },
     { entity: 'leads', key: 'qualification', label: 'Highest qualification', type: 'select', options: ['10th', '12th', 'ITI / trade certificate', 'Diploma', "Bachelor's", "Master's", 'PhD'], carry: true, section: 'Applicant' },
     { entity: 'leads', key: 'experienceYears', label: 'Work experience (years)', type: 'number', carry: true, section: 'Applicant' },
-    { entity: 'leads', key: 'alsoInterested', label: 'Also interested in', type: 'multi_lookup', library: 'country', hint: 'Other destinations to consider', carry: true, section: 'Destination' },
+    { entity: 'leads', key: 'alsoInterested', label: 'Other destinations', type: 'multi_lookup', library: 'country', hint: 'Countries they would also consider', carry: true, section: 'Destination' },
     { entity: 'leads', key: 'service', label: 'Service needed', type: 'select', options: ['Visa only', 'Admission + visa', 'Job placement + visa', 'Assessment only', 'Documentation only'], carry: true, section: 'Destination' },
     // Clients: the professional profile.
     { entity: 'clients', key: 'occupation', label: 'Occupation', type: 'lookup', library: 'occupation', section: 'Profession' },
@@ -134,7 +141,7 @@ export const immigrationPack: PackManifest = {
       ],
     },
     { entity: 'clients', key: 'preferredCountries', label: 'Preferred countries', type: 'multi_lookup', library: 'country', section: 'Preferences' },
-    { entity: 'clients', key: 'alsoInterested', label: 'Also interested in', type: 'multi_lookup', library: 'country', section: 'Preferences' },
+    { entity: 'clients', key: 'alsoInterested', label: 'Other destinations', type: 'multi_lookup', library: 'country', section: 'Preferences' },
     { entity: 'clients', key: 'salaryExpectation', label: 'Salary expectation', type: 'text', hint: 'e.g. AED 3,500 / month', section: 'Preferences' },
     { entity: 'clients', key: 'jobPreferences', label: 'Job preferences', type: 'text', hint: 'Shifts, accommodation, location…', section: 'Preferences' },
     { entity: 'clients', key: 'service', label: 'Service needed', type: 'select', options: ['Visa only', 'Admission + visa', 'Job placement + visa', 'Assessment only', 'Documentation only'], section: 'Preferences' },
@@ -172,8 +179,4 @@ export const immigrationPack: PackManifest = {
 };
 
 export { OCCUPATION_GROUPS };
-export const OCCUPATION_GROUP_LABEL: Record<string, string> = {
-  drivers: 'Drivers', education: 'Education', healthcare: 'Healthcare', care: 'Care & support', hospitality: 'Hospitality',
-  construction_trades: 'Construction & trades', factory_logistics: 'Factory & logistics', agriculture: 'Agriculture',
-  it: 'IT', engineering: 'Engineering', finance: 'Finance & accounting', other_professional: 'Other professional',
-};
+export const OCCUPATION_GROUP_LABEL = OCCUPATION_GROUP_LABEL_MAP;

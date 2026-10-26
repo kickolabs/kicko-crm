@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { countryName } from '@/lib/countries';
 import { Badge, Card, CardHeader } from '@/components/ui';
-import { CATEGORY_LABEL, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE } from '@/lib/constants';
+import { CATEGORY_LABEL, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE } from '@/lib/constants';
 import { fmtDateTime, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
@@ -16,6 +17,10 @@ import { AiCallButton, CallButton } from '../../_components/calls';
 import { voiceFor } from '@/server/voice/view';
 import { db } from '@/lib/tenant';
 import { SubAgentPicker } from '../../partners/agents/agent-forms';
+import { displayPackValue, type PackValues } from '@/lib/pack-fields';
+import { lookupName, packForm } from '@/server/library';
+import { scopeOf } from '@/server/scope';
+import { PathwayInfo } from '../pathway-info';
 import { CallsPanel } from '../../_components/calls-panel';
 import { callingFor } from '@/server/calls/view';
 import { BranchSelect } from '../../_components/branch-select';
@@ -26,6 +31,7 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
   const ctx = await getCtx(slug);
   const [lead, team, products, calling, branches] = await Promise.all([getLead(ctx, id), getTeam(ctx), listProducts(ctx), callingFor(ctx), listBranches(ctx)]);
   const voice = await voiceFor(ctx);
+  const form = await packForm(scopeOf(ctx), 'leads');
   const agents = await db(ctx, (tx) => tx.subAgent.findMany({ where: { OR: [{ active: true }, { id: lead?.subAgentId ?? '' }] }, orderBy: { name: 'asc' } }));
   const agent = agents.find((a) => a.id === lead?.subAgentId);
   if (!lead) notFound();
@@ -34,14 +40,18 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
   const tz = ctx.tenant.timezone;
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const writable = can(ctx.role, 'lead.write');
-  const productOpts = products.map(({ id, name, country, category }) => ({ id, name, country, category }));
+  const productOpts = products.map(({ id, name, country, category, info }) => ({ id, name, country, category, info }));
+  const nameOf = lookupName(form.lookups);
+  const packRows: [string, React.ReactNode][] = form.fields
+    .filter((f) => (lead.packData as PackValues)[f.key] != null)
+    .map((f) => [f.label, displayPackValue(f, (lead.packData as PackValues)[f.key], nameOf)]);
 
   const rows: [string, React.ReactNode][] = [
     ['Phone', lead.phone ? <a href={`tel:${lead.phoneNormalized ?? lead.phone}`} className="font-semibold underline decoration-ink/30 underline-offset-4">{lead.phone}</a> : '—'],
     ['WhatsApp', lead.phoneNormalized ? <a href={`https://wa.me/${lead.phoneNormalized.replace('+', '')}`} target="_blank" rel="noreferrer" className="font-semibold underline decoration-ink/30 underline-offset-4">Open chat ↗</a> : '—'],
     ['Email', lead.email ? <a href={`mailto:${lead.email}`} className="font-semibold underline decoration-ink/30 underline-offset-4">{lead.email}</a> : '—'],
-    ['Interested in', [lead.interestCategory && CATEGORY_LABEL[lead.interestCategory], lead.interestCountry && (COUNTRIES[lead.interestCountry] ?? lead.interestCountry)].filter(Boolean).join(' · ') || '—'],
-    ['Visa product', lead.product ? `${COUNTRIES[lead.product.country] ?? lead.product.country} · ${lead.product.name}` : '—'],
+    ['Interested in', [lead.interestCategory && CATEGORY_LABEL[lead.interestCategory], lead.interestCountry && (countryName(lead.interestCountry))].filter(Boolean).join(' · ') || '—'],
+    ['Visa product', lead.product ? `${countryName(lead.product.country)} · ${lead.product.name}` : '—'],
     ['Source', LEAD_SOURCE_LABEL[lead.source]],
     [
       'Referred by',
@@ -65,6 +75,7 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
           ),
         ] as [string, React.ReactNode]]
       : []),
+    ...packRows,
     ['Created', fmtDateTime(lead.createdAt, tz)],
   ];
 
@@ -87,7 +98,7 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
           <div className="flex flex-wrap items-start gap-2">
             {lead.phoneNormalized && !lead.clientId && <CallButton slug={slug} contactKey={`lead:${lead.id}`} contactName={fullName(lead)} calling={calling} />}
             {lead.phoneNormalized && !lead.clientId && <AiCallButton slug={slug} contactKey={`lead:${lead.id}`} contactName={fullName(lead)} voice={voice} />}
-            <LeadToolbar slug={slug} lead={lead} products={productOpts} team={team} />
+            <LeadToolbar slug={slug} lead={lead} products={productOpts} team={team} form={form} />
           </div>
         )}
       </header>
@@ -111,6 +122,7 @@ export default async function LeadPage({ params }: { params: Promise<{ tenant: s
                 </div>
               ))}
             </dl>
+            {lead.product && <PathwayInfo info={lead.product.info} className="mx-5 mb-4" />}
             {lead.message && (
               <div className="border-t border-line px-5 py-4">
                 <div className="mb-1 text-xs font-semibold text-muted">Enquiry</div>

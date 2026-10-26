@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge, Card, CardHeader, PageHeader } from '@/components/ui';
-import { COUNTRIES } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
 import { fullName } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { can } from '@/lib/permissions';
@@ -9,6 +9,8 @@ import { getCtx } from '@/lib/tenant';
 import { APPLICATION_LABEL } from '@/server/partners';
 import { getInstitution } from '@/server/queries2';
 import { CoursesPanel, InstitutionForm } from '../institution-form';
+import { countryChoices } from '@/server/library';
+import { scopeOf } from '@/server/scope';
 
 export default async function InstitutionPage({ params }: { params: Promise<{ tenant: string; id: string }> }) {
   const { tenant: slug, id } = await params;
@@ -25,7 +27,7 @@ export default async function InstitutionPage({ params }: { params: Promise<{ te
       </nav>
       <PageHeader
         title={inst.name}
-        sub={`${[inst.city, COUNTRIES[inst.country] ?? inst.country].filter(Boolean).join(', ')} · ${inst.applications.length} applications · ${enrolled} enrolled`}
+        sub={`${[inst.city, countryName(inst.country)].filter(Boolean).join(', ')} · ${inst.applications.length} applications · ${enrolled} enrolled`}
       />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div className="flex min-w-0 flex-col gap-5">
@@ -76,6 +78,7 @@ export default async function InstitutionPage({ params }: { params: Promise<{ te
             <InstitutionForm
               slug={slug}
               inst={{ ...inst, agreementUntil: inst.agreementUntil?.toISOString() ?? null }}
+              countries={await countryChoices(scopeOf(ctx)).then((c) => [...c.offered, ...c.others])}
             />
           ) : (
             <p className="text-sm text-muted">

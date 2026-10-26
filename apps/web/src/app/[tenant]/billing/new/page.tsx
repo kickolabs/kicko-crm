@@ -1,6 +1,7 @@
 import { Card, EmptyState, PageHeader } from '@/components/ui';
-import { COUNTRIES } from '@/lib/constants';
+
 import { fullName, toLocalInput } from '@/lib/format';
+import { countryName } from '@/lib/countries';
 import type { PlanStep } from '@/lib/money';
 import { can } from '@/lib/permissions';
 import { db, getCtx } from '@/lib/tenant';
@@ -44,7 +45,7 @@ export default async function NewInvoicePage({
             id: c.id,
             name: fullName(c),
             ref: c.ref,
-            cases: c.cases.map((k) => ({ id: k.id, ref: k.ref, label: `${COUNTRIES[k.product.country] ?? k.product.country} · ${k.product.name}` })),
+            cases: c.cases.map((k) => ({ id: k.id, ref: k.ref, label: `${countryName(k.product.country)} · ${k.product.name}` })),
           }))}
           packages={packages.map((p) => ({ id: p.id, name: p.name, description: p.description, price: p.price, taxRate: p.taxRate, plan: p.plan as PlanStep[] }))}
           defaults={{

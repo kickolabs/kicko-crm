@@ -3,6 +3,7 @@ import { LogoMark } from '@/components/logo';
 import { publicScope } from '@/server/public';
 import { getTenantBySlug } from '@/lib/tenant';
 import { EnquiryForm } from './enquiry-form';
+import { countryChoices } from '@/server/library';
 
 export const metadata = { title: 'Enquiry', robots: { index: false } };
 
@@ -30,7 +31,7 @@ export default async function EnquiryPage({
           </div>
         </div>
         <p className="mb-6 text-sm text-muted">A counsellor will get back to you within one working day.</p>
-        <EnquiryForm slug={slug} formKey={k!} />
+        <EnquiryForm slug={slug} formKey={k!} countries={await countryChoices(scope)} />
       </div>
     </div>
   );

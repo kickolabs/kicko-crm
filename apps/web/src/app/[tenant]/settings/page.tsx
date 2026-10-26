@@ -1,13 +1,18 @@
 import clsx from 'clsx';
 import Link from 'next/link';
-import type { ChecklistItem, Stage } from '@kicko/db/visa-catalog';
-import { Badge, Card, CardHeader, EmptyState, PageHeader } from '@/components/ui';
-import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
+import type { ChecklistItem, Stage } from '@kicko/packs';
+import { Badge, buttonCls, Card, CardHeader, EmptyState, inputCls, PageHeader } from '@/components/ui';
+import { CATEGORY_LABEL } from '@/lib/constants';
 import { fmtDate } from '@/lib/format';
 import { can, ROLE_LABEL } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { listInvites, listProducts } from '@/server/queries';
-import { GeneralForm, InviteForm, LeadCapture, MemberControls, MemberHours, ProductEditor, RevokeInvite } from './settings-forms';
+import { AdoptButton, CustomWorkflowForm, GeneralForm, InviteForm, LeadCapture, LibraryUpdateBanner, MemberControls, MemberHours, ProductEditor, RevokeInvite } from './settings-forms';
+import { libraryPathways, libraryUpdates } from '@/server/workflows';
+import { packForm } from '@/server/library';
+import { checklistToText, stagesToText } from '@/lib/workflow-text';
+import { PathwayInfo } from '../leads/pathway-info';
 import { BillingDetailsForm, PackagesCard } from './billing-settings';
 import { ConnectionCard } from './connection-card';
 import { UpgradeCard } from '@/components/upgrade';
@@ -70,7 +75,7 @@ export default async function SettingsPage({
   searchParams,
 }: {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ tab?: string; product?: string; paid?: string; group?: string; person?: string; before?: string }>;
+  searchParams: Promise<{ tab?: string; product?: string; country?: string; paid?: string; group?: string; person?: string; before?: string }>;
 }) {
   const { tenant: slug } = await params;
   const sp = await searchParams;
@@ -139,7 +144,7 @@ export default async function SettingsPage({
 
       {tab === 'security' && <SecurityTab ctx={ctx} sp={sp} />}
 
-      {tab === 'workflows' && <WorkflowsTab slug={slug} productId={sp.product} ctx={ctx} />}
+      {tab === 'workflows' && <WorkflowsTab slug={slug} productId={sp.product} country={sp.country} ctx={ctx} />}
     </div>
   );
 
@@ -351,7 +356,7 @@ export default async function SettingsPage({
         </Card>
         <PackagesCard
           slug={slug}
-          products={products.map((p) => ({ id: p.id, label: `${COUNTRIES[p.country] ?? p.country} · ${p.name}` }))}
+          products={products.map((p) => ({ id: p.id, label: `${countryName(p.country)} · ${p.name}` }))}
           packages={packages.map((p) => ({ id: p.id, name: p.name, description: p.description, productId: p.productId, price: p.price, taxRate: p.taxRate, plan: p.plan as PlanStep[], active: p.active }))}
         />
         <ConnectionCard
@@ -418,34 +423,112 @@ export default async function SettingsPage({
   }
 }
 
-async function WorkflowsTab({ slug, productId, ctx }: { slug: string; productId?: string; ctx: Awaited<ReturnType<typeof getCtx>> }) {
-  const products = await listProducts(ctx, { includeInactive: true });
+async function WorkflowsTab({ slug, productId, country, ctx }: { slug: string; productId?: string; country?: string; ctx: Awaited<ReturnType<typeof getCtx>> }) {
+  const scope = scopeOf(ctx);
+  const [products, updates, form] = await Promise.all([listProducts(ctx, { includeInactive: true }), libraryUpdates(scope), packForm(scope, 'leads')]);
   const selected = products.find((p) => p.id === productId);
+  const workflowWord = form.labels.workflows ?? 'Workflows';
   if (selected) {
-    const stages = (selected.stages as Stage[]).map((s) => s.name).join('\n');
-    const checklist = (selected.checklist as ChecklistItem[]).map((i) => `${i.group}: ${i.name}${i.required ? '' : ' (optional)'}`).join('\n');
+    const checklistItems = selected.checklist as ChecklistItem[];
+    const update = updates.get(selected.id);
     return (
-      <Card>
-        <CardHeader title={`${COUNTRIES[selected.country] ?? selected.country} · ${selected.name}`} sub={`${CATEGORY_LABEL[selected.category]} · ${selected.code}`} action={<Link href="?tab=workflows" className="text-[13px] font-semibold text-muted hover:text-ink">← All workflows</Link>} />
-        <div className="p-5"><ProductEditor slug={slug} id={selected.id} name={selected.name} active={selected.active} stages={stages} checklist={checklist} /></div>
-      </Card>
+      <div className="flex flex-col gap-5">
+        {update && <LibraryUpdateBanner slug={slug} productId={selected.id} from={selected.libraryVersion ?? 1} to={update} />}
+        <Card>
+          <CardHeader
+            title={`${countryName(selected.country)} · ${selected.name}`}
+            sub={`${form.categories[selected.category] ?? selected.category} · ${selected.code}${selected.libraryKey ? ' · from the Kicko library' : ' · your own'}`}
+            action={<Link href="?tab=workflows" className="text-[13px] font-semibold text-muted hover:text-ink">← All workflows</Link>}
+          />
+          <div className="p-5">
+            <ProductEditor
+              slug={slug}
+              id={selected.id}
+              name={selected.name}
+              active={selected.active}
+              stages={stagesToText(selected.stages as Stage[], checklistItems)}
+              checklist={checklistToText(checklistItems)}
+              groups={Object.entries(form.groupLabels.occupation ?? {})}
+            />
+          </div>
+        </Card>
+        {Object.keys((selected.info as object) ?? {}).length > 0 && (
+          <Card>
+            <CardHeader title="Reference info" sub="Shown on leads and cases. From the library, as published by the authority; not legal advice." />
+            <div className="p-5 pt-1"><PathwayInfo info={selected.info} open /></div>
+          </Card>
+        )}
+      </div>
     );
   }
+  const countries = form.regionType ? (form.lookups[form.regionType] ?? []) : [];
+  const pick = country && countries.some((c) => c.key === country) ? country : undefined;
+  const pathways = pick ? await libraryPathways(scope, pick) : [];
   return (
-    <Card>
-      <CardHeader title="Visa workflows" sub="Stages and document checklists for each visa product. Changes apply to new and existing cases." />
-      <ul className="divide-y divide-line">
-        {products.map((p) => (
-          <li key={p.id}>
-            <Link href={`?tab=workflows&product=${p.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-paper-3">
-              <span className="w-28 text-xs font-bold text-muted uppercase">{CATEGORY_LABEL[p.category]}</span>
-              <span className="min-w-0 flex-1 font-semibold">{COUNTRIES[p.country] ?? p.country} · {p.name}</span>
-              <span className="text-xs text-muted">{(p.stages as Stage[]).length} stages · {(p.checklist as ChecklistItem[]).length} docs</span>
-              {!p.active && <Badge>Hidden</Badge>}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader title="Add from the Kicko library" sub="Every country, with visa pathways checked against official sources. Adding one copies it into your workflows to edit." />
+        <div className="flex flex-col gap-4 p-5">
+          <form className="flex flex-wrap items-end gap-2.5">
+            <input type="hidden" name="tab" value="workflows" />
+            <label className="flex min-w-60 flex-1 flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+              Country
+              <select name="country" defaultValue={pick ?? ''} className={inputCls}>
+                <option value="">Choose a country</option>
+                {countries.map((c) => (
+                  <option key={c.key} value={c.key}>{c.name}{form.pathwayCount[c.key] ? ` (${form.pathwayCount[c.key]})` : ''}</option>
+                ))}
+              </select>
+            </label>
+            <button className={buttonCls('secondary')}>Show pathways</button>
+          </form>
+          {pick && (
+            <ul className="divide-y divide-line rounded-[14px] shadow-[inset_0_0_0_1px_var(--color-line-2)]">
+              {pathways.length === 0 && (
+                <li className="px-4 py-3 text-sm text-muted">No researched pathways for {countryName(pick)} yet. Create your own below from a starting template.</li>
+              )}
+              {pathways.map((p) => (
+                <li key={p.key} className="flex flex-col gap-2 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="w-24 text-xs font-bold text-muted uppercase">{form.categories[p.template.category] ?? p.template.category}</span>
+                    <span className="min-w-0 flex-1 font-semibold">{p.name}</span>
+                    <span className="text-xs text-muted">{p.template.stages.length} stages · {p.template.checklist.length} docs</span>
+                    {p.unverified && <Badge tone="warn">Partly verified</Badge>}
+                    {p.adoptedId ? (
+                      <Link href={`?tab=workflows&product=${p.adoptedId}`} className={buttonCls('ghost', 'sm')}>Added · Edit</Link>
+                    ) : (
+                      <AdoptButton slug={slug} pathKey={p.key} name={p.name} />
+                    )}
+                  </div>
+                  <PathwayInfo info={p.template.info} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
+      <Card>
+        <CardHeader title="Create your own" sub="For any country or service. Starts from a template you can edit." />
+        <div className="p-5">
+          <CustomWorkflowForm slug={slug} countries={countries.map((c) => ({ key: c.key, name: c.name }))} categories={Object.entries(form.categories)} defaultCountry={pick} />
+        </div>
+      </Card>
+      <Card>
+        <CardHeader title={`Your ${workflowWord.toLowerCase()}`} sub="Stages and document checklists. Edits shape new cases; open cases keep the workflow they started with." />
+        <ul className="divide-y divide-line">
+          {products.map((p) => (
+            <li key={p.id}>
+              <Link href={`?tab=workflows&product=${p.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-paper-3">
+                <span className="w-28 text-xs font-bold text-muted uppercase">{form.categories[p.category] ?? p.category}</span>
+                <span className="min-w-0 flex-1 font-semibold">{countryName(p.country)} · {p.name}</span>
+                <span className="text-xs text-muted">{(p.stages as Stage[]).length} stages · {(p.checklist as ChecklistItem[]).length} docs</span>
+                {updates.has(p.id) && <Badge tone="info">Update available</Badge>}
+                {!p.active && <Badge>Hidden</Badge>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
   );
 }

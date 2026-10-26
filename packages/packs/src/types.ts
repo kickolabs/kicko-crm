@@ -105,6 +105,8 @@ export type PackManifest = {
   labels: Record<string, string>;
   /** Library types this pack defines, with their parent type (pathway → country). */
   libraryTypes: Record<string, { label: string; plural: string; parent?: string }>;
+  /** Labels for the groups a library type's items fall into (occupation groups...). */
+  groupLabels?: Record<string, Record<string, string>>;
   /** The library type that cases are run on (pathways), and the one it hangs off (countries). */
   workflowType: string;
   regionType?: string;

@@ -1,5 +1,6 @@
 import 'server-only';
 import { after } from 'next/server';
+import { countryName } from '@/lib/countries';
 import { prisma, type CallStatus, type Prisma, type Tx } from '@kicko/db';
 import { webhookUrl } from '@/integrations/core/connections';
 import { ProviderError } from '@/integrations/core/types';
@@ -8,7 +9,7 @@ import type { Segment } from '@/integrations/stt/port';
 import type { CallStatusName } from '@/integrations/telephony/port';
 import type { ToolRequest, VoiceEvent, VoiceResponse, VoiceWebhook } from '@/integrations/voice/port';
 import type { SandboxVoiceBody } from '@/integrations/voice/sandbox';
-import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
+import { CATEGORY_LABEL } from '@/lib/constants';
 import { fmtDateTime, fullName, parseLocal, toLocalInput } from '@/lib/format';
 import { normalizePhone } from '@/lib/phone';
 import { callNotes, detectCategory, detectCountry } from '../ai/call-notes';
@@ -67,11 +68,11 @@ async function callVariables(scope: Scope, cfg: VoiceCfg, contact: Contact, call
     const known: string[] = [];
     if ('interestCountry' in row) {
       if (row.interestCategory) known.push(`wants: ${CATEGORY_LABEL[row.interestCategory]}`);
-      if (row.interestCountry) known.push(`destination: ${COUNTRIES[row.interestCountry] ?? row.interestCountry}`);
+      if (row.interestCountry) known.push(`destination: ${countryName(row.interestCountry)}`);
       if (row.message) known.push(`their enquiry: "${row.message.slice(0, 200)}"`);
     } else {
       const cases = await tx.case.findMany({ where: { clientId: contact.id, status: 'OPEN' }, include: { product: true }, take: 2 });
-      for (const c of cases) known.push(`existing client, ${c.product.name} case at "${stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey}"`);
+      for (const c of cases) known.push(`existing client, ${c.product.name} case at "${stagesOf(c).find((s) => s.key === c.stageKey)?.name ?? c.stageKey}"`);
     }
     return { row, known };
   });
@@ -435,7 +436,7 @@ export async function runTool(scope: Scope, t: ToolRequest): Promise<unknown> {
         return {
           name,
           type: contact.kind === 'client' ? 'existing client' : 'enquiry',
-          cases: cases.map((c) => ({ visa: `${COUNTRIES[c.product.country] ?? c.product.country} ${c.product.name}`, stage: stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey, documents_still_needed: c.documents.map((d) => d.name) })),
+          cases: cases.map((c) => ({ visa: `${countryName(c.product.country)} ${c.product.name}`, stage: stagesOf(c).find((s) => s.key === c.stageKey)?.name ?? c.stageKey, documents_still_needed: c.documents.map((d) => d.name) })),
           next_appointment: appt ? fmtDateTime(appt.startsAt, scope.timezone) : null,
         };
       });

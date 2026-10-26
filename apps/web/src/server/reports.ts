@@ -1,8 +1,9 @@
 import 'server-only';
 import type { Prisma } from '@kicko/db';
+import { countryName } from '@/lib/countries';
 import type { Stage } from '@kicko/db/visa-catalog';
 import { z } from 'zod';
-import { CATEGORY_LABEL, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from '@/lib/constants';
+import { CATEGORY_LABEL, LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from '@/lib/constants';
 import { cfDisplay, type CfDef, type CfValues } from '@/lib/custom-fields';
 import { aggregate, DIMENSIONS, MEASURES, monthKey, periodRange, weekKey, type Fact, type ReportEntity, type ReportSpec } from '@/lib/reports';
 import { prisma } from '@kicko/db';
@@ -108,7 +109,7 @@ export async function runReport(scope: Scope, spec: ReportSpec, opts: { billing:
       case 'source': return LEAD_SOURCE_LABEL[value as keyof typeof LEAD_SOURCE_LABEL] ?? value;
       case 'status': return spec.entity === 'cases' ? CASE_STATUS[value] ?? value : LEAD_STATUS_LABEL[value as keyof typeof LEAD_STATUS_LABEL] ?? value;
       case 'owner': return users.find((u) => u.id === value)?.name ?? 'Former member';
-      case 'country': case 'nationality': return COUNTRIES[value] ?? value;
+      case 'country': case 'nationality': return countryName(value);
       case 'category': return CATEGORY_LABEL[value as keyof typeof CATEGORY_LABEL] ?? value;
       case 'month': return `${MONTHS[Number(value.slice(5, 7)) - 1]} ${value.slice(0, 4)}`;
       case 'week': {
@@ -117,7 +118,7 @@ export async function runReport(scope: Scope, spec: ReportSpec, opts: { billing:
       }
       case 'product': {
         const p = extra.products.find((x) => x.id === value);
-        return p ? `${COUNTRIES[p.country] ?? p.country} · ${p.name}` : value;
+        return p ? `${countryName(p.country)} · ${p.name}` : value;
       }
       case 'stage': return stageName.get(value) ?? value;
       case 'outcome': return OUTCOME[value] ?? value;

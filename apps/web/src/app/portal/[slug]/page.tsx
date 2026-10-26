@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import Link from 'next/link';
-import { COUNTRIES } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
 import { fmtDate, fmtDateTime } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { stagesOf } from '@/server/cases';
@@ -61,7 +61,7 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
       )}
 
       {openCases.map((c) => {
-        const stages = stagesOf(c.product);
+        const stages = stagesOf(c);
         const idx = Math.max(0, stages.findIndex((s) => s.key === c.stageKey));
         const next = stages[idx + 1];
         const appt = home.appointments.find((a) => a.caseId === c.id) ?? home.appointments[0];
@@ -69,10 +69,10 @@ export default async function PortalHome({ params, searchParams }: { params: Pro
           <section key={c.id} aria-label={`${c.product.name} journey`} className="flex flex-wrap items-end justify-between gap-7 rounded-[24px] bg-ink p-7 text-paper sm:p-8">
             <div className="flex max-w-xl flex-col gap-3">
               <span className="text-xs font-semibold tracking-wider text-[#A9AFB7] uppercase">
-                {COUNTRIES[c.product.country] ?? c.product.country} · {c.product.name} · {c.ref}
+                {countryName(c.product.country)} · {c.product.name} · {c.ref}
               </span>
               <h1 className="text-[36px] leading-[1.05] font-extrabold tracking-[-0.04em] sm:text-[48px]">
-                {p.client.firstName}, you're <span className="text-lime">{idx + 1} of {stages.length}</span> steps to {COUNTRIES[c.product.country] ?? 'your destination'}.
+                {p.client.firstName}, you're <span className="text-lime">{idx + 1} of {stages.length}</span> steps to {countryName(c.product.country) || 'your destination'}.
               </h1>
               <p className="leading-relaxed text-[#C4CAD2]">
                 Now: <strong className="text-paper">{stages[idx]?.name}</strong>.

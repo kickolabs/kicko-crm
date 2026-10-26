@@ -28,7 +28,7 @@ describe('cell cleaning', () => {
   it('splits names, maps countries and labels', () => {
     expect(splitName('  Priya  Lakshmi Sharma ')).toEqual({ firstName: 'Priya Lakshmi', lastName: 'Sharma' });
     expect(splitName('Ravi')).toEqual({ firstName: 'Ravi', lastName: null });
-    expect(['UK', 'usa', 'Canada', 'au', 'Dubai', 'Japan'].map(countryCode)).toEqual(['GB', 'US', 'CA', 'AU', 'AE', 'Japan']);
+    expect(['UK', 'usa', 'Canada', 'au', 'Dubai', 'Japan', 'Atlantis'].map(countryCode)).toEqual(['GB', 'US', 'CA', 'AU', 'AE', 'JP', 'Atlantis']);
     expect(['Student visa', 'UK Skilled Worker', 'Express Entry', 'Tourist', 'Spouse visa', 'Astrology'].map(category)).toEqual(['STUDY', 'WORK', 'PR', 'VISIT', 'FAMILY', null]);
     expect(['Facebook', 'Walk in', 'Google Form', 'Friend', 'Newspaper'].map(source)).toEqual(['ADS', 'WALK_IN', 'WEB_FORM', 'REFERRAL', 'OTHER']);
     expect(['Not interested', 'Converted', 'Uncontacted', 'Follow up', 'Hot', 'Meeting fixed', '???'].map(status)).toEqual(['LOST', 'WON', 'NEW', 'CONTACTED', 'QUALIFIED', 'CONSULT_BOOKED', null]);

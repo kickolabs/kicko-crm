@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { countryName } from '@/lib/countries';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Client, FamilyMember, VisaProduct } from '@kicko/db';
 import { ActionButton, ActionForm, FormBanner, FormField, Modal, SubmitButton } from '@/components/forms';
 import { Button, Input, Select, Textarea, buttonCls } from '@/components/ui';
-import { COUNTRIES, FAMILY_RELATIONS } from '@/lib/constants';
+import { FAMILY_RELATIONS } from '@/lib/constants';
 import { addFamilyAction, openCaseAction, removeFamilyAction, updateClientAction, updateClientJsonAction } from '../../actions';
 
 const d = (v: Date | string | null | undefined) => (v ? new Date(v).toISOString().slice(0, 10) : '');
@@ -191,7 +192,7 @@ export function OpenCaseButton({
           <FormField label="Visa product" name="productId">
             <Select name="productId" required defaultValue="">
               <option value="" disabled>Choose…</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{COUNTRIES[p.country] ?? p.country} · {p.name}</option>)}
+              {products.map((p) => <option key={p.id} value={p.id}>{countryName(p.country)} · {p.name}</option>)}
             </Select>
           </FormField>
           <FormField label="Case owner" name="ownerId">

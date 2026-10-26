@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { prisma, withTenant, type Role } from './index';
-import { DEFAULT_PACK, getPack } from '@kicko/packs';
+import { prisma, withTenant, type Prisma, type Role } from './index';
+import { DEFAULT_PACK, getPack, type LibrarySeedItem } from '@kicko/packs';
 
 export const RESERVED_SLUGS = new Set([
   'api', 'app', 'login', 'logout', 'signup', 'invite', 'f', 'embed', 'static', 'assets',
@@ -114,8 +114,13 @@ export async function provisionTenant(input: { name: string; slug: string; owner
             : { tenantId: tenant.id, plan: 'pro', status: 'trialing', seats: 10, trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400_000) },
       });
       await tx.tenantPack.create({ data: { tenantId: tenant.id, packId: pack.id, version: pack.version } });
+      // Starter workflows carry the library's reference info (eligibility, steps, fees, sources).
+      const starters = pack.starterWorkflows();
+      const lib = new Map(
+        (await tx.libraryItem.findMany({ where: { packId: pack.id, type: pack.workflowType, key: { in: starters.map((p) => p.code) } } })).map((i) => [i.key, i]),
+      );
       await tx.visaProduct.createMany({
-        data: pack.starterWorkflows().map((p) => ({
+        data: starters.map((p) => ({
           tenantId: tenant.id,
           code: p.code,
           country: p.country,
@@ -125,7 +130,8 @@ export async function provisionTenant(input: { name: string; slug: string; owner
           checklist: p.checklist,
           packId: pack.id,
           libraryKey: p.code,
-          libraryVersion: 1,
+          libraryVersion: lib.get(p.code)?.version ?? 1,
+          info: (lib.has(p.code) ? (pack.workflowFromLibrary(seedOf(lib.get(p.code)!)).info ?? {}) : {}) as Prisma.InputJsonValue,
         })),
       });
     });
@@ -152,4 +158,18 @@ export async function tenantsForUser(userId: string) {
     orderBy: { createdAt: 'asc' },
   });
   return tenants.map((t) => ({ ...t, role: memberships.find((m) => m.tenantId === t.id)!.role }));
+}
+
+/** A library row in the shape packs work with. */
+export function seedOf(i: { type: string; key: string; parentKey: string | null; name: string; coverage: string | null; unverified: boolean; data: unknown; sources: unknown }): LibrarySeedItem {
+  return {
+    type: i.type,
+    key: i.key,
+    ...(i.parentKey ? { parent: i.parentKey } : {}),
+    name: i.name,
+    ...(i.coverage ? { coverage: i.coverage as 'basic' | 'full' } : {}),
+    unverified: i.unverified,
+    data: i.data as Record<string, unknown>,
+    sources: i.sources as LibrarySeedItem['sources'],
+  };
 }

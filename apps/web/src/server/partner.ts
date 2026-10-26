@@ -1,6 +1,7 @@
 import 'server-only';
 import { withTenant } from '@kicko/db';
-import { CATEGORY_LABEL, COUNTRIES, LEAD_STATUS_LABEL } from '@/lib/constants';
+import { countryName } from '@/lib/countries';
+import { CATEGORY_LABEL, LEAD_STATUS_LABEL } from '@/lib/constants';
 import { fullName } from '@/lib/format';
 import { normalizeEmail, normalizePhone } from '@/lib/phone';
 import { stagesOf } from './cases';
@@ -27,15 +28,15 @@ export async function getPartnerHome(p: PartnerCtx) {
 
     const referrals = leads.map((l) => {
       const c = l.client?.cases.find((k) => k.status === 'OPEN') ?? l.client?.cases[0];
-      const stage = c ? stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey : null;
+      const stage = c ? stagesOf(c).find((s) => s.key === c.stageKey)?.name ?? c.stageKey : null;
       return {
         id: l.id,
         ref: l.ref,
         name: fullName(l),
         createdAt: l.createdAt,
-        interest: [l.interestCategory && CATEGORY_LABEL[l.interestCategory], l.interestCountry && (COUNTRIES[l.interestCountry] ?? l.interestCountry)].filter(Boolean).join(' · ') || null,
+        interest: [l.interestCategory && CATEGORY_LABEL[l.interestCategory], l.interestCountry && (countryName(l.interestCountry))].filter(Boolean).join(' · ') || null,
         status: l.clientId ? (c ? (c.status === 'CLOSED' ? `Case closed${c.outcome ? ` · ${c.outcome.toLowerCase()}` : ''}` : 'Client · case open') : 'Client') : LEAD_STATUS_LABEL[l.status],
-        stage: c && c.status !== 'CLOSED' ? `${COUNTRIES[c.product.country] ?? c.product.country} ${c.product.name}: ${stage}` : null,
+        stage: c && c.status !== 'CLOSED' ? `${countryName(c.product.country)} ${c.product.name}: ${stage}` : null,
         converted: Boolean(l.clientId),
       };
     });

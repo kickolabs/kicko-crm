@@ -270,6 +270,8 @@ model Lead {
   aiResumedAt      DateTime? // staff resumed the assistant; earlier staff replies don't pause it
   // Agency-defined fields: { [CustomField.key]: string | number | boolean }
   customFields     Json          @default("{}")
+  // Industry-pack fields (occupation, qualification…): { [PackField.key]: value }
+  packData         Json          @default("{}")
 
   @@unique([tenantId, ref])
   @@index([tenantId, status])
@@ -331,6 +333,7 @@ model Client {
   aiHandoffReason String?
   aiResumedAt     DateTime?
   customFields    Json               @default("{}")
+  packData        Json               @default("{}")
 
   @@unique([tenantId, ref])
   @@index([tenantId, phoneNormalized])
@@ -401,6 +404,7 @@ model Case {
   // { title, salary, currency, startDate, contract, notes }
   jobOffer       Json?
   customFields   Json           @default("{}")
+  packData       Json           @default("{}")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   history        StageHistory[]

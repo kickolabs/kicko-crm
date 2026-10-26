@@ -3,6 +3,7 @@ import { unstable_rethrow } from 'next/navigation';
 import { ZodError } from 'zod';
 import { ForbiddenError } from './tenant';
 import { UserError } from '@/server/scope';
+import { PackFieldError } from './pack-fields';
 
 export type ActionResult<T = unknown> =
   | { ok: true; data?: T; message?: string }
@@ -23,6 +24,7 @@ export async function run<T>(fn: () => Promise<T>, message?: string): Promise<Ac
       }
       return { ok: false, error: Object.values(fieldErrors)[0] ?? 'Check the form', fieldErrors };
     }
+    if (err instanceof PackFieldError) return { ok: false, error: err.message, fieldErrors: { [err.field]: err.message } };
     if (err instanceof UserError && err.field) return { ok: false, error: err.message, fieldErrors: { [err.field]: err.message } };
     if (err instanceof UserError || err instanceof ForbiddenError) return { ok: false, error: err.message };
     // Postgres refused a write: the workspace is read-only (lapsed subscription).

@@ -4,10 +4,9 @@ import { useActionState } from 'react';
 import { FormBanner, SubmitButton } from '@/components/forms';
 import { Field, Input, Select, Textarea } from '@/components/ui';
 import { CATEGORY_LABEL, CATEGORIES } from '@/lib/constants';
-import { COUNTRIES } from '@kicko/db/visa-catalog';
 import { submitEnquiry } from '../../actions';
 
-export function EnquiryForm({ slug, formKey }: { slug: string; formKey: string }) {
+export function EnquiryForm({ slug, formKey, countries }: { slug: string; formKey: string; countries: { offered: [string, string][]; others: [string, string][] } }) {
   const [state, action] = useActionState(submitEnquiry.bind(null, slug, formKey), null);
   if (state?.ok) {
     return (
@@ -35,7 +34,10 @@ export function EnquiryForm({ slug, formKey }: { slug: string; formKey: string }
         <Field label="Country" name="interestCountry">
           <Select name="interestCountry" defaultValue="">
             <option value="">Not sure yet</option>
-            {Object.entries(COUNTRIES).map(([code, n]) => <option key={code} value={code}>{n}</option>)}
+            {countries.offered.length > 0 && (
+              <optgroup label="Popular">{countries.offered.map(([code, n]) => <option key={code} value={code}>{n}</option>)}</optgroup>
+            )}
+            <optgroup label={countries.offered.length ? 'All countries' : 'Countries'}>{countries.others.map(([code, n]) => <option key={code} value={code}>{n}</option>)}</optgroup>
           </Select>
         </Field>
       </div>

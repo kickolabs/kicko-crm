@@ -1,6 +1,6 @@
 import type { LeadSource, LeadStatus, VisaCategory } from '@kicko/db';
 
-export { COUNTRIES, CATEGORY_LABEL } from '@kicko/db/visa-catalog';
+export { CATEGORY_LABEL } from '@kicko/db/visa-catalog';
 
 export const LEAD_STATUSES: LeadStatus[] = ['NEW', 'CONTACTED', 'QUALIFIED', 'CONSULT_BOOKED', 'WON', 'LOST'];
 

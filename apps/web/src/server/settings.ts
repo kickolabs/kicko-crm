@@ -2,7 +2,9 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { prisma } from '@kicko/db';
 import type { TenantSettings } from '@kicko/db/provision';
-import type { ChecklistItem, Stage } from '@kicko/db/visa-catalog';
+import type { ChecklistItem, Stage } from '@kicko/packs';
+import { Prisma } from '@kicko/db';
+import { parseChecklist, parseStages, WorkflowTextError } from '@/lib/workflow-text';
 import { z } from 'zod';
 import { audit } from './audit';
 import { inTenant, UserError, type Scope } from './scope';
@@ -48,40 +50,33 @@ export async function rotateFormKey(scope: Scope) {
 const key = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
-/** Stages and checklist are edited as one item per line; checklist lines are "Group: Item" with optional "(optional)". */
+/** Stages and checklist are edited as text, one item per line, with optional [flags] (see lib/workflow-text). */
 export const productInput = z.object({
   name: z.string().trim().min(2).max(80),
   active: z.boolean(),
-  stages: z.string().max(4000),
-  checklist: z.string().max(10000),
+  stages: z.string().max(8000),
+  checklist: z.string().max(16000),
 });
 
 export async function updateProduct(scope: Scope, productId: string, raw: z.input<typeof productInput>) {
   const input = productInput.parse(raw);
-  const stageNames = input.stages.split('\n').map((s) => s.trim()).filter(Boolean);
-  if (stageNames.length < 2) throw new UserError('Add at least two stages');
-  const stages: Stage[] = stageNames.map((name) => ({ key: key(name), name }));
-  if (new Set(stages.map((s) => s.key)).size !== stages.length) throw new UserError('Stage names must be unique');
-
-  const checklist: ChecklistItem[] = input.checklist
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const optional = /\(optional\)\s*$/i.test(line);
-      const clean = line.replace(/\(optional\)\s*$/i, '').trim();
-      const [group, ...rest] = clean.includes(':') ? clean.split(':') : ['General', clean];
-      const name = rest.join(':').trim() || group!.trim();
-      return { key: key(`${group}_${name}`), name, group: group!.trim(), required: !optional };
-    });
-
+  let checklist: ChecklistItem[];
+  let stages: Stage[];
+  try {
+    checklist = parseChecklist(input.checklist);
+    stages = parseStages(input.stages, checklist);
+  } catch (e) {
+    if (e instanceof WorkflowTextError) throw new UserError(e.message);
+    throw e;
+  }
   return inTenant(scope, async (tx) => {
     const product = await tx.visaProduct.findUnique({ where: { id: productId } });
     if (!product) throw new UserError('Product not found');
-    // Open cases sitting on a stage that would disappear must be moved first.
+    // Cases keep the workflow they opened with, so edits only shape new cases. Only cases
+    // from before snapshots existed still follow the product, and can't lose their stage.
     const removed = (product.stages as Stage[]).filter((s) => !stages.some((n) => n.key === s.key)).map((s) => s.key);
     if (removed.length) {
-      const stuck = await tx.case.count({ where: { productId, stageKey: { in: removed }, status: { not: 'CLOSED' } } });
+      const stuck = await tx.case.count({ where: { productId, workflow: { equals: Prisma.DbNull }, stageKey: { in: removed }, status: { not: 'CLOSED' } } });
       if (stuck) throw new UserError(`${stuck} open case(s) are on a stage you removed. Move them first.`);
     }
     await tx.visaProduct.update({

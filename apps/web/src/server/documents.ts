@@ -2,7 +2,8 @@ import 'server-only';
 import { after } from 'next/server';
 import { checkDocumentFile } from './doc-checks';
 import type { DocumentStatus, Tx } from '@kicko/db';
-import type { ChecklistItem } from '@kicko/db/visa-catalog';
+import type { ChecklistItem } from '@kicko/packs';
+import { checklistOf } from '@/lib/workflow';
 import { z } from 'zod';
 import { parseLocal } from '@/lib/format';
 import { audit } from './audit';
@@ -14,7 +15,8 @@ import { ALLOWED_TYPES, MAX_UPLOAD_BYTES, createDownloadUrl, createUploadUrl, ne
 export async function syncChecklistTx(tx: Tx, scope: Scope, caseId: string) {
   const c = await tx.case.findUnique({ where: { id: caseId }, include: { product: true } });
   if (!c) return;
-  const checklist = (c.product.checklist as ChecklistItem[]) ?? [];
+  // The case's own checklist (its snapshot), falling back to the product's for older cases.
+  const checklist: ChecklistItem[] = checklistOf(c);
   await tx.document.createMany({
     data: checklist.map((item, i) => ({
       tenantId: scope.tenantId,

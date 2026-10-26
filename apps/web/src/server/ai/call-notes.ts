@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import { spokenCountry } from '@/lib/countries';
 import type { Segment } from '@/integrations/stt/port';
 import { runStructured } from './run';
 
@@ -112,7 +113,7 @@ export function heuristicNotes(segments: Segment[]): CallNotes {
   }
 
   const what = category === 'STUDY' ? 'studying' : category === 'PR' ? 'permanent residency' : category === 'WORK' ? 'a work visa' : 'their visa';
-  const where = country ? ` in ${({ CA: 'Canada', AU: 'Australia', GB: 'the UK', US: 'the US', NZ: 'New Zealand', DE: 'Germany', IE: 'Ireland' } as Record<string, string>)[country] ?? country}` : '';
+  const where = country ? ` in ${spokenCountry(country)}` : '';
   const facts = [englishTest && `${englishTest}`, intake && `intake ${intake[0]}`, budget && `budget ${budget}`, occupation, age && `age ${age}`].filter(Boolean);
   const summary = negative
     ? `The client was unhappy about a lack of updates on their file${payment ? ' and discussed an overdue payment' : ''}. ${steps.length ? `Agreed: ${steps.join(', ').toLowerCase()}.` : ''}`.trim()

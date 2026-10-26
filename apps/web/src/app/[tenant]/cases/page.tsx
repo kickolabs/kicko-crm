@@ -1,7 +1,8 @@
 import clsx from 'clsx';
 import Link from 'next/link';
+import { countryName } from '@/lib/countries';
 import { Badge, Card, EmptyState, Input, PageHeader, Select, buttonCls } from '@/components/ui';
-import { CATEGORY_LABEL, CATEGORIES, COUNTRIES } from '@/lib/constants';
+import { CATEGORY_LABEL, CATEGORIES } from '@/lib/constants';
 import { fullName, relative } from '@/lib/format';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { stagesOf } from '@/server/cases';
@@ -34,7 +35,7 @@ export default async function CasesPage({
         </Select>
         <Select name="product" defaultValue={sp.product ?? ''} aria-label="Product" className="w-56">
           <option value="">Any product</option>
-          {products.map((p) => <option key={p.id} value={p.id}>{COUNTRIES[p.country] ?? p.country} · {p.name}</option>)}
+          {products.map((p) => <option key={p.id} value={p.id}>{countryName(p.country)} · {p.name}</option>)}
         </Select>
         <Select name="status" defaultValue={sp.status ?? ''} aria-label="Status" className="w-36">
           <option value="">Active</option>
@@ -70,7 +71,7 @@ export default async function CasesPage({
               </thead>
               <tbody>
                 {cases.map((c) => {
-                  const stages = stagesOf(c.product);
+                  const stages = stagesOf(c);
                   const idx = stages.findIndex((s) => s.key === c.stageKey);
                   const days = Math.floor((Date.now() - c.stageSince.getTime()) / 86400_000);
                   return (

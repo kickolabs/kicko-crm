@@ -6,7 +6,9 @@
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { prisma, withLibraryWrite, type Prisma } from '../src/index';
+import { prisma, withLibraryWrite, withTenant, type Prisma } from '../src/index';
+import { seedOf } from '../src/provision';
+import { getPack } from '@kicko/packs';
 import type { LibrarySeedItem } from '@kicko/packs';
 
 const packId = process.argv[2] ?? 'immigration';
@@ -63,6 +65,31 @@ async function main() {
     });
   }
   console.log(`${packId}: ${created} added, ${updated} updated, ${items.length - created - updated} unchanged`);
+  await backfillInfo();
+}
+
+/**
+ * Workflows that have no reference info yet (created before the library existed) get it
+ * from their library pathway. Reference info only: stages and checklists are left alone,
+ * and the workflow is marked at the library's current version.
+ */
+async function backfillInfo() {
+  const pack = getPack(packId);
+  const lib = new Map((await prisma.libraryItem.findMany({ where: { packId, type: pack.workflowType } })).map((i) => [i.key, i]));
+  let filled = 0;
+  for (const t of await prisma.tenant.findMany({ select: { id: true } })) {
+    await withTenant(t.id, async (tx) => {
+      const products = await tx.visaProduct.findMany({ where: { packId, libraryKey: { not: null } } });
+      for (const p of products) {
+        const item = lib.get(p.libraryKey!);
+        if (!item || Object.keys((p.info as object) ?? {}).length) continue;
+        const info = pack.workflowFromLibrary(seedOf(item)).info ?? {};
+        await tx.visaProduct.update({ where: { id: p.id }, data: { info: info as Prisma.InputJsonValue, libraryVersion: item.version } });
+        filled++;
+      }
+    });
+  }
+  if (filled) console.log(`${packId}: reference info added to ${filled} workflows`);
 }
 
 main()

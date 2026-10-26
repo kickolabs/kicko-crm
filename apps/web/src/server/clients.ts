@@ -4,6 +4,9 @@ import { normalizeEmail, normalizePhone } from '@/lib/phone';
 import { parseLocal } from '@/lib/format';
 import { inTenant, logActivity, UserError, type Scope } from './scope';
 import { findDuplicates } from './leads';
+import type { Prisma } from '@kicko/db';
+import { cleanPackValues, type PackValues } from '@/lib/pack-fields';
+import { allowedKeys, tenantPack, visibleFields } from './library';
 
 const opt = z
   .string()
@@ -143,5 +146,19 @@ export async function addFamilyMember(scope: Scope, clientId: string, raw: unkno
 export async function removeFamilyMember(scope: Scope, memberId: string) {
   return inTenant(scope, async (tx) => {
     await tx.familyMember.deleteMany({ where: { id: memberId } });
+  });
+}
+
+/** The client's professional profile: the industry pack's client fields (occupation, licences…). */
+export async function updateClientPack(scope: Scope, clientId: string, raw: Record<string, string | string[]>) {
+  const { pack, settings } = await tenantPack(scope);
+  const fields = visibleFields(pack, settings, 'clients');
+  const allowed = await allowedKeys(scope, pack);
+  return inTenant(scope, async (tx) => {
+    const c = await tx.client.findUnique({ where: { id: clientId }, select: { packData: true } });
+    if (!c) throw new UserError('Client not found');
+    const packData = cleanPackValues(fields, raw, allowed, c.packData as PackValues);
+    await tx.client.update({ where: { id: clientId }, data: { packData: packData as Prisma.InputJsonValue } });
+    await logActivity(tx, scope, { type: 'PROFILE_UPDATED', summary: 'Professional profile updated', clientId });
   });
 }

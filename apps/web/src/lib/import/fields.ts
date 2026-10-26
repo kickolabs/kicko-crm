@@ -2,7 +2,7 @@
 // from headers, and how each cell is cleaned. Pure: the browser uses it for the
 // preview and the server runs it again before saving anything.
 
-import { COUNTRIES } from '@/lib/constants';
+import { countryCode as isoCode } from '@/lib/countries';
 import { cfClean, type CfDef, type CfValues } from '@/lib/custom-fields';
 import { parseDate, type DateOrder } from '@/lib/parse-date';
 import { normalizeEmail, normalizePhone } from '@/lib/phone';
@@ -111,9 +111,7 @@ export function countryCode(raw: string): string | null {
   if (!s) return null;
   const k = s.toLowerCase();
   if (COUNTRY_ALIASES[k]) return COUNTRY_ALIASES[k]!;
-  if (/^[a-z]{2}$/i.test(s) && COUNTRIES[s.toUpperCase()]) return s.toUpperCase();
-  const hit = Object.entries(COUNTRIES).find(([, name]) => name.toLowerCase() === k);
-  return hit ? hit[0] : s.slice(0, 60);
+  return isoCode(s) ?? s.slice(0, 60);
 }
 
 const pick = <T extends string>(raw: string, table: [RegExp, T][]): T | null => {
@@ -256,7 +254,7 @@ export function cleanRow(entity: Entity, cells: string[], mapping: Mapping, opts
       ...base,
       dob: date('dob', 'Date of birth'),
       gender: cut(get('gender'), 30),
-      nationality: get('nationality') ? countryCode(get('nationality')) : null,
+      nationality: get('nationality') ? get('nationality').trim().slice(0, 60) : null, // free text, as on the profile
       passportNumber: cut(get('passportNumber').toUpperCase().replace(/\s+/g, ''), 30),
       passportExpiry: date('passportExpiry', 'Passport expiry'),
       maritalStatus: cut(get('maritalStatus'), 30),

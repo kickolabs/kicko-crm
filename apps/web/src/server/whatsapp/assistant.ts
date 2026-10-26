@@ -1,8 +1,9 @@
 import 'server-only';
 import { prisma, type Prisma, type Tx } from '@kicko/db';
+import { countryName } from '@/lib/countries';
 import type { TenantSettings } from '@kicko/db/provision';
 import { z } from 'zod';
-import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
+import { CATEGORY_LABEL } from '@/lib/constants';
 import { fmtDateTime, fullName, toLocalInput } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { assistantTurn, type AssistantInput, type AssistantTurn } from '../ai/assistant';
@@ -180,10 +181,10 @@ async function buildInput(scope: Scope, cfg: Cfg, contact: Contact) {
     contact: {
       kind: contact.kind,
       name: PLACEHOLDER_NAMES.includes(name) ? null : name,
-      interest: lead ? [lead.interestCategory && CATEGORY_LABEL[lead.interestCategory], lead.interestCountry && (COUNTRIES[lead.interestCountry] ?? lead.interestCountry)].filter(Boolean).join(' · ') || null : null,
+      interest: lead ? [lead.interestCategory && CATEGORY_LABEL[lead.interestCategory], lead.interestCountry && (countryName(lead.interestCountry))].filter(Boolean).join(' · ') || null : null,
       cases: data.cases.map((c) => ({
-        product: `${COUNTRIES[c.product.country] ?? c.product.country} ${c.product.name}`,
-        stage: stagesOf(c.product).find((s) => s.key === c.stageKey)?.name ?? c.stageKey,
+        product: `${countryName(c.product.country)} ${c.product.name}`,
+        stage: stagesOf(c).find((s) => s.key === c.stageKey)?.name ?? c.stageKey,
         pendingDocs: c.documents.map((d) => d.name),
       })),
       nextAppointment: data.appt ? fmtDateTime(data.appt.startsAt, scope.timezone) : null,

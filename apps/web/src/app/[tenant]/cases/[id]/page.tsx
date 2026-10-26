@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { countryName } from '@/lib/countries';
 import { docChecksOn } from '@/server/doc-checks';
 import { Avatar, Badge, Card, CardHeader, LinkButton } from '@/components/ui';
 import { formatMoney } from '@/lib/money';
@@ -7,7 +8,7 @@ import { getCaseApplications, getCaseDocuments, listInstitutions, listInvoicesFo
 import { InvoiceBadge } from '../../billing/invoice-badge';
 import { ApplicationsPanel } from './applications-panel';
 import { DocumentsPanel } from './documents-panel';
-import { CATEGORY_LABEL, COUNTRIES } from '@/lib/constants';
+import { CATEGORY_LABEL } from '@/lib/constants';
 import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { hasFeature } from '@/lib/plans';
@@ -20,6 +21,9 @@ import { routeFor } from '@/lib/route';
 import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-panels';
 import { Timeline } from '../../_components/timeline';
 import { DetailsForm, Journey, StatusControls } from './case-controls';
+import { NextActionCard, TracksCard } from './case-extras';
+import { gateProblems, mainStages, overdueDays, trackStages } from '@/lib/workflow';
+import { PathwayInfo } from '../../leads/pathway-info';
 
 // Study applications that decide where the client is headed, best first.
 const COLLEGE_RANK = ['ENROLLED', 'ACCEPTED', 'UNCONDITIONAL_OFFER', 'CONDITIONAL_OFFER'];
@@ -68,7 +72,8 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
     : null;
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const editable = can(ctx.role, 'case.write') && c.status !== 'CLOSED';
-  const stages = stagesOf(c.product);
+  const allStages = stagesOf(c);
+  const stages = mainStages(allStages);
   const dates = (c.dates as Record<string, string>) ?? {};
   // Date each stage was reached, for the journey labels.
   const reached: Record<string, string> = {};
@@ -77,7 +82,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
   // The journey's route line and the dates still ahead (appointments, estimated decision).
   const college = [...apps].sort((a, b) => COLLEGE_RANK.indexOf(a.status) - COLLEGE_RANK.indexOf(b.status)).find((a) => COLLEGE_RANK.includes(a.status) && a.institution.city);
   const homeBranch = c.branch ?? (await db(ctx, (tx) => tx.branch.findFirst({ orderBy: { createdAt: 'asc' } })));
-  const route = routeFor({ fromCity: homeBranch?.city, toCity: college?.institution.city, toCountry: c.product.country, countryName: COUNTRIES[c.product.country] ?? c.product.country });
+  const route = routeFor({ fromCity: homeBranch?.city, toCity: college?.institution.city, toCountry: c.product.country, countryName: countryName(c.product.country) });
   const ahead: Record<string, string> = {};
   for (const s of stages) {
     const hit = UPCOMING_DATES.find(([re]) => re.test(s.key));
@@ -85,6 +90,31 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
     if (v && /^d{4}-d{2}-d{2}/.test(v)) ahead[s.key] = `${hit[2]}${fmtDate(new Date(`${v.slice(0, 10)}T00:00:00Z`), 'UTC', { year: undefined })}`;
   }
   const daysOpen = Math.max(0, Math.floor((Date.now() - c.createdAt.getTime()) / 86400_000));
+
+  // What's in the way of the next step.
+  const now = new Date();
+  const current = stages.find((s) => s.key === c.stageKey);
+  const blockers: { tone: 'danger' | 'warn'; text: string }[] = [];
+  if (c.status === 'OPEN') {
+    const missing = docs.filter((d) => d.required && d.status === 'PENDING');
+    if (missing.length) blockers.push({ tone: 'warn', text: `${missing.length} required document${missing.length > 1 ? 's' : ''} not uploaded yet${missing.length <= 3 ? `: ${missing.map((d) => d.name).join(', ')}` : ''}` });
+    for (const d of docs.filter((d) => d.status === 'REJECTED')) blockers.push({ tone: 'danger', text: `${d.name} was rejected${d.rejectionReason ? `: ${d.rejectionReason}` : ''}` });
+    for (const d of docs.filter((d) => d.status === 'EXPIRED' || (d.expiresAt && d.expiresAt < now && d.status !== 'NOT_APPLICABLE'))) blockers.push({ tone: 'danger', text: `${d.name} has expired` });
+    const overdue = c.tasks.filter((t) => !t.done && t.dueAt && t.dueAt < now).length;
+    if (overdue) blockers.push({ tone: 'warn', text: `${overdue} overdue task${overdue > 1 ? 's' : ''}` });
+    const late = overdueDays(current, c.stageSince, now);
+    if (late) blockers.push({ tone: 'warn', text: `${current!.name} is ${late} day${late > 1 ? 's' : ''} past its expected time` });
+    blockers.push(
+      ...gateProblems(current, {
+        docs: Object.fromEntries(docs.filter((d) => d.checklistKey).map((d) => [d.checklistKey!, d.status])),
+        fields: { ...(c.client.packData as Record<string, unknown>), ...(c.packData as Record<string, unknown>) },
+        hasFollowUp: c.tasks.some((t) => !t.done && t.dueAt && t.dueAt > now),
+        docName: (k) => docs.find((d) => d.checklistKey === k)?.name ?? k,
+      }).map((text) => ({ tone: 'warn' as const, text: `Before moving on: ${text}` })),
+    );
+  }
+  const trackState = (c.tracks as Record<string, { status: 'todo' | 'in_progress' | 'done' | 'not_needed' }>) ?? {};
+  const tracks = trackStages(allStages).map((s) => ({ key: s.key, name: s.name, status: trackState[s.key]?.status ?? 'todo' }));
   const dependants = c.client.family.filter((f) => f.included);
 
   return (
@@ -106,7 +136,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
               {c.status === 'CLOSED' && <Badge tone={c.outcome === 'APPROVED' ? 'ok' : c.outcome === 'REFUSED' ? 'danger' : 'neutral'}>{(c.outcome ?? 'closed').toLowerCase()}</Badge>}
             </div>
             <div className="flex flex-wrap gap-x-2 text-[13px] font-medium text-muted">
-              <span>{COUNTRIES[c.product.country] ?? c.product.country} · {c.product.name}</span>
+              <span>{countryName(c.product.country)} · {c.product.name}</span>
               <span>·</span><span>{CATEGORY_LABEL[c.product.category]}</span>
               <span>·</span><span>Owner {c.ownerId ? names[c.ownerId] : 'unassigned'}</span>
               {branches.length > 1 && (
@@ -132,7 +162,7 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
         </div>
       </header>
 
-      <Journey slug={slug} caseId={c.id} stages={stages} current={c.stageKey} dates={reached} ahead={ahead} route={route} editable={editable} />
+      <Journey slug={slug} caseId={c.id} stages={stages} current={c.stageKey} dates={reached} ahead={ahead} route={route} editable={editable} canOverride={can(ctx.role, 'settings.manage')} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-5">
@@ -191,6 +221,8 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
           </Card>
         </div>
         <div className="flex flex-col gap-5">
+          <NextActionCard slug={slug} caseId={c.id} nextAction={c.nextAction} refs={(c.refs as { label: string; value: string }[]) ?? []} blockers={blockers} canEdit={editable} />
+          <TracksCard slug={slug} caseId={c.id} tracks={tracks} canEdit={editable} />
           <TasksPanel slug={slug} tasks={c.tasks} tz={tz} links={{ caseId: c.id }} team={team} me={ctx.user.id} />
           {invoices && (
             <Card>
@@ -225,6 +257,12 @@ export default async function CasePage({ params }: { params: Promise<{ tenant: s
             </div>
           </Card>
           <CustomFieldsPanel ctx={ctx} entity="cases" recordId={c.id} values={c.customFields} canEdit={can(ctx.role, 'case.write')} />
+          {Object.keys((c.product.info as object) ?? {}).length > 0 && (
+            <Card>
+              <CardHeader title="About this pathway" sub="From the Kicko library, as published by the authority" />
+              <div className="p-5 pt-1"><PathwayInfo info={c.product.info} /></div>
+            </Card>
+          )}
           <AppointmentsPanel slug={slug} items={c.appointments} tz={tz} links={{ caseId: c.id }} team={team} me={ctx.user.id} canOverride={can(ctx.role, 'settings.manage')} />
           {dependants.length > 0 && (
             <Card>

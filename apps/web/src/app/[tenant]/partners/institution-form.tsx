@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { ActionButton, ActionForm, FormBanner, FormField, Modal, SubmitButton } from '@/components/forms';
 import { Button, Input, Select, Textarea } from '@/components/ui';
-import { COUNTRIES } from '@/lib/constants';
 import { CURRENCIES, formatMoney, toInputAmount } from '@/lib/money';
 import { addCourseAction, removeCourseAction, saveInstitutionAction } from '../actions-phase2';
 
@@ -27,7 +26,7 @@ export type InstitutionData = {
 
 const DEFAULT_CURRENCY: Record<string, string> = { CA: 'CAD', AU: 'AUD', GB: 'GBP', US: 'USD', NZ: 'NZD', DE: 'EUR', IE: 'EUR', FR: 'EUR', EU: 'EUR', SG: 'SGD', AE: 'AED' };
 
-export function InstitutionForm({ slug, inst }: { slug: string; inst?: InstitutionData }) {
+export function InstitutionForm({ slug, inst, countries }: { slug: string; inst?: InstitutionData; countries: [string, string][] }) {
   const [country, setCountry] = useState(inst?.country ?? 'CA');
   const [currency, setCurrency] = useState(inst?.currency ?? 'CAD');
   const [type, setType] = useState(inst?.commissionType ?? 'PERCENT');
@@ -44,7 +43,7 @@ export function InstitutionForm({ slug, inst }: { slug: string; inst?: Instituti
         </FormField>
         <FormField label="Country" name="country">
           <Select name="country" value={country} onChange={(e) => { setCountry(e.target.value); setCurrency(DEFAULT_CURRENCY[e.target.value] ?? currency); }}>
-            {Object.entries(COUNTRIES).filter(([c]) => c !== 'EU').map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+            {countries.filter(([c]) => c !== 'EU').map(([c, n]) => <option key={c} value={c}>{n}</option>)}
           </Select>
         </FormField>
         <FormField label="City" name="city"><Input name="city" defaultValue={inst?.city ?? ''} /></FormField>

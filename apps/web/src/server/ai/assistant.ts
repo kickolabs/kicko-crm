@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import { spokenCountry } from '@/lib/countries';
 import { detectCategory, detectCountry } from './call-notes';
 import { runStructured } from './run';
 
@@ -129,7 +130,6 @@ export function matchKnowledge(message: string, knowledge: { question: string; a
 
 const none = { handoff: null, book: null, offerSlots: false, capture: null };
 
-const COUNTRY_NAME: Record<string, string> = { CA: 'Canada', AU: 'Australia', GB: 'the UK', US: 'the US', NZ: 'New Zealand', DE: 'Germany', IE: 'Ireland' };
 const NOT_A_NAME = new Set([
   'and', 'or', 'i', 'im', 'am', 'my', 'name', 'is', 'its', 'it', 'this', 'from', 'to', 'for', 'in', 'the', 'a', 'want', 'go', 'going', 'planning', 'plan',
   'hi', 'hello', 'hey', 'ok', 'okay', 'yes', 'no', 'sir', 'madam', 'study', 'studies', 'work', 'pr', 'visa', 'country', 'told', 'you', 'u', 'already', 'me',
@@ -170,7 +170,7 @@ function knownFacts(i: AssistantInput, text: string) {
 
 /** Ask only for what we don't know yet. */
 function nextQuestion(name: string | null, country: string | null, category: string | null, interest?: string | null) {
-  const where = country ? COUNTRY_NAME[country] ?? country : null;
+  const where = country ? spokenCountry(country) : null;
   if (!name && !where && !interest) return 'May I know your name, and which country you are planning for?';
   if (!name) return `${where ? `${where.charAt(0).toUpperCase()}${where.slice(1)}, great choice. ` : ''}May I know your name?`;
   if (!where && !interest) return `Nice to meet you, ${name}! Which country are you planning for?`;

@@ -1,13 +1,16 @@
 import Link from 'next/link';
 import clsx from 'clsx';
+import { countryName } from '@/lib/countries';
 import { Card, EmptyState, Input, PageHeader, Select, buttonCls, Badge } from '@/components/ui';
-import { CATEGORY_LABEL, CATEGORIES, COUNTRIES, LEAD_SOURCE_LABEL, LEAD_SOURCES, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, LEAD_STATUSES } from '@/lib/constants';
+import { CATEGORY_LABEL, CATEGORIES, LEAD_SOURCE_LABEL, LEAD_SOURCES, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, LEAD_STATUSES } from '@/lib/constants';
 import { fmtDate, fullName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { getCtx, getTeam } from '@/lib/tenant';
 import { listLeads, listProducts, type LeadFilters, listBranches } from '@/server/queries';
 import { LeadBoard } from './board';
 import { NewLeadButton } from './new-lead-button';
+import { packForm } from '@/server/library';
+import { scopeOf } from '@/server/scope';
 
 export const metadata = { title: 'Leads' };
 
@@ -22,11 +25,12 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const ctx = await getCtx(slug);
   const view = sp.view === 'table' ? 'table' : 'board';
-  const [leads, team, products, branches] = await Promise.all([
+  const [leads, team, products, branches, form] = await Promise.all([
     listLeads(ctx, view === 'board' ? { ...sp, status: undefined } : sp),
     getTeam(ctx),
     listProducts(ctx),
     listBranches(ctx),
+    packForm(scopeOf(ctx), 'leads'),
   ]);
   const names = Object.fromEntries(team.map((m) => [m.userId, m.name]));
   const tz = ctx.tenant.timezone;
@@ -55,7 +59,8 @@ export default async function LeadsPage({
             {can(ctx.role, 'lead.write') && (
               <NewLeadButton
                 slug={slug}
-                products={products.map(({ id, name, country, category }) => ({ id, name, country, category }))}
+                products={products.map(({ id, name, country, category, info }) => ({ id, name, country, category, info }))}
+                form={form}
                 team={team}
                 autoAssign={ctx.tenant.settings.leadAssignment === 'round_robin'}
                 openInitially={sp.new === '1'}
@@ -113,7 +118,7 @@ export default async function LeadsPage({
               name: fullName(l),
               status: l.status,
               source: l.source,
-              product: l.product ? `${COUNTRIES[l.product.country] ?? l.product.country} · ${l.product.name}` : l.interestCategory ? CATEGORY_LABEL[l.interestCategory] : null,
+              product: l.product ? `${countryName(l.product.country)} · ${l.product.name}` : l.interestCategory ? CATEGORY_LABEL[l.interestCategory] : null,
               owner: l.ownerId ? (names[l.ownerId] ?? null) : null,
               createdAt: l.createdAt.toISOString(),
             }))}

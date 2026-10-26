@@ -1,11 +1,12 @@
 import clsx from 'clsx';
 import Link from 'next/link';
+import { countryName } from '@/lib/countries';
 import { notFound } from 'next/navigation';
 import { Avatar, Badge, Card, CardHeader, LinkButton } from '@/components/ui';
 import { formatMoney } from '@/lib/money';
 import { listInvoicesFor } from '@/server/queries2';
 import { InvoiceBadge } from '../../billing/invoice-badge';
-import { COUNTRIES } from '@/lib/constants';
+
 import { fmtDate, fullName, relative } from '@/lib/format';
 import { connectionSummary } from '@/integrations/core/connections';
 import { buildThread } from '@/server/thread-view';
@@ -34,8 +35,11 @@ import { AppointmentsPanel, NoteBox, TasksPanel } from '../../_components/work-p
 import { Timeline } from '../../_components/timeline';
 import { FamilyPanel, OpenCaseButton, ProfileForm, RepeaterEditor } from './client-forms';
 import { EDU_COLUMNS, TEST_COLUMNS, WORK_COLUMNS } from './columns';
+import { ProfessionForm } from './profession-form';
+import { displayPackValue, type PackValues } from '@/lib/pack-fields';
+import { lookupName, packForm } from '@/server/library';
 
-const TABS = ['overview', 'messages', 'profile', 'background', 'eligibility', 'forms', 'family', 'billing'] as const;
+const TABS = ['overview', 'messages', 'profile', 'profession', 'background', 'eligibility', 'forms', 'family', 'billing'] as const;
 
 export default async function ClientPage({
   params,
@@ -56,6 +60,22 @@ export default async function ClientPage({
   const name = fullName(client);
   const passportSoon = client.passportExpiry && client.passportExpiry.getTime() < Date.now() + 180 * 86400_000;
   const tests = (client.tests as Record<string, string>[]) ?? [];
+
+  async function ProfessionTab() {
+    const form = await packForm(scopeOf(ctx), 'clients');
+    const values = (client!.packData as PackValues) ?? {};
+    if (writable) {
+      return <Card className="p-5"><ProfessionForm slug={slug} clientId={client!.id} values={values} form={form} /></Card>;
+    }
+    const nameOf = lookupName(form.lookups);
+    return (
+      <Card className="p-5">
+        <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
+          {form.fields.map((f) => <div key={f.key}><dt className="text-xs text-muted">{f.label}</dt><dd className="font-semibold">{displayPackValue(f, values[f.key], nameOf)}</dd></div>)}
+        </dl>
+      </Card>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-5">
@@ -113,13 +133,13 @@ export default async function ClientPage({
               <ul className="divide-y divide-line">
                 {client.cases.length === 0 && <li className="px-5 py-5 text-sm text-muted">No cases yet. Open one to start tracking stages.</li>}
                 {client.cases.map((c) => {
-                  const stages = stagesOf(c.product);
+                  const stages = stagesOf(c);
                   const idx = stages.findIndex((s) => s.key === c.stageKey);
                   return (
                     <li key={c.id}>
                       <Link href={`/${slug}/cases/${c.id}`} className="flex flex-wrap items-center gap-4 px-5 py-4 hover:bg-paper-3">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold">{COUNTRIES[c.product.country] ?? c.product.country} · {c.product.name}</div>
+                          <div className="font-bold">{countryName(c.product.country)} · {c.product.name}</div>
                           <div className="text-xs text-muted">{c.ref} · {stages[idx]?.name ?? c.stageKey}</div>
                         </div>
                         <div className="flex w-40 gap-0.5" aria-label={`Stage ${idx + 1} of ${stages.length}`}>
@@ -169,6 +189,8 @@ export default async function ClientPage({
       {tab === 'profile' && (
         <Card className="p-5">{writable ? <ProfileForm slug={slug} client={client} team={team} /> : <p className="text-sm text-muted">You can view but not edit client profiles.</p>}</Card>
       )}
+
+      {tab === 'profession' && <ProfessionTab />}
 
       {tab === 'background' && (
         <div className="flex flex-col gap-5">
